@@ -42,7 +42,7 @@ To install the cmdstanr R package, the following worked on both my Linux and Win
         #### Load cmdstanr R outer package:
         require(cmdstanr) 
         #### Then, install the latest version of CmdStan:
-        install_cmdstan(cores = parallel::detectcores(),
+        install_cmdstan(cores = parallel::detectCores(),
                         overwrite = TRUE,
                         cpp_options = list("STAN_MODEL_LDFLAGS" = "-shared",   "CXXFLAGS" = "-fPIC"))
 ```
