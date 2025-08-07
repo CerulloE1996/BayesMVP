@@ -4,7 +4,7 @@
 
 ### Current Status: Alpha
 - ✅ Core functionality working
-- ✅ Successfully used in research (32,000+ model fits for LC-MVP and latent_trait models)
+- ✅ Successfully used in research (10,000+ model fits for LC-MVP and latent_trait models)
 - ⚠️ API still evolving
 - ⚠️ Limited error handling
 - 🔨 Actively improving
