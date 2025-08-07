@@ -3,11 +3,13 @@
 **🚧 Early release - Breaking changes expected until v1.0**
 
 ### Current Status: Alpha
-- ✅ Core functionality working
-- ✅ Successfully used in research (10,000+ model fits for LC-MVP and latent_trait models)
-- ⚠️ API still evolving
-- ⚠️ Limited error handling
-- 🔨 Actively improving
+- Core functionality should be mostly working.
+- Successfully used in research (10,000+ model fits for LC-MVP and latent_trait models).
+- ChESSR-HMC burnin algorithm working & stable on tested built-in models & selected Stan models.
+- SNAPER-HMC burnin algorithm is not consistent/stable yet.
+- API still evolving.
+- Limited error handling.
+- Actively improving.
 
 BayesMVP uses a highly-efficient, recently proposed state-of-the-art HMC algorithm called SNAPER Hamiltonian Monte Carlo (SNAPER-HMC; Sountsov & Hoffman et al, 2022) to sample the posterior distribution. 
 Furthermore, depending on the model (and if the user enables this experimenal option), it also makes use of diffusion-pathspace HMC (Beskos et al, 2013) for models which have high-dimensional guassian latent variables. 
