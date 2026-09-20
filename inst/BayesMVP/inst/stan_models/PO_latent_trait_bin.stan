@@ -91,7 +91,7 @@ data {
   matrix<lower=0>[n_class, n_tests]  LT_b_priors_scale;
   matrix<lower=0>[n_class, n_tests]  LT_known_bs_values;
   matrix<lower=0>[n_class, n_tests]  LT_known_bs_indicator;
-  
+
 }
 
 

@@ -6,8 +6,6 @@
 \usage{
 create_summary_and_traces(
   model_results,
-  init_object,
-  n_nuisance,
   compute_main_params = TRUE,
   compute_transformed_parameters = TRUE,
   compute_generated_quantities = TRUE,
@@ -15,10 +13,13 @@ create_summary_and_traces(
   save_nuisance_trace = FALSE,
   compute_nested_rhat = FALSE,
   n_superchains = NULL,
-  save_trace_tibbles = FALSE
+  save_trace_tibbles = FALSE,
+  n_iter_to_store = NULL,
+  use_disk = TRUE,
+  use_disk_path = "/tmp/hmc_traces",
+  use_disk_path_post_hoc_dir = "/tmp/constrain_traces"
 )
 }
 \description{
 create_summary_and_traces
 }
-\keyword{internal}

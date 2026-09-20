@@ -33,7 +33,9 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
                                                                                                          const Eigen::Matrix<double, -1, 1> theta_us_vec_ref,
                                                                                                          const Eigen::Matrix<int, -1, -1> y_ref,
                                                                                                          const std::string grad_option,
-                                                                                                         const Model_fn_args_struct Model_args_as_cpp_struct
+                                                                                                         const Model_fn_args_struct Model_args_as_cpp_struct,
+                                                                                                         std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                                                         const int n_threads_WCP
 ) {
   
 
@@ -67,10 +69,13 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   const int ub_threshold_phi_approx = Model_args_as_cpp_struct.Model_args_ints(2);
   const int n_chunks = Model_args_as_cpp_struct.Model_args_ints(3);
   
-  const double prev_prior_a = Model_args_as_cpp_struct.Model_args_doubles(0);
-  const double prev_prior_b = Model_args_as_cpp_struct.Model_args_doubles(1);
-  const double overflow_threshold = Model_args_as_cpp_struct.Model_args_doubles(2);
-  const double underflow_threshold = Model_args_as_cpp_struct.Model_args_doubles(3);
+  // const int n_pops = Model_args_as_cpp_struct.Model_args_ints(6); //// ----
+  // const Eigen::Matrix<int, -1, 1> &pop_ind = Model_args_as_cpp_struct.Model_args_col_vecs_int[2]; //// ----
+  
+  // const double prev_prior_a = Model_args_as_cpp_struct.Model_args_doubles(0);
+  // const double prev_prior_b = Model_args_as_cpp_struct.Model_args_doubles(1);
+  const double overflow_threshold  = Model_args_as_cpp_struct.Model_args_doubles(0);
+  const double underflow_threshold = Model_args_as_cpp_struct.Model_args_doubles(1);
   
   const std::string vect_type = Model_args_as_cpp_struct.Model_args_strings(0);
   const std::string Phi_type = Model_args_as_cpp_struct.Model_args_strings(1);
@@ -86,7 +91,9 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   ////// const std::string grad_option =  Model_args_as_cpp_struct.Model_args_strings(11);
   const std::string nuisance_transformation =   Model_args_as_cpp_struct.Model_args_strings(12);
   
-  const Eigen::Matrix<double, -1, 1>  lkj_cholesky_eta =   Model_args_as_cpp_struct.Model_args_col_vecs_double[0];
+  const Eigen::Matrix<double, -1, 1> &lkj_cholesky_eta =   Model_args_as_cpp_struct.Model_args_col_vecs_double[0];
+  // const Eigen::Matrix<double, -1, 1> &prev_prior_a = Model_args_as_cpp_struct.Model_args_col_vecs_double[1]; //// ----
+  // const Eigen::Matrix<double, -1, 1> &prev_prior_b = Model_args_as_cpp_struct.Model_args_col_vecs_double[2]; //// ----
   
   const Eigen::Matrix<int, -1, -1> n_covariates_per_outcome_vec = Model_args_as_cpp_struct.Model_args_mats_int[0];
   
@@ -146,7 +153,7 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   /////////////////  ------------------------------------------------------------ 
   using namespace stan::math;
  
-  stan::math::start_nested();
+  stan::math::nested_rev_autodiff nested_autodiff_scope;
   
   Eigen::Matrix<stan::math::var, -1, 1  >  theta_var(n_params);
 
@@ -156,7 +163,6 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
     theta.tail(n_params_main) = theta_main_vec_ref;
     theta_var = stan::math::to_var(theta);
   }
-  
 
   Eigen::Matrix<stan::math::var, -1, 1>    u_unconstrained_vec_var = theta_var.head(n_us);   // u's
   
@@ -180,7 +186,6 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   }
   
   stan::math::var target = 0.0;
-
 
   ////////////////// u (double / manual diff)
   Eigen::Matrix<stan::math::var, -1, 1>  u_vec(n_us);
@@ -207,28 +212,27 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
     log_jac_u   +=    sum(log1m(u_vec));  // correct
   }
 
-  
   ///////////////// get cholesky factor's (lower-triangular) of corr matrices
   ////// first need to convert Omega_unconstrained to var   // then convert to 3d var array
   std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_unconstrained_var = fn_convert_std_vec_of_corrs_to_3d_array_var(Omega_unconstrained_vec_var, n_tests, 1);
   std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > L_Omega_var = vec_of_mats_var(n_tests, n_tests, 1);
-  std::vector<Eigen::Matrix<stan::math::var, -1, -1 > >  Omega_var  = vec_of_mats_var(n_tests, n_tests, 1);
+  std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_var  = vec_of_mats_var(n_tests, n_tests, 1);
     
-        Eigen::Matrix<stan::math::var, -1, -1 >  ub = stan::math::to_var(ub_corr[0]);
-        Eigen::Matrix<stan::math::var, -1, -1 >  lb = stan::math::to_var(lb_corr[0]);
-        Eigen::Matrix<stan::math::var, -1, -1  >  Chol_Schur_outs =  Pinkney_LDL_bounds_opt(n_tests, lb, ub, Omega_unconstrained_var[0], known_values_indicator[0], known_values[0]) ;
-        L_Omega_var[0]   =  Chol_Schur_outs.block(1, 0, n_tests, n_tests);  // stan::math::cholesky_decompose( Omega_var[0]) ;
-        target +=   Chol_Schur_outs(0, 0); // now can set prior directly on Omega
-        Omega_var[0] =   L_Omega_var[0] * L_Omega_var[0].transpose() ;
+  Eigen::Matrix<stan::math::var, -1, -1 >  ub = stan::math::to_var(ub_corr[0]);
+  Eigen::Matrix<stan::math::var, -1, -1 >  lb = stan::math::to_var(lb_corr[0]);
+  Eigen::Matrix<stan::math::var, -1, -1  >  Chol_Schur_outs =  Pinkney_LDL_bounds_opt(n_tests, lb, ub, Omega_unconstrained_var[0], known_values_indicator[0], known_values[0]) ;
+  L_Omega_var[0]   =  Chol_Schur_outs.block(1, 0, n_tests, n_tests);  // stan::math::cholesky_decompose( Omega_var[0]) ;
+  target +=   Chol_Schur_outs(0, 0); // now can set prior directly on Omega
+  Omega_var[0] =   L_Omega_var[0] * L_Omega_var[0].transpose() ;
 
 
   ///////////////////////////////////////////////////////////////////////// prior densities
-    for (int t = 0; t < n_tests; t++) {
+  for (int t = 0; t < n_tests; t++) {
       for (int k = 0; k < n_covariates_per_outcome_vec(0, t); k++) {
         target  += stan::math::normal_lpdf(beta_all_tests_class_var[0](k, t), prior_coeffs_mean[0](k, t), prior_coeffs_sd[0](k, t));
       }
-    }
-    target +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[0], lkj_cholesky_eta(0)) ;
+  }
+  target +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[0], lkj_cholesky_eta(0)) ;
     
   /////////////////////////////////////////////////////////////////////////////////////////////////////////// likelihood
   Eigen::Matrix<stan::math::var, -1, 1>	   y1(n_tests);
@@ -330,6 +334,7 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
 
         stan::math::var log_posterior = lp(0);
         target += log_posterior;
+        if (out_mat.size() >= 1 + n_params + N) out_mat(1 + n_params + n) = log_posterior.val();
 
     } // end of n loop
 
@@ -404,7 +409,7 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
  //  
   
   
-  stan::math::recover_memory_nested();  
+  //// nested_autodiff_scope releases the tape, including on exceptions.  
  
   //// return(out_mat);
  
@@ -424,11 +429,9 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<do
                                                                        const Eigen::Matrix<double, -1, 1> &&theta_us_vec_R_val,
                                                                        const Eigen::Matrix<int, -1, -1> &&y_R_val,
                                                                        const std::string &grad_option,
-                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct
-                                                                         
-                                                                         
-                                                                         
-                                                                         
+                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                       std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                       const int n_threads_WCP
 ) {
   
   
@@ -443,7 +446,9 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<do
                                                                       theta_us_vec_ref,
                                                                       y_ref,
                                                                       grad_option,
-                                                                      Model_args_as_cpp_struct); 
+                                                                      Model_args_as_cpp_struct,
+                                                                      LC_MVP_ws_structs,
+                                                                      n_threads_WCP); 
   
   
 }  
@@ -461,11 +466,9 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<do
                                                                        const Eigen::Matrix<double, -1, 1> &theta_us_vec_ref,
                                                                        const Eigen::Matrix<int, -1, -1> &y_ref,
                                                                        const std::string &grad_option,
-                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct
-                                                                         
-                                                                         
-                                                                         
-                                                                         
+                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                       std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                       const int n_threads_WCP
 ) {
   
   
@@ -474,7 +477,9 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<do
                                                                       theta_us_vec_ref,
                                                                       y_ref,
                                                                       grad_option,
-                                                                      Model_args_as_cpp_struct); 
+                                                                      Model_args_as_cpp_struct,
+                                                                      LC_MVP_ws_structs,
+                                                                      n_threads_WCP); 
   
   
 }    
@@ -490,11 +495,9 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Ref<Eigen
                                                                        const Eigen::Ref<const Eigen::Block<MatrixType, -1, 1>>  &theta_us_vec_ref,
                                                                        const Eigen::Matrix<int, -1, -1> &y_ref,
                                                                        const std::string &grad_option,
-                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct
-                                                                         
-                                                                         
-                                                                         
-                                                                         
+                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                       std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                       const int n_threads_WCP
 ) { 
   
   
@@ -503,7 +506,9 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Ref<Eigen
                                                                       theta_us_vec_ref,
                                                                       y_ref,
                                                                       grad_option,
-                                                                      Model_args_as_cpp_struct); 
+                                                                      Model_args_as_cpp_struct, 
+                                                                      LC_MVP_ws_structs,
+                                                                      n_threads_WCP); 
   
   
 }     
@@ -526,11 +531,9 @@ Eigen::Matrix<double, -1, 1>    fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale(  co
                                                                                      const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                                                                      const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                      const std::string &grad_option,
-                                                                                     const Model_fn_args_struct &Model_args_as_cpp_struct
-                                                                                       
-                                                                                       
-                                                                                       
-                                                                                        
+                                                                                     const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                                     std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                                     const int n_threads_WCP
 ) {
   
   int n_params_main = theta_main_vec_ref.rows();
@@ -545,7 +548,9 @@ Eigen::Matrix<double, -1, 1>    fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale(  co
                                                               theta_us_vec_ref,
                                                               y_ref,
                                                               grad_option,
-                                                              Model_args_as_cpp_struct); 
+                                                              Model_args_as_cpp_struct, 
+                                                              LC_MVP_ws_structs,
+                                                              n_threads_WCP); 
   
   return out_mat;
   
@@ -561,7 +566,6 @@ Eigen::Matrix<double, -1, 1>    fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale(  co
 
 
  
-
 
 
 

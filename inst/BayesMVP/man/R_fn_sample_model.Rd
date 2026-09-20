@@ -5,55 +5,137 @@
 \title{R_fn_sample_model}
 \usage{
 R_fn_sample_model(
-  Model_type,
+  debug = FALSE,
+  stream = NULL,
   init_object,
+  n_chains_burnin,
   init_lists_per_chain,
   parallel_method,
   Stan_data_list,
   model_args_list,
-  y,
-  N,
-  manual_tau,
-  tau_if_manual,
   sample_nuisance,
-  diffusion_HMC,
-  partitioned_HMC,
-  vect_type,
-  Phi_type,
-  inv_Phi_type,
-  n_params_main,
-  n_nuisance,
-  n_chains_burnin,
-  n_chains_sampling,
-  n_superchains,
+  n_nuisance_override = NULL,
   seed,
   n_burnin,
+  n_adapt,
+  gap,
+  n_chains_sampling,
+  n_superchains,
+  nuisance_jitter_scale = 0.25,
   n_iter,
   adapt_delta,
-  LR_main,
-  LR_us,
-  n_adapt,
-  clip_iter,
-  gap,
-  metric_type_main,
-  metric_shape_main,
-  metric_type_nuisance,
-  metric_shape_nuisance,
-  max_eps_main,
-  max_eps_us,
-  max_L,
+  learning_rate,
   tau_mult,
-  ratio_M_us,
-  ratio_M_main,
-  interval_width_main,
-  interval_width_nuisance,
+  tau_initial,
+  manual_tau,
+  tau_if_manual,
+  tau_if_manual_in_L_units = NULL,
+  tau_objective = NULL,
+  tau_weight_by_p_jump = NULL,
+  tau_ramp = NULL,
+  eps_reinit_at_ChEES_handover = NULL,
+  theta_hat_us_rule = NULL,
+  theta_hat_us_freeze_iter = NULL,
+  burnin_schedule = "automatic",
+  metric_adaptation_end_iter = NULL,
+  pre_burnin_n_iter = NULL,
+  pre_burnin_L = NULL,
+  share_tau_ii_across_chains_in_burnin = NULL,
+  burnin_TBB_pool_equals_n_chains = NULL,
+  store_log_lik_trace = NULL,
+  burnin_algorithm = "ChESSR",
+  diffusion_HMC,
+  partitioned_HMC,
+  clip_iter,
+  clip_iter_tau,
+  n_refresh = NULL,
+  use_proposed = TRUE,
+  beta1_adam = 0,
+  beta2_adam = 0.95,
+  eps_adam = 0.00000001,
   force_autodiff,
   force_PartialLog,
   multi_attempts,
-  n_nuisance_to_track
+  force_autodiff_for_metric = TRUE,
+  force_PartialLog_for_metric = FALSE,
+  force_multi_attempts_for_metric = FALSE,
+  vect_type,
+  Phi_type,
+  inv_Phi_type,
+  metric_type_main,
+  metric_shape_main,
+  ratio_M_main,
+  interval_width_main,
+  M_decay_type,
+  M_decay_power,
+  M_decay_scale,
+  metric_type_nuisance,
+  metric_shape_nuisance,
+  ratio_M_nuisance,
+  interval_width_nuisance,
+  max_tau_main = 25,
+  max_tau_nuisance = 25,
+  max_eps_main,
+  max_eps_nuisance,
+  learning_rate_initial = NULL,
+  learning_rate_initial_iter = NULL,
+  eps_initial = NULL,
+  eps_initial_iter = NULL,
+  max_L,
+  n_nuisance_to_track = NULL,
+  use_disk,
+  use_disk_path = "/tmp/hmc_traces",
+  n_threads_WCP_burnin,
+  n_threads_WCP_sampling,
+  reorder_cols_MVP,
+  metric_estimator = "pooled",
+  test_perm_override = NULL,
+  num_chunks_burnin = NULL,
+  num_chunks_sampling = NULL,
+  diffusion_HMC_integrator = "kick_flow_kick",
+  debug_burnin_timing = FALSE
 )
+}
+\arguments{
+\item{burnin_TBB_pool_equals_n_chains}{NULL selects TRUE for built-in models, whose within-chain work uses OpenMP.
+External Stan models always use FALSE, including when TRUE is supplied, so their nested TBB work can use
+n_chains_burnin * n_threads_WCP_burnin threads. An explicit FALSE remains available for built-in models.}
+
+\item{reorder_cols_MVP}{Run a short pre-burnin and then re-fit with the test/outcome
+columns permuted into the Dissmann (2013) pair-first order of the estimated
+correlation matrix. Supported for Model_type = "LC_MVP" and for USER-SUPPLIED
+Stan models (Model_type = "Stan").
+
+For Model_type = "Stan" only \code{y} is permuted - BayesMVP cannot know which of
+an external model's other data objects are test-indexed - so the option is REFUSED
+(with a large warning banner, after which sampling continues in the original column
+order) unless all of the following hold: the outcome matrix in your Stan data is
+called \code{y} and is N x n_tests with one column per test; the model exposes a
+correlation matrix called \code{Omega} whose dimension matches; and NO other entry
+of the Stan data is shaped like n_tests. That last condition is the strict one, and
+deliberately so: permuting \code{y} while leaving a per-test prior, covariate or
+flag in place would pair each test's responses with a different test's metadata,
+silently. Note also that test-indexed OUTPUTS are not un-permuted (slot j corresponds
+to original test \code{test_perm[j]}; the permutation and its inverse are returned as
+\code{test_perm} / \code{test_inv_perm}), and that user-supplied test-indexed initial
+values are left alone. This has only been tested to work and/or be beneficial for
+multivariate probit-based models.}
+
+\item{diffusion_HMC_integrator}{Joint diffusion integrator: "kick_flow_kick" (default) or "flow_kick_flow".}
+
+\item{debug_burnin_timing}{Collect per-iteration native timings and per-chain elapsed times and integrator step counts during burn-in.}
 }
 \description{
 R_fn_sample_model
 }
-\keyword{internal}
+\details{
+Set \code{options(BayesMVP_autodiff_fallback = TRUE)} before a fit
+to enable an autodiff lp/gradient fallback for built-in models with multi_attempts = TRUE.
+If unset, it defaults to FALSE for MVP/LC-MVP/MVOP/LC-MVOP and preserves the existing
+TRUE default for latent_trait. Standard-scale and partial-log evaluations are tried first;
+autodiff is used only if both return nonfinite output, at the same parameter values.
+The latent_trait model skips its known-unfinished partial-log path and uses standard -> autodiff.
+This does not retry trajectories or rescue finite energy-error divergences. The option
+is frozen for the fit and returned as autodiff_fallback. For separate R worker
+processes, set the option in the process which calls this function.
+}

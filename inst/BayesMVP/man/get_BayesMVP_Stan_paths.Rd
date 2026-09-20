@@ -9,4 +9,3 @@ get_BayesMVP_Stan_paths()
 \description{
 get_BayesMVP_Stan_paths
 }
-\keyword{internal}

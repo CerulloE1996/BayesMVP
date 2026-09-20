@@ -1,3 +1,4 @@
+
 #pragma once 
  
 #ifndef FN_WRAPPERS_SIMD_AVX_GENERAL_HPP
@@ -16,9 +17,9 @@
 
 
 template <typename T>
-MAYBE_INLINE  void fn_AVX_row_or_col_vector(    Eigen::Ref<T>  x_Ref,
-                                                const FuncAVX &fn_AVX,
-                                                const FuncDouble &fn_double) {
+ALWAYS_INLINE  void fn_AVX_row_or_col_vector(    Eigen::Ref<T>  x_Ref,
+                                                 const FuncAVX &fn_AVX,
+                                                 const FuncDouble &fn_double) {
   
         const int N = x_Ref.size();
   
@@ -83,9 +84,9 @@ MAYBE_INLINE  void fn_AVX_row_or_col_vector(    Eigen::Ref<T>  x_Ref,
  
 
 template <typename T>
-MAYBE_INLINE  void fn_AVX_matrix(    Eigen::Ref<T> x_Ref,
-                                     const FuncAVX &fn_AVX, 
-                                     const FuncDouble &fn_double) {
+ALWAYS_INLINE  void fn_AVX_matrix(    Eigen::Ref<T> x_Ref,
+                                      const FuncAVX &fn_AVX, 
+                                      const FuncDouble &fn_double) {
      
      const int n_rows = x_Ref.rows();
      const int n_cols = x_Ref.cols();
@@ -118,9 +119,9 @@ MAYBE_INLINE  void fn_AVX_matrix(    Eigen::Ref<T> x_Ref,
  
 
 template <typename T>
-inline  void fn_AVX_dbl_Eigen(     Eigen::Ref<T> x_Ref, 
-                                         const FuncAVX &fn_AVX, 
-                                         const FuncDouble &fn_double) {
+ALWAYS_INLINE  void fn_AVX_dbl_Eigen(     Eigen::Ref<T> x_Ref, 
+                                          const FuncAVX &fn_AVX, 
+                                          const FuncDouble &fn_double) {
      
      constexpr int n_rows = T::RowsAtCompileTime;
      constexpr int n_cols = T::ColsAtCompileTime;
@@ -150,7 +151,7 @@ inline  void fn_AVX_dbl_Eigen(     Eigen::Ref<T> x_Ref,
   
 
 template <typename T>
-inline  void    fn_process_double_AVX_sub_function(      Eigen::Ref<T> x_Ref,  
+ALWAYS_INLINE  void    fn_process_double_AVX_sub_function(    Eigen::Ref<T> x_Ref,  
                                                               const FuncAVX    &fn_fast_AVX_function,
                                                               const FuncDouble &fn_fast_double_function,
                                                               const FuncAVX    &fn_fast_AVX_function_wo_checks,
@@ -178,9 +179,9 @@ inline  void    fn_process_double_AVX_sub_function(      Eigen::Ref<T> x_Ref,
 //// #pragma message "About to define AVX-512 mplementation of fn_process_Ref_double_AVX"
  
 template <typename T>
-inline  void       fn_process_Ref_double_AVX(       Eigen::Ref<T> x_Ref,
-                                                          const std::string &fn,
-                                                          const bool &skip_checks) {
+ALWAYS_INLINE  void       fn_process_Ref_double_AVX(       Eigen::Ref<T> x_Ref,
+                                                           const std::string &fn,
+                                                           const bool &skip_checks) {
   
     if        (fn == "test_simple") {    
           std::cout << "Calling test_simple function" << std::endl;
@@ -262,9 +263,9 @@ inline  void       fn_process_Ref_double_AVX(       Eigen::Ref<T> x_Ref,
 //// #pragma message "About to define AVX2 implementation of fn_process_Ref_double_AVX"
  
 template <typename T>
-inline  void       fn_process_Ref_double_AVX(        Eigen::Ref<T> x_Ref,
-                                                           const std::string &fn,
-                                                           const bool &skip_checks) {
+ALWAYS_INLINE  void       fn_process_Ref_double_AVX(        Eigen::Ref<T> x_Ref,
+                                                            const std::string &fn,
+                                                            const bool &skip_checks) {
    
    if        (fn == "test_simple") {    
      std::cout << "Calling test_simple function" << std::endl;
@@ -345,9 +346,9 @@ inline  void       fn_process_Ref_double_AVX(        Eigen::Ref<T> x_Ref,
 //// #pragma message "Defining dummy fn_process_Ref_double_AVX - since neither AVX2 nor AVX-512 are available"
  
 template <typename T>
-inline  void       fn_process_Ref_double_AVX(         Eigen::Ref<T> x_Ref,
-                                                            const std::string &fn,
-                                                            const bool &skip_checks) {
+ALWAYS_INLINE  void       fn_process_Ref_double_AVX(         Eigen::Ref<T> x_Ref,
+                                                             const std::string &fn,
+                                                             const bool &skip_checks) {
    
 
 }

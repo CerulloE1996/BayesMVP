@@ -214,79 +214,79 @@ devtools::install(local_pkg_dir, upgrade = "never")
 
 
 
-
-
-### USER INSTALLATION PROCESS: --------------------------------------------------------------------------------------------
-
-
-#### ----------------- install cmdstanr first:
-
-#### Install the cmdstanr "outer" R package:
-remotes::install_github("stan-dev/cmdstanr", force = TRUE)
-#### Load cmdstanr R outer package:
-require(cmdstanr) 
-#### Then, install the latest version of CmdStan:
-install_cmdstan(cores = parallel::detectCores(),
-                overwrite = TRUE,
-                cpp_options = list("STAN_MODEL_LDFLAGS" = "-shared",   "CXXFLAGS" = "-fPIC"))
-
-
-
-
-
-
-
-#### ----------------- Then install bridgestan:
-remotes::install_github("https://github.com/roualdes/bridgestan", subdir="R")
-#### Load bridgestan:
-require(bridgestan)
-
-
-
-
-
-#### ----------------- Then install BayesMVP:
-## First remove any possible package fragments:
-## Find user_pkg_install_dir:
-user_pkg_install_dir <- Sys.getenv("R_LIBS_USER")
-print(paste("user_pkg_install_dir = ", user_pkg_install_dir))
-##
-## Find pkg_install_path + pkg_temp_install_path:
-pkg_install_path <- file.path(user_pkg_install_dir, "BayesMVP")
-pkg_temp_install_path <- file.path(user_pkg_install_dir, "00LOCK-BayesMVP") 
-##
-## Remove any (possible) BayesMVP package fragments:
-remove.packages("BayesMVP")
-unlink(pkg_install_path, recursive = TRUE, force = TRUE)
-unlink(pkg_temp_install_path, recursive = TRUE, force = TRUE)
-
-
-## Install OUTER R package from GitHub:
-remotes::install_github("https://github.com/CerulloE1996/BayesMVP", force = TRUE, upgrade = "never")
-## Then restart R session:
-rstudioapi::restartSession()
-## Then install INNTER (i.e. the "real") package:
-require(BayesMVP)
-BayesMVP::install_BayesMVP()
-require(BayesMVP)
-
-
-## Restart session:
-rstudioapi::restartSession()
-## Install INNER R package:
-BayesMVP:::install_BayesMVP()
-## Restart session:
-rstudioapi::restartSession()
-
-
-###### other / testing
-
-setwd(local_INNER_pkg_dir)
-Rcpp::sourceCpp(file.path(local_INNER_pkg_dir, "src", "cpu_check.cpp"))
-checkCPUFeatures()
-
-
-
+# 
+# 
+# ### USER INSTALLATION PROCESS: --------------------------------------------------------------------------------------------
+# 
+# 
+# #### ----------------- install cmdstanr first:
+# 
+# #### Install the cmdstanr "outer" R package:
+# remotes::install_github("stan-dev/cmdstanr", force = TRUE)
+# ### Load cmdstanr R outer package:
+# require(cmdstanr) 
+# #### Then, install the latest version of CmdStan:
+# install_cmdstan(cores = parallel::detectCores(),
+#                 overwrite = TRUE,
+#                 cpp_options = list("STAN_MODEL_LDFLAGS" = "-shared",   "CXXFLAGS" = "-fPIC"))
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# #### ----------------- Then install bridgestan:
+# remotes::install_github("https://github.com/roualdes/bridgestan", subdir="R")
+# #### Load bridgestan:
+# require(bridgestan)
+# 
+# 
+# 
+# 
+# 
+# #### ----------------- Then install BayesMVP:
+# ## First remove any possible package fragments:
+# ## Find user_pkg_install_dir:
+# user_pkg_install_dir <- Sys.getenv("R_LIBS_USER")
+# print(paste("user_pkg_install_dir = ", user_pkg_install_dir))
+# ##
+# ## Find pkg_install_path + pkg_temp_install_path:
+# pkg_install_path <- file.path(user_pkg_install_dir, "BayesMVP")
+# pkg_temp_install_path <- file.path(user_pkg_install_dir, "00LOCK-BayesMVP") 
+# ##
+# ## Remove any (possible) BayesMVP package fragments:
+# remove.packages("BayesMVP")
+# unlink(pkg_install_path, recursive = TRUE, force = TRUE)
+# unlink(pkg_temp_install_path, recursive = TRUE, force = TRUE)
+# 
+# 
+# ## Install OUTER R package from GitHub:
+# remotes::install_github("https://github.com/CerulloE1996/BayesMVP", force = TRUE, upgrade = "never")
+# ## Then restart R session:
+# rstudioapi::restartSession()
+# ## Then install INNTER (i.e. the "real") package:
+# require(BayesMVP)
+# BayesMVP::install_BayesMVP()
+# require(BayesMVP)
+# 
+# 
+# ## Restart session:
+# rstudioapi::restartSession()
+# ## Install INNER R package:
+# BayesMVP:::install_BayesMVP()
+# ## Restart session:
+# rstudioapi::restartSession()
+# 
+# 
+# ###### other / testing
+# 
+# setwd(local_INNER_pkg_dir)
+# Rcpp::sourceCpp(file.path(local_INNER_pkg_dir, "src", "cpu_check.cpp"))
+# checkCPUFeatures()
+# 
+# 
+# 
 
 
 

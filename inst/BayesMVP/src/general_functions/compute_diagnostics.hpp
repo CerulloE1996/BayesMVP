@@ -45,9 +45,10 @@
 #include <stan/analyze/mcmc/split_chains.hpp>
 #include <stan/analyze/mcmc/compute_effective_sample_size.hpp>
 #include <stan/analyze/mcmc/compute_potential_scale_reduction.hpp>
+ 
+#include <stan/analyze/mcmc/split_rank_normalized_ess.hpp>
+#include <stan/analyze/mcmc/split_rank_normalized_rhat.hpp>
 
-
-#include <stan/math/prim.hpp>
  
 #include <limits>
 #include <utility>
@@ -61,7 +62,7 @@ using namespace Rcpp;
 
   
   
-#include <stan/math/prim.hpp>
+// #include <stan/math/prim.hpp>
 #include <stan/analyze/mcmc/autocovariance.hpp>
 #include <algorithm>
 #include <cmath>
@@ -71,6 +72,110 @@ using namespace Rcpp;
   
   
   
+//// Note: The classic functions (compute_effective_sample_size, compute_potential_scale_reduction, and their split variants) date from Stan's original analyze module, 
+//// when chains were passed around as raw const double* arrays with a matching sizes vector — the C-style interface CmdStan's stansummary originally used to read CSV 
+//// columns without copying. The rank-normalised versions were added much later (Stan 2.33, 2023), after the codebase had moved to Eigen types, 
+//// so they take a MatrixXd (draws × chains) directly and do the split/rank/fold internally.
+
+
+// Individual constant chains/half-chains must remain in the calculation. Only a
+// nonfinite or globally constant ensemble is undefined (posterior's convention).
+inline bool fn_diagnostic_ensemble_varies(const Eigen::MatrixXd &draws) {
+    return draws.size() > 0 && draws.allFinite()
+           && draws.maxCoeff() - draws.minCoeff() >= std::numeric_limits<double>::epsilon();
+}
+
+inline Eigen::MatrixXd fn_split_diagnostic_chains(const Eigen::MatrixXd &draws) {
+    const Eigen::Index half = draws.rows() / 2;
+    Eigen::MatrixXd split(half, 2 * draws.cols());
+    split.leftCols(draws.cols()) = draws.topRows(half);
+    split.rightCols(draws.cols()) = draws.bottomRows(half);
+    return split; // For an odd length, omit the middle draw, as posterior does.
+}
+
+// Keep zero-variance chains with zero autocovariance, not 0/0. Use biased
+// autocovariances (lag denominator n) and posterior's positive/monotone sequence
+// truncation. The local Stan Math autocovariance uses denominator n - lag.
+inline double fn_ensemble_ESS(const Eigen::MatrixXd &draws) {
+    const Eigen::Index n = draws.rows();
+    const Eigen::Index chains = draws.cols();
+    if (n < 3 || !fn_diagnostic_ensemble_varies(draws)) return std::numeric_limits<double>::quiet_NaN();
+    Eigen::VectorXd mean_acov = Eigen::VectorXd::Zero(n);
+    Eigen::VectorXd chain_means(chains);
+    Eigen::FFT<double> fft;
+    for (Eigen::Index chain = 0; chain < chains; ++chain) {
+        const Eigen::VectorXd values = draws.col(chain);
+        chain_means(chain) = values.mean();
+        if (values.maxCoeff() == values.minCoeff()) continue;
+        Eigen::VectorXd acov(n);
+        stan::math::autocovariance<double>(values, acov, fft);
+        for (Eigen::Index lag = 0; lag < n; ++lag) acov(lag) *= static_cast<double>(n - lag) / n;
+        mean_acov += acov;
+    }
+    mean_acov /= chains;
+    const double within = mean_acov(0) * n / (n - 1);
+    const double between = chains > 1 ? (chain_means.array() - chain_means.mean()).square().sum() / (chains - 1) : 0.0;
+    const double variance_plus = mean_acov(0) + between;
+    Eigen::VectorXd rho = Eigen::VectorXd::Zero(n);
+    double even = 1.0;
+    double odd = 1.0 - (within - mean_acov(1)) / variance_plus;
+    rho(0) = even;
+    rho(1) = odd;
+    Eigen::Index t = 0;
+    while (t < n - 5 && !std::isnan(even + odd) && even + odd > 0.0) {
+        t += 2;
+        even = 1.0 - (within - mean_acov(t)) / variance_plus;
+        odd = 1.0 - (within - mean_acov(t + 1)) / variance_plus;
+        if (even + odd >= 0.0) {
+            rho(t) = even;
+            rho(t + 1) = odd;
+        }
+    }
+    const Eigen::Index max_t = t;
+    if (even > 0.0) rho(max_t) = even;
+    for (t = 2; t <= max_t - 2; t += 2) {
+        if (rho(t) + rho(t + 1) > rho(t - 2) + rho(t - 1)) {
+            rho(t) = 0.5 * (rho(t - 2) + rho(t - 1));
+            rho(t + 1) = rho(t);
+        }
+    }
+    const double total = static_cast<double>(n) * chains;
+    const double tau = -1.0 + 2.0 * rho.head(std::max<Eigen::Index>(1, max_t)).sum() + rho(max_t);
+    return total / std::max(tau, 1.0 / std::log10(total));
+}
+
+//// Rank-normalised split-ESS (Vehtari et al. 2021): returns (bulk_ESS, tail_ESS)
+inline std::pair<double, double> compute_Stan_split_ESS_rank(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
+    const double undefined = std::numeric_limits<double>::quiet_NaN();
+    if (mcmc_array.rows() < 8 || mcmc_array.cols() == 0 || !mcmc_array.allFinite()) return {undefined, undefined};
+    const Eigen::MatrixXd draws = mcmc_array;
+    const Eigen::MatrixXd ranked = stan::analyze::rank_transform(fn_split_diagnostic_chains(draws));
+    const double bulk = fn_ensemble_ESS(ranked);
+    if (!fn_diagnostic_ensemble_varies(draws)) return {bulk, undefined};
+    const Eigen::MatrixXd lower = fn_split_diagnostic_chains(
+        (draws.array() <= stan::math::quantile(draws.reshaped(), 0.05)).cast<double>());
+    const Eigen::MatrixXd upper = fn_split_diagnostic_chains(
+        (draws.array() <= stan::math::quantile(draws.reshaped(), 0.95)).cast<double>());
+    const double lower_ess = fn_ensemble_ESS(lower);
+    const double upper_ess = fn_ensemble_ESS(upper);
+    const double tail = std::isnan(lower_ess) || std::isnan(upper_ess) ? undefined : std::min(lower_ess, upper_ess);
+    return {bulk, tail};
+}
+
+
+//// Rank-normalised split-Rhat: returns (bulk_rhat, tail_rhat); report max of the two.
+inline std::pair<double, double> compute_Stan_split_Rhat_rank(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
+    const double undefined = std::numeric_limits<double>::quiet_NaN();
+    if (mcmc_array.rows() < 4 || mcmc_array.cols() == 0 || !mcmc_array.allFinite()) return {undefined, undefined};
+    const Eigen::MatrixXd draws = mcmc_array;
+    const Eigen::MatrixXd ranked = stan::analyze::rank_transform(fn_split_diagnostic_chains(draws));
+    const Eigen::MatrixXd folded = (draws.array() - stan::math::quantile(draws.reshaped(), 0.5)).abs();
+    const Eigen::MatrixXd ranked_folded = stan::analyze::rank_transform(fn_split_diagnostic_chains(folded));
+    const double bulk = fn_diagnostic_ensemble_varies(ranked) ? stan::analyze::rhat(ranked) : undefined;
+    const double tail = fn_diagnostic_ensemble_varies(ranked_folded) ? stan::analyze::rhat(ranked_folded) : undefined;
+    return {bulk, tail};
+}
+
 
 inline double   compute_Stan_ESS(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
   
@@ -92,73 +197,66 @@ inline double   compute_Stan_ESS(const Eigen::Ref<const Eigen::Matrix<double, -1
       
 }
 
+
+inline double  compute_Stan_Rhat(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
   
-  
-  
-  
-  inline double  compute_Stan_Rhat(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
-  
-  const int n_iter = mcmc_array.rows();
-  const int n_chains = mcmc_array.cols();
-  
-  // Create a vector of pointers to each column (chain)
-  std::vector<const double*> draws;
-  for (int chain = 0; chain < n_chains; ++chain) {
-    draws.push_back(mcmc_array.col(chain).data());
-  } 
-  
-  // Create a sizes vector (each chain has the same size in this example)
-  std::vector<size_t> sizes(n_chains, n_iter);
-  
-  double out = stan::analyze::compute_potential_scale_reduction(draws, sizes);
-  
-  return out;
+          const int n_iter = mcmc_array.rows();
+          const int n_chains = mcmc_array.cols();
+          
+          // Create a vector of pointers to each column (chain)
+          std::vector<const double*> draws;
+          for (int chain = 0; chain < n_chains; ++chain) {
+            draws.push_back(mcmc_array.col(chain).data());
+          } 
+          
+          // Create a sizes vector (each chain has the same size in this example)
+          std::vector<size_t> sizes(n_chains, n_iter);
+          
+          double out = stan::analyze::compute_potential_scale_reduction(draws, sizes);
+          
+          return out;
   
 }
-
-
 
 
 inline double   compute_Stan_split_ESS(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
   
-  const int n_iter = mcmc_array.rows();
-  const int n_chains = mcmc_array.cols();
-  
-  // Create a vector of pointers to each column (chain)
-  std::vector<const double*> draws;
-  for (int chain = 0; chain < n_chains; ++chain) {
-    draws.push_back(mcmc_array.col(chain).data());
-  } 
-   
-  // Create a sizes vector (each chain has the same size in this example)
-  std::vector<size_t> sizes(n_chains, n_iter);
-  
-  double out = stan::analyze::compute_split_effective_sample_size(draws, sizes);
-  
-  return out;
+          const int n_iter = mcmc_array.rows();
+          const int n_chains = mcmc_array.cols();
+          
+          // Create a vector of pointers to each column (chain)
+          std::vector<const double*> draws;
+          for (int chain = 0; chain < n_chains; ++chain) {
+            draws.push_back(mcmc_array.col(chain).data());
+          } 
+           
+          // Create a sizes vector (each chain has the same size in this example)
+          std::vector<size_t> sizes(n_chains, n_iter);
+          
+          double out = stan::analyze::compute_split_effective_sample_size(draws, sizes);
+          
+          return out;
   
 }
 
 
-
-
 inline double  compute_Stan_split_Rhat(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
-  
-  const int n_iter = mcmc_array.rows();
-  const int n_chains = mcmc_array.cols();
-  
-  // Create a vector of pointers to each column (chain)
-  std::vector<const double*> draws;
-  for (int chain = 0; chain < n_chains; ++chain) {
-    draws.push_back(mcmc_array.col(chain).data());
-  } 
-  
-  // Create a sizes vector (each chain has the same size in this example)
-  std::vector<size_t> sizes(n_chains, n_iter);
-  
-  double out = stan::analyze::compute_split_potential_scale_reduction(draws, sizes);
-  
-  return out;
+          
+          const int n_iter = mcmc_array.rows();
+          const int n_chains = mcmc_array.cols();
+          
+          // Create a vector of pointers to each column (chain)
+          std::vector<const double*> draws;
+          for (int chain = 0; chain < n_chains; ++chain) {
+            draws.push_back(mcmc_array.col(chain).data());
+          } 
+          
+          // Create a sizes vector (each chain has the same size in this example)
+          std::vector<size_t> sizes(n_chains, n_iter);
+          
+          double out = stan::analyze::compute_split_potential_scale_reduction(draws, sizes);
+          
+          return out;
   
 } 
 
@@ -191,8 +289,8 @@ inline double  compute_Stan_split_Rhat(const Eigen::Ref<const Eigen::Matrix<doub
 
 
   
-inline std::pair<double, double> Stan_compute_diagnostic(const std::string &diagnostic, 
-                                                         const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
+inline std::pair<double, double> Stan_compute_diagnostic( const std::string &diagnostic, 
+                                                          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> mcmc_array) {
       
             if (diagnostic == "ESS") {
               double ess = compute_Stan_ESS(mcmc_array);
@@ -210,12 +308,14 @@ inline std::pair<double, double> Stan_compute_diagnostic(const std::string &diag
               double rhat = compute_Stan_split_Rhat(mcmc_array);
               return std::make_pair(rhat, 0.0);
             }
-            // if (diagnostic == "split_rhat_rank") {
-            //   std::pair<double, double>  rhat = compute_Stan_split_Rhat_rank(mcmc_array);
-            //   return  rhat;
-            // }
-    
-    return std::make_pair(0.0, 0.0);
+            if (diagnostic == "split_ESS_rank") {
+              return compute_Stan_split_ESS_rank(mcmc_array);   //// (bulk, tail)
+            }
+            if (diagnostic == "split_rhat_rank") {
+              return compute_Stan_split_Rhat_rank(mcmc_array);  //// (bulk, tail)
+            }
+
+            return std::make_pair(0.0, 0.0);
     
 }
 
@@ -371,8 +471,6 @@ struct ComputeStatsParallel : public RcppParallel::Worker {
         }
   
 };
-
-
 
 
 

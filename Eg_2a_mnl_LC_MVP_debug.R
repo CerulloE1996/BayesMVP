@@ -105,7 +105,7 @@ BayesMVP:::detect_vectorization_support()
 ## Simulate data (for N = 500)
 {
       source(file.path(getwd(), "R_fn_load_data_binary_LC_MVP_sim.R"))
-      N <- 500
+      N <- 2500
       ## Call the fn to simulate binary data:
       data_sim_outs <- simulate_binary_LC_MVP_data(N_vec = N, 
                                                    seed = 123, 
@@ -241,7 +241,7 @@ Model_type <- "LC_MVP"
     ## -----------  initialise model / inits etc
     # based on (informal) testing, more than 8 burnin chains seems unnecessary 
     # and probably not worth the extra overhead (even on a 96-core AMD EPYC Genoa CPU)
-    n_chains_burnin <- min(8, parallel::detectCores()) 
+    n_chains_burnin <- min(16, parallel::detectCores()) 
     init_lists_per_chain <- rep(list(init), n_chains_burnin) 
     
      
@@ -287,24 +287,62 @@ Model_type <- "LC_MVP"
     
     
     
+    
+    
+    
+ 
+    {
+      ##  NOTE: You can also use "model_obj$sample()" to update the model.
+      ##
+      ##  For example, if using the same model but a new/different dataset (so new y and N, and n_nuisance needed), you can do:
+      ##  model_obj$sample(y = y, N = N, n_nuisance = n_nuisance, ...)
+      ##
+      ##  You can also update model_args_list. 
+      ##  For example, let's say I wanted to change the prior for disease prevalence to be informative s.t. prev ~ beta(5, 10). 
+      ##  I could do this by modifying model_args_list:
+      model_args_list$prev_prior_a <-  matrix(5, ncol = 1)
+      model_args_list$prev_prior_b <-  matrix(10, ncol = 1) ## 10
+      
+      
+      # ## To run standard HMC, do:
+      partitioned_HMC <- FALSE ;    diffusion_HMC <- FALSE
+      # ## To run * partitioned * HMC (i.e. sample nuisance and main params. seperately), do:
+      #  partitioned_HMC <- TRUE ;     diffusion_HMC <- FALSE # fine
+      # ## To run partitioned * and * diffusion HMC (i.e., nuisance params. sampled using diffusion-pathspace HMC), do:
+      # partitioned_HMC <- TRUE ;    diffusion_HMC <- TRUE  # fine
+      
+      ## To use manual tau (path length):
+      #### manual_tau <- TRUE ;    tau_if_manual <- c(0.50, 1.0) # NOTE: first element in "tau_if_manual" is tau_main and second is tau_us
+      ## To use automaticn tau (path length) adaptation (using SNAPER-HMC):
+      manual_tau <- FALSE ;   tau_if_manual <- NA
+      
+      force_autodiff <- FALSE
+      force_PartialLog <- FALSE
+      multi_attempts <- TRUE
+      
+      n_runs <- 5
+    }
+    
+    
+    
+    
     ## ----------- Set some basic sampler settings
     {
             #### seed <- 123
             n_chains_sampling <- min(64, parallel::detectCores()) ## min(64, parallel::detectCores())
-            n_superchains <-   min(8, parallel::detectCores())  ## round(n_chains_sampling / n_chains_burnin) # Each superchain is a "group" or "nest" of chains. If using ~8 chains or less, set this to 1. 
-            n_iter <-   500                                 
+            n_superchains     <- min(8, parallel::detectCores())  ## round(n_chains_sampling / n_chains_burnin) # Each superchain is a "group" or "nest" of chains. If using ~8 chains or less, set this to 1. 
+            n_iter <-   1000                                 
             n_burnin <- 500
             n_nuisance_to_track <- n_nuisance # set to some small number (< 10) if don't care about making inference on nuisance params (which is most of the time!)
             ##
             #### learning_rate <- 0.025
             learning_rate <- 0.05
             ##
-             metric_shape_main <- "diag" 
-            # metric_shape_main <- "dense" 
-            ##
-          metric_type_main <- "Hessian"
-          #  metric_type_main <- "Empirical"
-            ##
+            #  metric_shape_main <- "diag"    ; metric_type_main <- "Empirical"  # works w/ part == TRUE (N = 500)  + w/ part == FALSE (N = 500)
+            # metric_shape_main <- "dense"   ; metric_type_main <- "Empirical"   # works w/ part == TRUE (N = 500) + w/ part == FALSE (N = 500)
+            # metric_shape_main <- "diag"    ; metric_type_main <- "Hessian"      # works w/ part == TRUE (N = 500) + w/ part == FALSE (N = 500)
+             metric_shape_main <- "dense"  ; metric_type_main <- "Hessian"      # works w/ part == TRUE (N = 500) + w/ part == FALSE (N = 500)
+             ##
             if (parallel::detectCores() < 64) { 
               vect_type <- "AVX2"
             } else { 
@@ -315,73 +353,106 @@ Model_type <- "LC_MVP"
             ##
             clip_iter = round(n_burnin/10) ; clip_iter
             ##
-            if (metric_type_main == "Hessian") { 
-               
-                 interval_width_main <- 25
-                 # interval_width_main <- 50
-                 ##
-                 ## ratio_M_main <- 0.25
-                 ratio_M_main <- 0.50
-                 ## ratio_M_main <- 0.75
-                 ##
-                 ratio_M_us   <- 0.25
-                 ##
-                 interval_width_nuisance <- interval_width_main
-                 
-            } else if (metric_type_main == "Empirical") { 
+            
+            if (partitioned_HMC == TRUE) {
+            
+                          
+                          if (metric_type_main == "Hessian") { 
+
+                                   #ratio_M_main <- 0.25
+                                   ratio_M_main <- 0.50
+                                   ## ratio_M_main <- 0.75
+                                   ##
+                                   ratio_M_us   <- 0.25
+                                   ##
+                                   interval_width_main <- 50
+                                   ##
+                                   interval_width_nuisance <- interval_width_main
+                               
+                          } else if (metric_type_main == "Empirical") { 
+                            
+                                    if (metric_shape_main == "diag") { ## Seems to work well for N = 500 w/ the following settings:
+                                      
+                                                interval_width_main <- 50
+                                                ##
+                                                ratio_M_main <- 0.50
+                                                ##
+                                                ratio_M_us   <- 0.25
+                                                ##
+                                                interval_width_nuisance <- interval_width_main
+                                               
+                                    } else if (metric_shape_main == "dense") { 
+                                      
+                                                interval_width_main <- 50
+                                                ##
+                                                ## ratio_M_main <- 0.75
+                                                ratio_M_main <- 0.50
+                                                ##
+                                                ratio_M_us   <- 0.25
+                                                ##
+                                                interval_width_nuisance <- interval_width_main
+                                      
+                                    }
+                                  
+                          }
+                          ##
+                          ## ratio_M_us   <- 0
+                          # ##
+                          # interval_width_nuisance <- interval_width_main
+                          # # # interval_width_nuisance <- 1
+                          # #   interval_width_nuisance <- 5
+                          # # # interval_width_nuisance <- 10
+                          # # # interval_width_nuisance <- 50
+                          # ##
+                          # # ratio_M_main <- 0.25
+                          # # ratio_M_main <- 0.50
+                          # ratio_M_main = 0.75 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
+                          # # ratio_M_main = 0.80 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
+                          # # ratio_M_main = 0.90 ## NOTE: if set to 0, you will get a UNIT metric for these params.
+                          # # ratio_M_main = 0.95 ## NOTE: if set to 0, you will get a UNIT metric for these params.
+                          # #### ratio_M_main = 1.00 ## NOTE: if set to 0, you will get a UNIT metric for these params.
+                          # ## For nuisance metric:
+                          # #### ratio_M_us =   0.75 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
+                          # # ratio_M_us <-  0.50 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
+                          # ratio_M_us <-  0.25
+                          # ## ratio_M_us <-  0
+            
+            } else if (partitioned_HMC == FALSE) {
+                
+                        if (metric_type_main == "Empirical") { 
+                        
+                              ratio_M_main <- 0.50
+                              ##
+                              ratio_M_us   <- 0.50
+                              ##
+                              interval_width_main <- 1
+                              ##
+                              interval_width_nuisance <- interval_width_main
+                              
+                        } else if (metric_type_main == "Hessian") {
+                          
+                              ratio_M_main <- 0.50
+                              ##
+                              ratio_M_us   <- 0.50
+                              ##
+                              interval_width_main <- 5
+                              ##
+                              interval_width_nuisance <- interval_width_main
+                          
+                        }
               
-                      if (metric_shape_main == "diag") { ## Seems to work well for N = 500 w/ the following settings:
-                        
-                                  interval_width_main <- 50
-                                  ##
-                                  ratio_M_main <- 0.50
-                                  ##
-                                  ratio_M_us   <- 0.25
-                                  ##
-                                  interval_width_nuisance <- interval_width_main
-                                 
-                      } else if (metric_shape_main == "dense") { 
-                        
-                                  interval_width_main <- 50
-                                  ## interval_width_main <- 25
-                                  # interval_width_main <- 10
-                                  # interval_width_main <- 5
-                                  #  interval_width_main <- 1
-                                  ##
-                                  ## ratio_M_main <- 0.75
-                                  ratio_M_main <- 0.50
-                                  ##
-                                  ratio_M_us   <- 0.25
-                                  ##
-                                  interval_width_nuisance <- interval_width_main
-                        
-                      }
-                    
               
             }
-            # ##
-            # interval_width_nuisance <- interval_width_main
-            # # # interval_width_nuisance <- 1
-            # #   interval_width_nuisance <- 5
-            # # # interval_width_nuisance <- 10
-            # # # interval_width_nuisance <- 50
-            # ##
-            # # ratio_M_main <- 0.25
-            # # ratio_M_main <- 0.50
-            # ratio_M_main = 0.75 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
-            # # ratio_M_main = 0.80 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
-            # # ratio_M_main = 0.90 ## NOTE: if set to 0, you will get a UNIT metric for these params.
-            # # ratio_M_main = 0.95 ## NOTE: if set to 0, you will get a UNIT metric for these params.
-            # #### ratio_M_main = 1.00 ## NOTE: if set to 0, you will get a UNIT metric for these params.
-            # ## For nuisance metric:
-            # #### ratio_M_us =   0.75 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
-            # # ratio_M_us <-  0.50 ## NOTE: if set to 0, you will get a UNIT metric for these params. 
-            # ratio_M_us <-  0.25
-            # ## ratio_M_us <-  0
     }
     
     
     
+    
+    
+    
+    
+    
+
     
     
     
@@ -390,46 +461,6 @@ Model_type <- "LC_MVP"
     
     
     #### ------ sample model using "  model_obj$sample()" --------- 
-    {
-            ##  NOTE: You can also use "model_obj$sample()" to update the model.
-            ##
-            ##  For example, if using the same model but a new/different dataset (so new y and N, and n_nuisance needed), you can do:
-            ##  model_obj$sample(y = y, N = N, n_nuisance = n_nuisance, ...)
-            ##
-            ##  You can also update model_args_list. 
-            ##  For example, let's say I wanted to change the prior for disease prevalence to be informative s.t. prev ~ beta(5, 10). 
-            ##  I could do this by modifying model_args_list:
-            model_args_list$prev_prior_a <-  matrix(5, ncol = 1)
-            model_args_list$prev_prior_b <-  matrix(10, ncol = 1) ## 10
-            
-            
-            # ## To run standard HMC, do:
-            #partitioned_HMC <- FALSE ;    diffusion_HMC <- FALSE
-            # ## To run * partitioned * HMC (i.e. sample nuisance and main params. seperately), do:
-            partitioned_HMC <- TRUE ;     diffusion_HMC <- FALSE # fine
-            # ## To run partitioned * and * diffusion HMC (i.e., nuisance params. sampled using diffusion-pathspace HMC), do:
-            # partitioned_HMC <- TRUE ;    diffusion_HMC <- TRUE  # fine
-            
-            ## To use manual tau (path length):
-            #### manual_tau <- TRUE ;    tau_if_manual <- c(0.50, 1.0) # NOTE: first element in "tau_if_manual" is tau_main and second is tau_us
-            ## To use automaticn tau (path length) adaptation (using SNAPER-HMC):
-            manual_tau <- FALSE ;   tau_if_manual <- NA
-            
-            force_autodiff <- FALSE
-            force_PartialLog <- FALSE
-            multi_attempts <- TRUE
-            
-            n_runs <- 5
-    }
-    
-    
-    
-    
-    
-    
-    
-    
-    
     {
       
     {
@@ -503,8 +534,8 @@ Model_type <- "LC_MVP"
                                                   ratio_M_us = ratio_M_us,
                                                   ratio_M_main = ratio_M_main,
                                                   ##
-                                                  # parallel_method = "RcppParallel",
-                                                   parallel_method = "OpenMP",
+                                                  ## parallel_method = "RcppParallel",
+                                                     parallel_method = "OpenMP",
                                                   ## vect_type = BayesMVP:::detect_vectorization_support(),
                                                   vect_type = vect_type,
                                                   n_nuisance_to_track = n_nuisance_to_track
@@ -521,12 +552,12 @@ Model_type <- "LC_MVP"
             
  
             
-            if (i > 5) { 
-                try({  
+            if (i > 5) {
+                try({
                   beepr::beep("wilhelm")
                 })
-            } else { 
-                try({  
+            } else {
+                try({
                   beepr::beep("ping")
                 })
             }
@@ -557,7 +588,7 @@ Model_type <- "LC_MVP"
       
       {
         
-          if (Min_ESS_per_sec_sampling < 0.05) { 
+          if (Min_ESS_per_sec_sampling < 0.05) {
             break
           }
         

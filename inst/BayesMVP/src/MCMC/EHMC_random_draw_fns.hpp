@@ -5,6 +5,7 @@
 
 
 #include <random>
+#include <cstdint>
 
   
 
@@ -33,6 +34,29 @@ using namespace Eigen;
 
  
 // HMC sampler functions   ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+// Burn-in calls the single-thread loop with one iteration at a time. Its incoming seed
+// already includes iteration + chain, so adding them again cannot distinguish pairs such
+// as (iteration 2, chain 1) and (iteration 1, chain 2). Seed from separate tuple fields.
+template<typename T>
+inline void fn_seed_burnin_rng(T &rng,
+                               const int incoming_chain_seed,
+                               const int chain_id,
+                               const int iteration,
+                               const std::uint32_t parameter_block) {
+    std::seed_seq seed_sequence{static_cast<std::uint32_t>(incoming_chain_seed),
+                               static_cast<std::uint32_t>(chain_id),
+                               static_cast<std::uint32_t>(iteration),
+                               parameter_block, std::uint32_t{0x4255524e}};
+#if RNG_TYPE_CPP_STD == 1
+    rng.seed(seed_sequence);
+#elif RNG_TYPE_dqrng_xoshiro256plusplus == 1
+    std::uint32_t seed_words[2];
+    seed_sequence.generate(seed_words, seed_words + 2);
+    const std::uint64_t combined_seed = (static_cast<std::uint64_t>(seed_words[0]) << 32) | seed_words[1];
+    rng.seed(combined_seed);
+#endif
+}
 
  
  

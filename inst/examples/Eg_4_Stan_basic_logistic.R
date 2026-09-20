@@ -11,41 +11,43 @@
 ## NUTS-HMC (Hoffman et al, 2014) for the adaptation. 
 
 
-
-####  ---- 1. Install BayesMVP (from GitHub) - SKIP THIS STEP IF INSTALLED: -----------------------------------------------------------
-## First remove any possible package fragments:
-## Find user_pkg_install_dir:
-user_pkg_install_dir <- Sys.getenv("R_LIBS_USER")
-print(paste("user_pkg_install_dir = ", user_pkg_install_dir))
-##
-## Find pkg_install_path + pkg_temp_install_path:
-pkg_install_path <- file.path(user_pkg_install_dir, "BayesMVP")
-pkg_temp_install_path <- file.path(user_pkg_install_dir, "00LOCK-BayesMVP") 
-##
-## Remove any (possible) BayesMVP package fragments:
-remove.packages("BayesMVP")
-unlink(pkg_install_path, recursive = TRUE, force = TRUE)
-unlink(pkg_temp_install_path, recursive = TRUE, force = TRUE)
-##
-## First install OUTER package:
-remotes::install_github("https://github.com/CerulloE1996/BayesMVP", force = TRUE, upgrade = "never")
-## Then restart R session:
-rstudioapi::restartSession()
-## Then install INNTER (i.e. the "real") package:
-require(BayesMVP)
-BayesMVP::install_BayesMVP()
-require(BayesMVP)
-
+# 
+# ####  ---- 1. Install BayesMVP (from GitHub) - SKIP THIS STEP IF INSTALLED: -----------------------------------------------------------
+# ## First remove any possible package fragments:
+# ## Find user_pkg_install_dir:
+# user_pkg_install_dir <- Sys.getenv("R_LIBS_USER")
+# print(paste("user_pkg_install_dir = ", user_pkg_install_dir))
+# ##
+# ## Find pkg_install_path + pkg_temp_install_path:
+# pkg_install_path <- file.path(user_pkg_install_dir, "BayesMVP")
+# pkg_temp_install_path <- file.path(user_pkg_install_dir, "00LOCK-BayesMVP") 
+# ##
+# ## Remove any (possible) BayesMVP package fragments:
+# remove.packages("BayesMVP")
+# unlink(pkg_install_path, recursive = TRUE, force = TRUE)
+# unlink(pkg_temp_install_path, recursive = TRUE, force = TRUE)
+# ##
+# ## First install OUTER package:
+# remotes::install_github("https://github.com/CerulloE1996/BayesMVP", force = TRUE, upgrade = "never")
+# ## Then restart R session:
+# rstudioapi::restartSession()
+# ## Then install INNTER (i.e. the "real") package:
+# require(BayesMVP)
+# BayesMVP::install_BayesMVP()
+# require(BayesMVP)
+# 
 # require(BayesMVP)
 # CUSTOM_FLAGS <- list()
 # install_BayesMVP(CUSTOM_FLAGS = list())
-# require(BayesMVP) 
+# require(BayesMVP)
 
 
 
 
 
 ####  ---- 2. Set BayesMVP example path and set working directory:  --------------------------------------------------------------------
+require(RcppParallel)
+require(BayesMVP)
 {
   user_dir_outs <- BayesMVP:::set_pkg_example_path_and_wd()
   ## Set paths:
@@ -75,7 +77,7 @@ BayesMVP:::detect_vectorization_support()
  
 Model_type <- "Stan"  # specify Model_type as "Stan" if using a Stan model
 
-source(file.path(pkg_example_path, "load_R_packages.R"))
+# source(file.path(pkg_example_path, "load_R_packages.R"))
 
  
  
@@ -152,8 +154,11 @@ source(file.path(pkg_example_path, "load_R_packages.R"))
       
       Stan_init_list <- init
       
-      # make lists of lists for inits 
-      n_chains <- max(64, parallel::detectCores() / 2)
+      # # make lists of lists for inits 
+      # n_chains <- max(64, parallel::detectCores() / 2)
+      ##
+      n_chains <- 8
+      ##
       init_lists_per_chain <- rep(list(Stan_init_list), n_chains) 
       
       n_burnin <- 500
@@ -234,6 +239,13 @@ source(file.path(pkg_example_path, "load_R_packages.R"))
         
 }
  
+      # 
+      # [1] "Stan_min_ESS =  888"
+      # [1] "Stan_min_ESS_per_sec =  887.67"
+      # [1] "Stan_min_ESS_per_sec_sampling =  2026.34"
+      # [1] "Stan_min_ESS_per_grad_sampling_x_1000 =  24.45"
+      # [1] "Stan_grad_evals_per_sec_div_1000 =  82.88"
+      
 
     
     sample_nuisance <- FALSE
@@ -246,7 +258,7 @@ source(file.path(pkg_example_path, "load_R_packages.R"))
     ## Define # of (raw) model parameters
     n_params_main <- n_covs + 1
     
-    n_nuisance <- 10 # dummry variable (just set to something small e.g. between 5-10 - this example model doesn't have any nuisance parameters)
+    n_nuisance <- 9 # dummry variable (just set to something small e.g. between 5-10 - this example model doesn't have any nuisance parameters)
     
       
     ## set Stan model file path for your Stan model (replace with your path)
@@ -285,7 +297,29 @@ source(file.path(pkg_example_path, "load_R_packages.R"))
     partitioned_HMC <- FALSE ;    diffusion_HMC <- FALSE
     
     
+    recip <- function(x) { 
+      
+      if (is.vector(x)) {
+        
+        recip_x <- 1.0 / x
+        return(recip_x)
+        
+      } else if (is.matrix(x)) { 
+        
+        diag_of_x <- diag(x)
+        recip_diag_x <- 1.0 / diag_of_x
+        recip_mat_x <- diag(recip_diag_x)
+        return(recip_mat_x)
+        
+      } else {
+        
+        stop("ERROR: x must be either a vector or a matrix")
+        
+      }
+      
+    }
     
+    ##
     model_samples <-  model_obj$sample(  partitioned_HMC = partitioned_HMC,
                                          diffusion_HMC = diffusion_HMC,
                                          seed = seed,
@@ -316,8 +350,77 @@ source(file.path(pkg_example_path, "load_R_packages.R"))
                                          )   
     
   
+    diffusion_HMC = diffusion_HMC
+    seed = seed
+    n_burnin = 500
+    n_iter = n_iter
+    n_chains_sampling = n_chains_sampling
+    n_superchains = n_superchains
+    ## Some other arguments:
+    y = y
+    N = N
+    n_params_main = n_params_main
+    n_nuisance = n_nuisance
+    init_lists_per_chain = init_lists_per_chain
+    n_chains_burnin = n_chains_burnin
+    model_args_list = NULL
+    # Some other SAMPLER / MCMC arguments:
+    sample_nuisance = FALSE
+    adapt_delta = 0.80
+    learning_rate = 0.05
+    metric_shape_main = "diag"
+    metric_type_main = "Hessian"
+    tau_mult = 2.0
+    clip_iter = 25
+    interval_width_main = 50
+    ratio_M_us = 0.25
+    ratio_M_main = 0.25
+    parallel_method = "RcppParallel"
+    ##
+    LR_main <- 0.05
+    LR_us <- 0.05
+    manual_tau <- FALSE
+    ##
+    n_chains_burnin <- n_chains
+    ##
+    ## Helper function:
+    if_null_then_set_to <- function(x, set_to_this_if_null) { 
+      if (is.null(x)) {
+        return(set_to_this_if_null)
+      }
+      return(x)
+    }
+    ##
+    gap <- n_adapt <- NULL
+    n_adapt <- if_null_then_set_to(n_adapt, n_burnin - round(n_burnin/10))
+    gap <- if_null_then_set_to(gap, clip_iter  + round(n_adapt / 5))
+    interval_width_nuisance <- interval_width_main <- NULL
+    interval_width_main <- if_null_then_set_to(interval_width_main, round(n_burnin/10))
+    interval_width_nuisance <- if_null_then_set_to(interval_width_nuisance, round(n_burnin/10))
+    metric_shape_nuisance <- "diag"
+    metric_type_nuisance = "Empirical"
+    ##
+    force_autodiff = FALSE
+    force_PartialLog = FALSE
+    multi_attempts = TRUE
+    ##
+    max_eps_main <- max_eps_us <- 100
+    max_L = 1024
+    ##
+    init_object <- model_obj$init_object
+    Stan_data_list = stan_data
     
     
+    
+    n_chains_sampling = n_chains_sampling
+    n_superchains = n_superchains
+    n_params_main = n_params_main
+    n_nuisance = n_nuisance
+    theta_main_vectors_all_chains_input_from_R
+    theta_us_vectors_all_chains_input_from_R
+
+
+
     
     #### --- MODEL RESULTS SUMMARY + DIAGNOSTICS -------------------------------------------------------------
     # after fitting, call the "summary()" method to compute + extract e.g. model summaries + traces + plotting methods 

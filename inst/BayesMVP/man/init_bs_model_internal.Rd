@@ -4,9 +4,8 @@
 \alias{init_bs_model_internal}
 \title{init_bs_model_internal}
 \usage{
-init_bs_model_internal(Stan_data_list, Stan_model_name)
+init_bs_model_internal(stream = NULL, Stan_data_list, Stan_model_name)
 }
 \description{
 init_bs_model_internal
 }
-\keyword{internal}

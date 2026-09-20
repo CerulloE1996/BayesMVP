@@ -236,6 +236,36 @@ devtools::check()
 
 
 
+####  ---- 1. Install BayesMVP (from GitHub) - SKIP THIS STEP IF INSTALLED: -----------------------------------------------------------
+## First remove any possible package fragments:
+## Find user_pkg_install_dir:
+user_pkg_install_dir <- Sys.getenv("R_LIBS_USER")
+print(paste("user_pkg_install_dir = ", user_pkg_install_dir))
+##
+## Find pkg_install_path + pkg_temp_install_path:
+pkg_install_path <- file.path(user_pkg_install_dir, "BayesMVP")
+pkg_temp_install_path <- file.path(user_pkg_install_dir, "00LOCK-BayesMVP") 
+##
+## Remove any (possible) BayesMVP package fragments:
+remove.packages("BayesMVP")
+unlink(pkg_install_path, recursive = TRUE, force = TRUE)
+unlink(pkg_temp_install_path, recursive = TRUE, force = TRUE)
+##
+## First install OUTER package:
+remotes::install_github("https://github.com/CerulloE1996/BayesMVP", force = TRUE, upgrade = "never")
+## Then restart R session:
+rstudioapi::restartSession()
+## Then install INNTER (i.e. the "real") package:
+require(BayesMVP)
+BayesMVP::install_BayesMVP()
+require(BayesMVP)
+
+
+
+
+
+
+
 
 
 

@@ -35,7 +35,7 @@ using namespace Rcpp;
 
 
 
-ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RMatrixColumn_to_EigenColVec(const RcppParallel::RMatrix<double>::Column &rcpp_col) {
+inline Eigen::Matrix<double, -1, 1> fn_convert_RMatrixColumn_to_EigenColVec(const RcppParallel::RMatrix<double>::Column &rcpp_col) {
   
   Eigen::Matrix<double, -1, 1> eigen_col_vec(rcpp_col.size());
   
@@ -51,7 +51,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RMatrixColumn_to_EigenColV
 
 
 
-ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RCppNumMat_Column_to_EigenColVec(const Rcpp::NumericMatrix::Column &rcpp_col) {
+inline Eigen::Matrix<double, -1, 1> fn_convert_RCppNumMat_Column_to_EigenColVec(const Rcpp::NumericMatrix::Column &rcpp_col) {
   
   // Rcpp::NumericVector col_vec = rcpp_col;
   
@@ -71,7 +71,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RCppNumMat_Column_to_Eigen
 
 
 // Function to convert Eigen column vector to RcppParallel::RMatrix column
-ALWAYS_INLINE RcppParallel::RMatrix<double>::Column   fn_convert_EigenColVec_to_RMatrixColumn(const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> eigen_col_vec,  // const 
+inline RcppParallel::RMatrix<double>::Column   fn_convert_EigenColVec_to_RMatrixColumn(const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> eigen_col_vec,  // const 
                                                                                        RcppParallel::RMatrix<double>::Column   r_matrix_col // not const
 ) { 
   
@@ -94,7 +94,7 @@ ALWAYS_INLINE RcppParallel::RMatrix<double>::Column   fn_convert_EigenColVec_to_
 
 
 
-ALWAYS_INLINE void copy_to_global(int chain_idx, 
+inline void copy_to_global(int chain_idx, 
                             int n_iter, 
                             const Eigen::Matrix<double, -1, -1> &local_buffer,
                             std::vector<Eigen::Matrix<double, -1, -1>> &global_trace) {
@@ -111,7 +111,7 @@ ALWAYS_INLINE void copy_to_global(int chain_idx,
 
 
 
-ALWAYS_INLINE void copy_to_global_float(int chain_idx, 
+inline void copy_to_global_float(int chain_idx, 
                                  int n_iter, 
                                  const Eigen::Matrix<float, -1, -1> &local_buffer,
                                  std::vector<Eigen::Matrix<float, -1, -1>> &global_trace) {
@@ -142,7 +142,7 @@ ALWAYS_INLINE void copy_to_global_float(int chain_idx,
 // 
 
 
-ALWAYS_INLINE void copy_to_global_tbb(int chain_index,
+inline void copy_to_global_tbb(int chain_index,
                                int n_iter,
                                const Eigen::Matrix<double, -1, -1> &Eigen_thread_local_trace_buffer,
                                tbb::concurrent_vector<RcppParallel::RMatrix<double>> &trace_output_to_R_RcppPar) {
@@ -163,7 +163,7 @@ ALWAYS_INLINE void copy_to_global_tbb(int chain_index,
 
  
 
- ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RMatrix<double>>    convert_vec_of_RcppMat_to_concurrent_vector(const std::vector<Rcpp::NumericMatrix> &input_matrices,
+ inline tbb::concurrent_vector<RcppParallel::RMatrix<double>>    convert_vec_of_RcppMat_to_concurrent_vector(const std::vector<Rcpp::NumericMatrix> &input_matrices,
                                                                                                             tbb::concurrent_vector<RcppParallel::RMatrix<double>> &result) {
    
   //  result.reserve(input_matrices.size());
@@ -183,7 +183,7 @@ ALWAYS_INLINE void copy_to_global_tbb(int chain_index,
  
  
 template <typename T> 
-ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(const std::vector<T> &inputs, 
+inline tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(const std::vector<T> &inputs, 
                                                                                 tbb::concurrent_vector<T> &result) {
    
    const int dim = inputs.size();
@@ -196,7 +196,7 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
    
    return result;
    
- } 
+} 
 
  
  
@@ -210,7 +210,7 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
  
  
  
- ALWAYS_INLINE void assign_column_to_3D_RcppNumericMat(   Rcpp::NumericMatrix &array_2D,
+inline void assign_column_to_3D_RcppNumericMat(   Rcpp::NumericMatrix &array_2D,
                                                   const Rcpp::NumericMatrix::Column &col_data,
                                                   const int dim1, const int dim2, const int dim3,
                                                   const int col_index) {
@@ -226,7 +226,7 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
          }
        }
        
- }
+}
  
  
  
@@ -236,7 +236,7 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
  
 
 
- ALWAYS_INLINE void assign_column_to_3D_RcppParRMatrix(  RcppParallel::RMatrix<double> &array_2D,
+inline void assign_column_to_3D_RcppParRMatrix(  RcppParallel::RMatrix<double> &array_2D,
                                                 const RcppParallel::RMatrix<double>::Column &col_data,
                                                 const int dim1, const int dim2, const int dim3,
                                                 const int col_index) {
@@ -264,8 +264,8 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
  
  
  
- ALWAYS_INLINE  std::vector<Model_fn_args_struct> replicate_Model_fn_args_struct(const Model_fn_args_struct &input_struct,
-                                                                          int N) {
+inline  std::vector<Model_fn_args_struct> replicate_Model_fn_args_struct( const Model_fn_args_struct &input_struct,
+                                                                                 int N) {
    
    std::vector<Model_fn_args_struct> replicated_structs;
    replicated_structs.reserve(N);  // Reserve space for N copies
@@ -276,14 +276,14 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
    
    return replicated_structs;
    
- }
+}
  
  
  
  
  
- ALWAYS_INLINE std::vector<EHMC_fn_args_struct> replicate_EHMC_fn_args_struct(const EHMC_fn_args_struct &input_struct, /// these are NOT const 
-                                                                      int N) {
+inline std::vector<EHMC_fn_args_struct> replicate_EHMC_fn_args_struct( const EHMC_fn_args_struct &input_struct, /// these are NOT const 
+                                                                              int N) {
    
    std::vector<EHMC_fn_args_struct> replicated_structs; 
    replicated_structs.reserve(N);  // Reserve space for N copies 
@@ -294,7 +294,7 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
    
    return replicated_structs;
    
- }  
+}  
  
  
  
@@ -304,8 +304,8 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
  
  
  
- ALWAYS_INLINE  std::vector<EHMC_Metric_struct> replicate_EHMC_Metric_struct(const EHMC_Metric_struct &input_struct,
-                                                                      int N) { 
+inline  std::vector<EHMC_Metric_struct> replicate_EHMC_Metric_struct( const EHMC_Metric_struct &input_struct,
+                                                                             int N) { 
    
    std::vector<EHMC_Metric_struct> replicated_structs; 
    replicated_structs.reserve(N);  // Reserve space for N copies 
@@ -316,13 +316,13 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
    
    return replicated_structs;
    
- }  
+}  
  
  
  
  
- ALWAYS_INLINE  std::vector<EHMC_burnin_struct> replicate_EHMC_burnin_struct(const EHMC_burnin_struct &input_struct,
-                                                                      int N) {
+inline  std::vector<EHMC_burnin_struct> replicate_EHMC_burnin_struct( const EHMC_burnin_struct &input_struct,
+                                                                              int N) {
    
    std::vector<EHMC_burnin_struct> replicated_structs;
    replicated_structs.reserve(N);  // Reserve space for N copies
@@ -333,7 +333,7 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
    
    return replicated_structs;
    
- }
+}
  
  
  
@@ -346,7 +346,7 @@ ALWAYS_INLINE tbb::concurrent_vector<T>    convert_std_vec_to_concurrent_vector(
  
  
 // Function to convert an Rcpp::NumericMatrix to RcppParallel::RMatrix
-ALWAYS_INLINE RcppParallel::RMatrix<double> fn_convert_RcppMat_to_RMatrix_double(const Rcpp::NumericMatrix &input_matrix) {
+inline RcppParallel::RMatrix<double> fn_convert_RcppMat_to_RMatrix_double(const Rcpp::NumericMatrix &input_matrix) {
    
   RcppParallel::RMatrix<double> rmatrix(input_matrix);
   
@@ -363,7 +363,7 @@ ALWAYS_INLINE RcppParallel::RMatrix<double> fn_convert_RcppMat_to_RMatrix_double
 // // 
 // Convert Eigen::Matrix<T, -1, 1> to RcppParallel::RVector
 template <typename T>
-ALWAYS_INLINE RcppParallel::RVector<T> fn_convert_EigenColVec_to_RVec(Eigen::Ref<Eigen::Matrix<T, -1, 1>> EigenColVec) {
+inline RcppParallel::RVector<T> fn_convert_EigenColVec_to_RVec(Eigen::Ref<Eigen::Matrix<T, -1, 1>> EigenColVec) {
   
       RcppParallel::RVector<T> RVec(EigenColVec.rows());
       
@@ -375,9 +375,12 @@ ALWAYS_INLINE RcppParallel::RVector<T> fn_convert_EigenColVec_to_RVec(Eigen::Ref
   
 }
 
+
+
+
 // Convert RcppParallel::RVector to Eigen::Matrix<T, -1, 1>
 template <typename T>
-ALWAYS_INLINE Eigen::Matrix<T, -1, 1> fn_convert_RVec_to_EigenColVec(RcppParallel::RVector<T> &RVec) {
+inline Eigen::Matrix<T, -1, 1> fn_convert_RVec_to_EigenColVec(RcppParallel::RVector<T> &RVec) {
   
       Eigen::Matrix<T, -1, 1> EigenColVec(RVec.size());
       
@@ -397,7 +400,7 @@ ALWAYS_INLINE Eigen::Matrix<T, -1, 1> fn_convert_RVec_to_EigenColVec(RcppParalle
 
 
 // / ----------------
-ALWAYS_INLINE Eigen::Matrix<double, -1, 1>  fn_convert_RVec_to_EigenColVec_double(RcppParallel::RVector<double> &RVec) {
+inline Eigen::Matrix<double, -1, 1>  fn_convert_RVec_to_EigenColVec_double(RcppParallel::RVector<double> &RVec) {
   
   Eigen::Matrix<double, -1, 1> EigenColVec(RVec.length());
   
@@ -412,7 +415,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, 1>  fn_convert_RVec_to_EigenColVec_doubl
 
 
 
-ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RcppNumericMatrixColumn_to_EigenColVec(Rcpp::NumericMatrix::Column &rcpp_col) {
+inline Eigen::Matrix<double, -1, 1> fn_convert_RcppNumericMatrixColumn_to_EigenColVec(Rcpp::NumericMatrix::Column &rcpp_col) {
   
   Eigen::Matrix<double, -1, 1> eigen_col_vec(rcpp_col.size());
   
@@ -431,7 +434,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RcppNumericMatrixColumn_to
 
 
 // Function to convert Eigen column vector to RcppParallel::RMatrix column
-ALWAYS_INLINE Rcpp::NumericMatrix::Column                  fn_convert_EigenColVec_to_RcppNumericMatrixColumn(const Eigen::Ref<const Eigen::Matrix<double, -1, 1>>  eigen_col_vec, 
+inline Rcpp::NumericMatrix::Column                  fn_convert_EigenColVec_to_RcppNumericMatrixColumn(const Eigen::Ref<const Eigen::Matrix<double, -1, 1>>  eigen_col_vec, 
                                                                                                       Rcpp::NumericMatrix::Column    &r_matrix_col) {
   
   // Ensure the size of the Eigen column vector matches the size of the RMatrix column
@@ -453,7 +456,7 @@ ALWAYS_INLINE Rcpp::NumericMatrix::Column                  fn_convert_EigenColVe
 
 
 // Function to convert Eigen::Matrix<double, -1, -1> to RcppParallel::RMatrix column by column
-ALWAYS_INLINE RcppParallel::RMatrix<double> fn_convert_EigenMat_to_RMatrix(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> EigenMat,
+inline RcppParallel::RMatrix<double> fn_convert_EigenMat_to_RMatrix(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> EigenMat,
                                                                     RcppParallel::RMatrix<double> &RMat) {
   int n_cols = EigenMat.cols();
   int n_rows = EigenMat.rows();
@@ -477,7 +480,7 @@ ALWAYS_INLINE RcppParallel::RMatrix<double> fn_convert_EigenMat_to_RMatrix(const
 
 
 // Convert RcppParallel::RMatrix to Eigen::Matrix<double, -1, -1>
-ALWAYS_INLINE Eigen::Matrix<double, -1, -1> fn_convert_RMatrix_to_Eigen(const RcppParallel::RMatrix<double> &RMat) {
+inline Eigen::Matrix<double, -1, -1> fn_convert_RMatrix_to_Eigen(const RcppParallel::RMatrix<double> &RMat) {
   
   Eigen::Matrix<double, -1, -1> EigenMat(RMat.nrow(), RMat.ncol());
   
@@ -492,7 +495,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, -1> fn_convert_RMatrix_to_Eigen(const Rc
 
 
 // Convert RcppParallel::RMatrix to Eigen::Matrix<double, -1, -1>
-ALWAYS_INLINE Eigen::Matrix<int, -1, -1> fn_convert_RMatrix_to_Eigen_int(const RcppParallel::RMatrix<int> &RMat) {
+inline Eigen::Matrix<int, -1, -1> fn_convert_RMatrix_to_Eigen_int(const RcppParallel::RMatrix<int> &RMat) {
   
   Eigen::Matrix<int, -1, -1> EigenMat(RMat.nrow(), RMat.ncol());
   
@@ -510,7 +513,7 @@ ALWAYS_INLINE Eigen::Matrix<int, -1, -1> fn_convert_RMatrix_to_Eigen_int(const R
 
  
 // Function to convert Eigen::MatrixXd (double) to Rcpp::NumericMatrix
-ALWAYS_INLINE Rcpp::NumericMatrix fn_convert_EigenMat_to_RcppMat_dbl(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> EigenMat) {
+inline Rcpp::NumericMatrix fn_convert_EigenMat_to_RcppMat_dbl(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> EigenMat) {
   
   Rcpp::NumericMatrix RMat(EigenMat.rows(), EigenMat.cols());
   
@@ -524,7 +527,7 @@ ALWAYS_INLINE Rcpp::NumericMatrix fn_convert_EigenMat_to_RcppMat_dbl(const Eigen
 } 
 
 // Function to convert Eigen::MatrixXi (int) to Rcpp::IntegerMatrix
-ALWAYS_INLINE Rcpp::IntegerMatrix fn_convert_EigenMat_to_RcppMat_int(const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> EigenMat) {
+inline Rcpp::IntegerMatrix fn_convert_EigenMat_to_RcppMat_int(const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> EigenMat) {
   
   Rcpp::IntegerMatrix RMat(EigenMat.rows(), EigenMat.cols());
   
@@ -538,7 +541,7 @@ ALWAYS_INLINE Rcpp::IntegerMatrix fn_convert_EigenMat_to_RcppMat_int(const Eigen
 } 
 
 // Function to convert Eigen::VectorXd (double) to Rcpp::NumericVector
-ALWAYS_INLINE Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> EigenVec) {
+inline Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> EigenVec) {
   
   Rcpp::NumericVector RVec(EigenVec.size());
   
@@ -550,7 +553,7 @@ ALWAYS_INLINE Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen
 } 
 
  
- ALWAYS_INLINE Rcpp::IntegerVector fn_convert_EigenVec_to_RcppVec_int(const Eigen::Ref<const Eigen::Matrix<int, -1, 1>> EigenVec) {
+ inline Rcpp::IntegerVector fn_convert_EigenVec_to_RcppVec_int(const Eigen::Ref<const Eigen::Matrix<int, -1, 1>> EigenVec) {
   
   Rcpp::IntegerVector RVec(EigenVec.size());
   
@@ -566,7 +569,7 @@ ALWAYS_INLINE Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen
 
  
  
- ALWAYS_INLINE Eigen::Matrix<double, -1, -1> fn_convert_RcppMat_to_EigenMat(const Rcpp::NumericMatrix &RMat) {
+ inline Eigen::Matrix<double, -1, -1> fn_convert_RcppMat_to_EigenMat(const Rcpp::NumericMatrix &RMat) {
   
   Eigen::Matrix<double, -1, -1>  EigenMat(RMat.nrow(), RMat.ncol());
   
@@ -580,7 +583,7 @@ ALWAYS_INLINE Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen
 } 
 
  
- ALWAYS_INLINE Eigen::Matrix<int, -1, -1>  fn_convert_RcppMat_to_EigenMat(const Rcpp::IntegerMatrix &RMat) { 
+ inline Eigen::Matrix<int, -1, -1>  fn_convert_RcppMat_to_EigenMat(const Rcpp::IntegerMatrix &RMat) { 
   
   Eigen::Matrix<int, -1, -1>  EigenMat(RMat.nrow(), RMat.ncol());
   
@@ -597,7 +600,7 @@ ALWAYS_INLINE Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen
 
  
  
- ALWAYS_INLINE Eigen::Matrix<double, -1, 1 > fn_convert_RcppVec_to_EigenVec_dbl(const Rcpp::NumericVector &RVec) {
+ inline Eigen::Matrix<double, -1, 1 > fn_convert_RcppVec_to_EigenVec_dbl(const Rcpp::NumericVector &RVec) {
    
   Eigen::Matrix<double, -1, 1 > EigenVec(RVec.size());
   
@@ -609,7 +612,7 @@ ALWAYS_INLINE Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen
 }
 
  
- ALWAYS_INLINE Eigen::Matrix<int, -1, 1 > fn_convert_RcppVec_to_EigenVec_int(const Rcpp::IntegerVector &RVec) {
+ inline Eigen::Matrix<int, -1, 1 > fn_convert_RcppVec_to_EigenVec_int(const Rcpp::IntegerVector &RVec) {
   
   Eigen::Matrix<int, -1, 1 > EigenVec(RVec.size());
   
@@ -628,7 +631,7 @@ ALWAYS_INLINE Rcpp::NumericVector fn_convert_EigenVec_to_RcppVec_dbl(const Eigen
 
 
 
-ALWAYS_INLINE RcppParallel::RVector<double> fn_convert_NumericVector_to_RVector(const Rcpp::NumericVector &r_vec) {
+inline RcppParallel::RVector<double> fn_convert_NumericVector_to_RVector(const Rcpp::NumericVector &r_vec) {
   
   RcppParallel::RVector<double> rcpp_parallel_mat(r_vec);
   
@@ -637,7 +640,7 @@ ALWAYS_INLINE RcppParallel::RVector<double> fn_convert_NumericVector_to_RVector(
 }
 
 
-ALWAYS_INLINE RcppParallel::RVector<int> fn_convert_IntegerVector_to_RVector(const Rcpp::IntegerVector &r_vec) {
+inline RcppParallel::RVector<int> fn_convert_IntegerVector_to_RVector(const Rcpp::IntegerVector &r_vec) {
   
   RcppParallel::RVector<int> rcpp_parallel_mat(r_vec);
   
@@ -647,7 +650,7 @@ ALWAYS_INLINE RcppParallel::RVector<int> fn_convert_IntegerVector_to_RVector(con
 
 
 
-ALWAYS_INLINE RcppParallel::RMatrix<double> fn_convert_NumericMatrix_to_RMatrix(const Rcpp::NumericMatrix &r_matrix) {
+inline RcppParallel::RMatrix<double> fn_convert_NumericMatrix_to_RMatrix(const Rcpp::NumericMatrix &r_matrix) {
   
   RcppParallel::RMatrix<double> r_parallel_matrix(r_matrix);
   
@@ -658,7 +661,7 @@ ALWAYS_INLINE RcppParallel::RMatrix<double> fn_convert_NumericMatrix_to_RMatrix(
 
 
 
-ALWAYS_INLINE RcppParallel::RMatrix<int> fn_convert_IntegerMatrix_to_RMatrix(const Rcpp::IntegerMatrix &r_matrix) {
+inline RcppParallel::RMatrix<int> fn_convert_IntegerMatrix_to_RMatrix(const Rcpp::IntegerMatrix &r_matrix) {
   
   RcppParallel::RMatrix<int> r_parallel_matrix(r_matrix);
   
@@ -675,7 +678,7 @@ ALWAYS_INLINE RcppParallel::RMatrix<int> fn_convert_IntegerMatrix_to_RMatrix(con
 
 
 
-ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RVector<double>>   fn_convert_std_vec_of_NumericVector_to_tbb_conc_vec_of_RVector(   const std::vector<Rcpp::NumericVector> &std_vec,
+inline tbb::concurrent_vector<RcppParallel::RVector<double>>   fn_convert_std_vec_of_NumericVector_to_tbb_conc_vec_of_RVector(   const std::vector<Rcpp::NumericVector> &std_vec,
                                                                                                                                  tbb::concurrent_vector<RcppParallel::RVector<double>> &tbb_vec) {
   
   for (int i = 0; i < std_vec.size(); ++i) {
@@ -693,7 +696,7 @@ ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RVector<double>>   fn_convert
 
 
 
-ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RVector<int>>   fn_convert_std_vec_of_IntegerVector_to_tbb_conc_vec_of_RVector(
+inline tbb::concurrent_vector<RcppParallel::RVector<int>>   fn_convert_std_vec_of_IntegerVector_to_tbb_conc_vec_of_RVector(
     const std::vector<Rcpp::IntegerVector> &std_vec,
     tbb::concurrent_vector<RcppParallel::RVector<int>> &tbb_vec) {
   
@@ -714,7 +717,7 @@ ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RVector<int>>   fn_convert_st
 
 
 
-ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RMatrix<double>>   fn_convert_std_vec_of_NumericMatrix_to_tbb_conc_vec_of_RMatrix(
+inline tbb::concurrent_vector<RcppParallel::RMatrix<double>>   fn_convert_std_vec_of_NumericMatrix_to_tbb_conc_vec_of_RMatrix(
     const std::vector<Rcpp::NumericMatrix> &std_vec,
     tbb::concurrent_vector<RcppParallel::RMatrix<double>> &tbb_vec) {
   
@@ -734,7 +737,7 @@ ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RMatrix<double>>   fn_convert
 
 
 
-ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RMatrix<int>>   fn_convert_std_vec_of_IntegerMatrix_to_tbb_conc_vec_of_RMatrix(
+inline tbb::concurrent_vector<RcppParallel::RMatrix<int>>   fn_convert_std_vec_of_IntegerMatrix_to_tbb_conc_vec_of_RMatrix(
     const std::vector<Rcpp::IntegerMatrix> &std_vec,
     tbb::concurrent_vector<RcppParallel::RMatrix<int>> &tbb_vec) {
   
@@ -754,7 +757,7 @@ ALWAYS_INLINE tbb::concurrent_vector<RcppParallel::RMatrix<int>>   fn_convert_st
 
 
 
-ALWAYS_INLINE Eigen::Matrix<double, -1, -1> fn_convert_RMatrix_to_Eigen_double(const RcppParallel::RMatrix<double> &RMat) {
+inline Eigen::Matrix<double, -1, -1> fn_convert_RMatrix_to_Eigen_double(const RcppParallel::RMatrix<double> &RMat) {
   
   Eigen::Matrix<double, -1, -1> EigenMat(RMat.nrow(), RMat.ncol());
   
@@ -769,7 +772,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, -1> fn_convert_RMatrix_to_Eigen_double(c
 }
 
 
-ALWAYS_INLINE std::deque<bool> fn_convert_RVector_to_deque_vec_bool(const RcppParallel::RVector<int> &RVec) {
+inline std::deque<bool> fn_convert_RVector_to_deque_vec_bool(const RcppParallel::RVector<int> &RVec) {
   
   std::deque<bool> stdDeque(RVec.size());
   
@@ -784,7 +787,7 @@ ALWAYS_INLINE std::deque<bool> fn_convert_RVector_to_deque_vec_bool(const RcppPa
 
 
 
-ALWAYS_INLINE std::vector<int> fn_convert_RVector_to_std_vec_Int(const RcppParallel::RVector<int> &RVec) {
+inline std::vector<int> fn_convert_RVector_to_std_vec_Int(const RcppParallel::RVector<int> &RVec) {
   std::vector<int> stdVec(RVec.size());
   
   for (size_t i = 0; i < RVec.size(); ++i) {
@@ -797,7 +800,7 @@ ALWAYS_INLINE std::vector<int> fn_convert_RVector_to_std_vec_Int(const RcppParal
 
 
 
-ALWAYS_INLINE std::vector<double> fn_convert_RVector_to_std_vec_double(const RcppParallel::RVector<double> &RVec) {
+inline std::vector<double> fn_convert_RVector_to_std_vec_double(const RcppParallel::RVector<double> &RVec) {
   std::vector<double> stdVec(RVec.size());
   
   for (size_t i = 0; i < RVec.size(); ++i) {
@@ -810,7 +813,7 @@ ALWAYS_INLINE std::vector<double> fn_convert_RVector_to_std_vec_double(const Rcp
 
 
 
-ALWAYS_INLINE std::vector<std::string> fn_convert_string_RVector_to_std_vec(const RcppParallel::RVector<std::string> &RVec) {
+inline std::vector<std::string> fn_convert_string_RVector_to_std_vec(const RcppParallel::RVector<std::string> &RVec) {
   std::vector<std::string> stdVec(RVec.size());
   
   for (size_t i = 0; i < RVec.size(); ++i) {
@@ -826,7 +829,7 @@ ALWAYS_INLINE std::vector<std::string> fn_convert_string_RVector_to_std_vec(cons
 
 
 
-ALWAYS_INLINE std::vector<Eigen::Matrix<double, -1, 1>> fn_convert_tbb_vec_of_RVector_to_EigenColVec_double(const tbb::concurrent_vector<RcppParallel::RVector<double>> &RVecs) {
+inline std::vector<Eigen::Matrix<double, -1, 1>> fn_convert_tbb_vec_of_RVector_to_EigenColVec_double(const tbb::concurrent_vector<RcppParallel::RVector<double>> &RVecs) {
   
   std::vector<Eigen::Matrix<double, -1, 1>> EigenColVecs(RVecs.size());
   
@@ -852,7 +855,7 @@ ALWAYS_INLINE std::vector<Eigen::Matrix<double, -1, 1>> fn_convert_tbb_vec_of_RV
 
 
 
-ALWAYS_INLINE std::vector<Eigen::Matrix<double, -1, -1>> fn_convert_tbb_vec_of_RMatrix_to_Eigen_double(const tbb::concurrent_vector<RcppParallel::RMatrix<double>> &RMats) {
+inline std::vector<Eigen::Matrix<double, -1, -1>> fn_convert_tbb_vec_of_RMatrix_to_Eigen_double(const tbb::concurrent_vector<RcppParallel::RMatrix<double>> &RMats) {
   
   std::vector<Eigen::Matrix<double, -1, -1>> EigenMats(RMats.size());
   
@@ -868,7 +871,7 @@ ALWAYS_INLINE std::vector<Eigen::Matrix<double, -1, -1>> fn_convert_tbb_vec_of_R
 
 
 
-ALWAYS_INLINE std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> fn_convert_tbb_vec_of_vec_of_RMatrix_to_Eigen_double(const tbb::concurrent_vector<tbb::concurrent_vector<RcppParallel::RMatrix<double>>> &RMatVecs) {
+inline std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> fn_convert_tbb_vec_of_vec_of_RMatrix_to_Eigen_double(const tbb::concurrent_vector<tbb::concurrent_vector<RcppParallel::RMatrix<double>>> &RMatVecs) {
   
   std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> EigenMatVecs(RMatVecs.size());
   
@@ -889,7 +892,7 @@ ALWAYS_INLINE std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> fn_convert
 
 
 
-ALWAYS_INLINE std::vector<std::vector<Eigen::Matrix<int, -1, -1>>> fn_convert_tbb_vec_of_vec_of_RMatrix_to_Eigen_int(const tbb::concurrent_vector<tbb::concurrent_vector<RcppParallel::RMatrix<int>>> &RMatVecs) {
+inline std::vector<std::vector<Eigen::Matrix<int, -1, -1>>> fn_convert_tbb_vec_of_vec_of_RMatrix_to_Eigen_int(const tbb::concurrent_vector<tbb::concurrent_vector<RcppParallel::RMatrix<int>>> &RMatVecs) {
   
   std::vector<std::vector<Eigen::Matrix<int, -1, -1>>> EigenMatVecs(RMatVecs.size());
   
@@ -912,7 +915,7 @@ ALWAYS_INLINE std::vector<std::vector<Eigen::Matrix<int, -1, -1>>> fn_convert_tb
 
 
 
-ALWAYS_INLINE std::vector<std::vector<Eigen::Matrix<int, -1, 1>>> fn_convert_tbb_vec_of_vec_of_RVector_to_EigenColVec_int(const tbb::concurrent_vector<tbb::concurrent_vector<RcppParallel::RVector<int>>> &RVecs) {
+inline std::vector<std::vector<Eigen::Matrix<int, -1, 1>>> fn_convert_tbb_vec_of_vec_of_RVector_to_EigenColVec_int(const tbb::concurrent_vector<tbb::concurrent_vector<RcppParallel::RVector<int>>> &RVecs) {
   
   std::vector<std::vector<Eigen::Matrix<int, -1, 1>>> EigenColVecs(RVecs.size());
   
@@ -941,7 +944,7 @@ ALWAYS_INLINE std::vector<std::vector<Eigen::Matrix<int, -1, 1>>> fn_convert_tbb
 
 
 
-ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RVector_to_EigenColVec_double(const RcppParallel::RVector<double> &RVec) {
+inline Eigen::Matrix<double, -1, 1> fn_convert_RVector_to_EigenColVec_double(const RcppParallel::RVector<double> &RVec) {
   
   Eigen::Matrix<double, -1, 1> EigenColVec(RVec.size());
   
@@ -967,7 +970,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RVector_to_EigenColVec_dou
 
 
 
- ALWAYS_INLINE tbb::concurrent_vector<std::string> initialize_tbb_string_vector(std::vector<std::string> input_strings) {
+ inline tbb::concurrent_vector<std::string> initialize_tbb_string_vector(std::vector<std::string> input_strings) {
   
   tbb::concurrent_vector<std::string> output_vector;
   output_vector.reserve(input_strings.size());
@@ -987,7 +990,7 @@ ALWAYS_INLINE Eigen::Matrix<double, -1, 1> fn_convert_RVector_to_EigenColVec_dou
 
 
 
-ALWAYS_INLINE std::vector<std::string> fn_convert_tbb_vec_to_std_vec_string(tbb::concurrent_vector<std::string> tbbVec) {
+inline std::vector<std::string> fn_convert_tbb_vec_to_std_vec_string(tbb::concurrent_vector<std::string> tbbVec) {
   
   std::vector<std::string> stdVec(tbbVec.size());
   
@@ -1036,7 +1039,7 @@ struct ReplicateRcppMatWorker : public RcppParallel::Worker {
 
 
 // Parallel version of the replicate function
-ALWAYS_INLINE std::vector<Rcpp::IntegerMatrix> replicate_Rcpp_Mat_int_parallel(const Rcpp::IntegerMatrix input_matrix,
+inline std::vector<Rcpp::IntegerMatrix> replicate_Rcpp_Mat_int_parallel(const Rcpp::IntegerMatrix input_matrix,
                                                                  int N) {
   std::vector<Rcpp::IntegerMatrix> output_vector(N);
   

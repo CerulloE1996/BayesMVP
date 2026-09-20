@@ -1,0 +1,27 @@
+# Local R sessions, generated builds, and test output.
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.o
+*.RDS
+*.rds
+**/test_output/
+**/stan_data/
+/inst/BayesMVP/src/BayesMVP.so
+/inst/BayesMVP/inst/BayesMVP.dll
+/inst/BayesMVP/inst/BayesMVPtest.dll
+**/stan_models/*
+!**/stan_models/*.stan
+!**/stan_models/*/
+
+# Keep private assistant configuration and exported conversations local.
+.agents/
+.claude/
+.codex/
+.mcp.json
+AGENTS.md
+CLAUDE.md
+/apms-*.html
+/read-prior-*.html
+/extract_cpp_from_chat.py

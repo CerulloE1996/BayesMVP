@@ -1,17 +1,18 @@
 Package: BayesMVP
 Type: Package
-Title: BayesMVP: A high-performance implementation of adaptive diffusion-space HMC for multivariate probit models and other models with high-dimensional latent variables.
-Version: 1.0
+Title: BayesMVP: This is a "frozen" version of BayesMVP (https://github.com/CerulloE1996/BayesMVP) used for a simulation study.
+Version: 0.1
 Date: 2024-05-18
 Author: Enzo Cerullo
 Maintainer: Enzo Cerullo <enzo.cerullo@bath.edu>
-Description: BayesMVP uses diffusion-space Hamiltonian Monte Carlo (HMC) to efficiently sample the multivariate probit model (MVP) to model correlated binary data, as well as the latent class MVP model for the evaluation of test accuracy data without a gold standard. It achieves rapid sampling through manually-derived gradients and chunking. Users can also input any Stan model for efficient sampling of high dimensional latent variable vectors.
+Description: This is a "frozen" version of BayesMVP (https://github.com/CerulloE1996/BayesMVP) used for a simulation study comparing the latent class multivariate probit model (LC-MVP) to the latent class latent trait model (LC-LT) for the analysis of test accuracy data without a perfect gold standard/reference test.
 License: GPL-3
 Imports: Rcpp (>= 1.0.10), RcppEigen, RcppParallel, dqrng, cmdstanr, bridgestan, bayesplot, posterior, dplyr, ggplot2, tibble, tictoc, psych
-LinkingTo: 
+LinkingTo:
 Suggests: roxygen2
 Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd"))
 SystemRequirements: GNU make, C++17
 RoxygenNote: 7.3.2
 Encoding: UTF-8
 Depends: R (>= 3.5.0)
+

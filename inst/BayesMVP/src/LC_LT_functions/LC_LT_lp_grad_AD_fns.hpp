@@ -94,29 +94,36 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   const int ub_threshold_phi_approx = Model_args_as_cpp_struct.Model_args_ints(2);
   const int n_chunks = Model_args_as_cpp_struct.Model_args_ints(3);
   
-  const double prev_prior_a = Model_args_as_cpp_struct.Model_args_doubles(0);
-  const double prev_prior_b = Model_args_as_cpp_struct.Model_args_doubles(1);
-  const double overflow_threshold = Model_args_as_cpp_struct.Model_args_doubles(2);
-  const double underflow_threshold = Model_args_as_cpp_struct.Model_args_doubles(3);
+  const int n_pops = Model_args_as_cpp_struct.Model_args_ints(6); //// ----
+  const Eigen::Matrix<int, -1, 1> &pop_ind = Model_args_as_cpp_struct.Model_args_col_vecs_int[2]; //// ----
   
-  const std::string vect_type = Model_args_as_cpp_struct.Model_args_strings(0);
+  // const double prev_prior_a = Model_args_as_cpp_struct.Model_args_doubles(0);
+  // const double prev_prior_b = Model_args_as_cpp_struct.Model_args_doubles(1);
+  const double overflow_threshold  = Model_args_as_cpp_struct.Model_args_doubles(0);
+  const double underflow_threshold = Model_args_as_cpp_struct.Model_args_doubles(1);
+  
+  std::string vect_type = Model_args_as_cpp_struct.Model_args_strings(0);
   const std::string Phi_type = Model_args_as_cpp_struct.Model_args_strings(1);
   const std::string inv_Phi_type = Model_args_as_cpp_struct.Model_args_strings(2);
-  const std::string vect_type_exp = Model_args_as_cpp_struct.Model_args_strings(3);
-  const std::string vect_type_log = Model_args_as_cpp_struct.Model_args_strings(4);
-  const std::string vect_type_lse = Model_args_as_cpp_struct.Model_args_strings(5);
-  const std::string vect_type_tanh = Model_args_as_cpp_struct.Model_args_strings(6);
-  const std::string vect_type_Phi = Model_args_as_cpp_struct.Model_args_strings(7);
-  const std::string vect_type_log_Phi = Model_args_as_cpp_struct.Model_args_strings(8);
+  std::string vect_type_exp = Model_args_as_cpp_struct.Model_args_strings(3);
+  std::string vect_type_log = Model_args_as_cpp_struct.Model_args_strings(4);
+  std::string vect_type_lse = Model_args_as_cpp_struct.Model_args_strings(5);
+  std::string vect_type_tanh = Model_args_as_cpp_struct.Model_args_strings(6);
+  std::string vect_type_Phi = Model_args_as_cpp_struct.Model_args_strings(7);
+  std::string vect_type_log_Phi = Model_args_as_cpp_struct.Model_args_strings(8);
   const std::string vect_type_inv_Phi = Model_args_as_cpp_struct.Model_args_strings(9);
   const std::string vect_type_inv_Phi_approx_from_logit_prob = Model_args_as_cpp_struct.Model_args_strings(10);
   ////// const std::string grad_option =  Model_args_as_cpp_struct.Model_args_strings(11);
   const std::string nuisance_transformation =   Model_args_as_cpp_struct.Model_args_strings(12);
+  ////
+  const std::string LT_prior_corr_bs =   Model_args_as_cpp_struct.Model_args_strings(13);
   
   // const Eigen::Matrix<double, -1, 1>  lkj_cholesky_eta =   Model_args_as_cpp_struct.Model_args_col_vecs_double[0];
+  const Eigen::Matrix<double, -1, 1> &prev_prior_a = Model_args_as_cpp_struct.Model_args_col_vecs_double[1]; //// ----
+  const Eigen::Matrix<double, -1, 1> &prev_prior_b = Model_args_as_cpp_struct.Model_args_col_vecs_double[2]; //// ----
   
-  const Eigen::Matrix<double, -1, -1> LT_b_priors_shape  = Model_args_as_cpp_struct.Model_args_mats_double[0]; 
-  const Eigen::Matrix<double, -1, -1> LT_b_priors_scale  = Model_args_as_cpp_struct.Model_args_mats_double[1]; 
+  const Eigen::Matrix<double, -1, -1> LT_b_priors_1   = Model_args_as_cpp_struct.Model_args_mats_double[0]; 
+  const Eigen::Matrix<double, -1, -1> LT_b_priors_2   = Model_args_as_cpp_struct.Model_args_mats_double[1]; 
   const Eigen::Matrix<double, -1, -1> LT_known_bs_indicator = Model_args_as_cpp_struct.Model_args_mats_double[2]; 
   const Eigen::Matrix<double, -1, -1> LT_known_bs_values = Model_args_as_cpp_struct.Model_args_mats_double[3]; 
   
@@ -178,8 +185,6 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   int n_total_chunks = chunk_size_info.n_total_chunks;
   int n_full_chunks = chunk_size_info.n_full_chunks;
   
-  
-  
   //////// latent-trait specific variables 
   const int n_bs_LT = n_class * n_tests;
   const int n_coeffs = n_bs_LT; //// latent-trait currently does not support covariates
@@ -188,7 +193,7 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
    /////////////////  ------------------------------------------------------------   
    using namespace stan::math;
       
-   stan::math::start_nested();
+   stan::math::nested_rev_autodiff nested_autodiff_scope;
    
    Eigen::Matrix<stan::math::var, -1, 1  >  theta_var(n_params);
    
@@ -200,18 +205,48 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
    }
    
    Eigen::Matrix<stan::math::var, -1, 1>    u_unconstrained_vec_var = theta_var.head(n_us);   // u's
+   
+   stan::math::var target_AD = 0.0;
   
    //////////////
    // corrs  -  b's (latent_trait only)
-   Eigen::Matrix<stan::math::var, -1, 1>  bs_raw_vec_var =  theta_var.segment(n_us, n_bs_LT) ; // stan::math::to_var(bs_raw_vec_double) ;
-   Eigen::Matrix<stan::math::var, -1, -1>  bs_mat =      Eigen::Matrix<stan::math::var, -1, -1 >::Zero(n_class, n_tests);
+   Eigen::Matrix<stan::math::var, -1, 1>  bs_raw_vec_var = theta_var.segment(n_us, n_bs_LT) ; // stan::math::to_var(bs_raw_vec_double) ;
+   Eigen::Matrix<stan::math::var, -1, -1> bs_mat =       Eigen::Matrix<stan::math::var, -1, -1 >::Zero(n_class, n_tests);
    Eigen::Matrix<stan::math::var, -1, -1> bs_raw_mat =   Eigen::Matrix<stan::math::var, -1, -1 >::Zero(n_class, n_tests);
    
    bs_raw_mat.row(0) =  bs_raw_vec_var.segment(0, n_tests).transpose();
    bs_raw_mat.row(1) =  bs_raw_vec_var.segment(n_tests, n_tests).transpose();
    
-   bs_mat.row(0) = stan::math::exp( bs_raw_mat.row(0)) ;
-   bs_mat.row(1) = stan::math::exp( bs_raw_mat.row(1)) ;
+   if (LT_prior_corr_bs == "uniform") {
+       for (int c = 0; c < n_class; ++c) {
+         for (int t = 0; t < n_tests; ++t) {
+           Eigen::Matrix<stan::math::var, -1, 1> outs = lb_ub_lp(bs_raw_mat(c, t), LT_b_priors_1(c, t), LT_b_priors_2(c, t));
+           target_AD += outs(0);
+           bs_mat(c, t) = outs(1);
+         }
+       }
+   } else { 
+       // bs_mat = stan::math::exp(bs_raw_mat);
+       for (int c = 0; c < n_class; ++c) {
+         for (int t = 0; t < n_tests; ++t) {
+           Eigen::Matrix<stan::math::var, -1, 1> outs = lb_ub_lp(bs_raw_mat(c, t), 0.0, 5.0);
+           bs_mat(c, t) = outs(1);
+           target_AD += outs(0);
+         }
+       }
+   }
+   
+   ////
+   for (int c = 0; c < n_class; ++c) {
+     for (int t = 0; t < n_tests; ++t) {
+       if (LT_known_bs_indicator(c, t) == 1) { 
+         bs_mat(c, t) = stan::math::to_var(LT_known_bs_values(c, t));
+         if (bs_mat(c, t) > 0.0) {
+           bs_raw_mat(c, t) = stan::math::log(bs_mat(c, t));
+         }
+       }
+     }
+   }
     
    stan::math::var known_bs_raw_sum = 0.0;
    
@@ -219,9 +254,8 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
    Eigen::Matrix<stan::math::var, -1, 1 > bs_d   =   bs_mat.row(1).transpose() ; //  bs_constrained_raw_vec_var.segment(n_tests, n_tests);
    
    //// coeffs
-   Eigen::Matrix<stan::math::var, -1, -1  > LT_theta(n_class, n_tests);
-   Eigen::Matrix<stan::math::var, -1, -1  > LT_a(n_class, n_tests);
-   
+   Eigen::Matrix<stan::math::var, -1, -1> LT_theta(n_class, n_tests);
+   Eigen::Matrix<stan::math::var, -1, -1> LT_a(n_class, n_tests);
    Eigen::Matrix<stan::math::var, -1, 1> coeffs_vec_var = theta_var.segment(n_us + n_bs_LT, n_coeffs);
   
    {
@@ -240,49 +274,71 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
      LT_theta(0, t)   =    LT_a(0, t) /  stan::math::sqrt(1.0 + ( bs_nd(t) * bs_nd(t)));
    }
 
+  // stan::math::var  u_prev_diseased = theta_var(n_params - 1);
+  Eigen::Matrix<stan::math::var, -1, 1> u_prev_raw_var(n_pops); //// ----
+   if (n_class > 1) { //// ----
+     for (int g = 0; g < n_pops; ++g) {
+       u_prev_raw_var(g) = theta_var(n_us + n_bs_LT + n_coeffs + g);
+     }
+   }
 
-  stan::math::var  u_prev_diseased = theta_var(n_params - 1);
- 
-  stan::math::var target = 0.0;
-  
-
-  /////////////  prev stuff  (only if latent class, otherwise just initialise and leave empty) -------------------------------------------------------------
-  Eigen::Matrix<stan::math::var, -1, -1>	 prev_var = Eigen::Matrix<stan::math::var, -1, -1>::Zero(1, 2);
-  if (n_class > 1)  { 
-    
-    std::vector<stan::math::var> 	 u_prev_var_vec_var(2, 0.0);
-    std::vector<stan::math::var> 	 prev_var_vec_var(2, 0.0);
-    std::vector<stan::math::var> 	 tanh_u_prev_var(2, 0.0);
-    
-    stan::math::var tanh_pu_deriv_var = 0.0; 
-    stan::math::var deriv_p_wrt_pu_var = 0.0;
-    stan::math::var tanh_pu_second_deriv_var = 0.0;
-    stan::math::var log_jac_p_deriv_wrt_pu_var = 0.0;
-    stan::math::var log_jac_p_var = 0.0;
-    stan::math::var target_AD_prev = 0.0;
-    
-    u_prev_var_vec_var[1] =  stan::math::to_var(u_prev_diseased);
-    tanh_u_prev_var[1] = ( stan::math::exp(2*u_prev_var_vec_var[1] ) - 1) / ( stan::math::exp(2*u_prev_var_vec_var[1] ) + 1) ; 
-    u_prev_var_vec_var[0] =   0.5 *  log( (1.0 + ( (1.0 - 0.5 * ( tanh_u_prev_var[1] + 1))*2.0 - 1.0) ) / (1.0 - ( (1.0 - 0.5 * ( tanh_u_prev_var[1] + 1))*2 - 1) ) )  ;
-    tanh_u_prev_var[0] = (stan::math::exp(2*u_prev_var_vec_var[0] ) - 1) / ( stan::math::exp(2*u_prev_var_vec_var[0] ) + 1) ;
-    
-    prev_var_vec_var[1] =  0.5 * ( tanh_u_prev_var[1] + 1);
-    prev_var_vec_var[0] =  0.5 * ( tanh_u_prev_var[0] + 1); 
-    prev_var(0, 1) =  prev_var_vec_var[1];
-    prev_var(0, 0) =  prev_var_vec_var[0];
-    
-    tanh_pu_deriv_var = ( 1.0 - tanh_u_prev_var[1] * tanh_u_prev_var[1]  );
-    deriv_p_wrt_pu_var = 0.5 *  tanh_pu_deriv_var;
-    tanh_pu_second_deriv_var  = -2.0 * tanh_u_prev_var[1]  * tanh_pu_deriv_var;
-    log_jac_p_deriv_wrt_pu_var  = ( 1.0 / deriv_p_wrt_pu_var) * 0.5 * tanh_pu_second_deriv_var; // for gradient of u's 
-    log_jac_p_var =    stan::math::log( deriv_p_wrt_pu_var );
-    
-    target += beta_lpdf( prev_var(0, 1), prev_prior_a, prev_prior_b  ); // weakly informative prior - helps avoid boundaries with slight negative skew (for lower N)
-    target += log_jac_p_var;
-    
+  // /////////////  prev stuff  (only if latent class, otherwise just initialise and leave empty) -------------------------------------------------------------
+  // Eigen::Matrix<stan::math::var, -1, -1>	 prev_var = Eigen::Matrix<stan::math::var, -1, -1>::Zero(1, 2);
+  // if (n_class > 1)  { 
+  //   
+  //   std::vector<stan::math::var> 	 u_prev_var_vec_var(2, 0.0);
+  //   std::vector<stan::math::var> 	 prev_var_vec_var(2, 0.0);
+  //   std::vector<stan::math::var> 	 tanh_u_prev_var(2, 0.0);
+  //   
+  //   stan::math::var tanh_pu_deriv_var = 0.0; 
+  //   stan::math::var deriv_p_wrt_pu_var = 0.0;
+  //   stan::math::var tanh_pu_second_deriv_var = 0.0;
+  //   stan::math::var log_jac_p_deriv_wrt_pu_var = 0.0;
+  //   stan::math::var log_jac_p_var = 0.0;
+  //   stan::math::var target_AD_prev = 0.0;
+  //   
+  //   u_prev_var_vec_var[1] =  stan::math::to_var(u_prev_diseased);
+  //   tanh_u_prev_var[1] = ( stan::math::exp(2*u_prev_var_vec_var[1] ) - 1) / ( stan::math::exp(2*u_prev_var_vec_var[1] ) + 1) ; 
+  //   u_prev_var_vec_var[0] =   0.5 *  log( (1.0 + ( (1.0 - 0.5 * ( tanh_u_prev_var[1] + 1))*2.0 - 1.0) ) / (1.0 - ( (1.0 - 0.5 * ( tanh_u_prev_var[1] + 1))*2 - 1) ) )  ;
+  //   tanh_u_prev_var[0] = (stan::math::exp(2*u_prev_var_vec_var[0] ) - 1) / ( stan::math::exp(2*u_prev_var_vec_var[0] ) + 1) ;
+  //   
+  //   prev_var_vec_var[1] =  0.5 * ( tanh_u_prev_var[1] + 1);
+  //   prev_var_vec_var[0] =  0.5 * ( tanh_u_prev_var[0] + 1); 
+  //   prev_var(0, 1) =  prev_var_vec_var[1];
+  //   prev_var(0, 0) =  prev_var_vec_var[0];
+  //   
+  //   tanh_pu_deriv_var = ( 1.0 - tanh_u_prev_var[1] * tanh_u_prev_var[1]  );
+  //   deriv_p_wrt_pu_var = 0.5 *  tanh_pu_deriv_var;
+  //   tanh_pu_second_deriv_var  = -2.0 * tanh_u_prev_var[1]  * tanh_pu_deriv_var;
+  //   log_jac_p_deriv_wrt_pu_var  = ( 1.0 / deriv_p_wrt_pu_var) * 0.5 * tanh_pu_second_deriv_var; // for gradient of u's 
+  //   log_jac_p_var =    stan::math::log( deriv_p_wrt_pu_var );
+  //   
+  //   target_AD += beta_lpdf( prev_var(0, 1), prev_prior_a, prev_prior_b  ); // weakly informative prior - helps avoid boundaries with slight negative skew (for lower N)
+  //   target_AD += log_jac_p_var;
+  //   
+  // }
+  Eigen::Matrix<stan::math::var, -1, -1> prev_var = Eigen::Matrix<stan::math::var, -1, -1>::Zero(n_pops, n_class);
+   
+  if (n_class > 1) {
+     
+       for (int g = 0; g < n_pops; ++g) {
+         
+           stan::math::var tanh_u = stan::math::tanh(u_prev_raw_var(g));
+           stan::math::var prev_g = 0.5 * (tanh_u + 1.0);
+           prev_var(g, 1) = prev_g;
+           prev_var(g, 0) = 1.0 - prev_g;
+           
+           // Jacobian: d(prev)/d(u_raw) = 0.5 * (1 - tanh^2)
+           stan::math::var deriv_p = 0.5 * (1.0 - tanh_u * tanh_u);
+           target_AD += stan::math::log(deriv_p);
+           
+           // Prior on prev for this population
+           target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
+         
+       }
+       
   }
   
-
   ////////////////// u (double / manual diff)
   Eigen::Matrix<stan::math::var, -1, 1>  u_vec(n_us);
   stan::math::var log_jac_u = 0.0;
@@ -328,19 +384,34 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   /// priors and Jacobians for coeffs
   for (int c = 0; c < n_class; ++c) {
     for (int t = 0; t < n_tests; ++t) {
-      target += stan::math::normal_lpdf(LT_theta(c, t), prior_coeffs_mean[c](0, t), prior_coeffs_sd[c](0, t)); //// Prior on theta
-      target +=  - 0.5 * stan::math::log(1.0 + stan::math::square(stan::math::abs(bs_mat(c, t) ))); // Jacobian for LT_theta -> LT_a
+      target_AD += stan::math::normal_lpdf(LT_theta(c, t), prior_coeffs_mean[c](0, t), prior_coeffs_sd[c](0, t)); //// Prior on theta
+      target_AD +=  - 0.5 * stan::math::log(1.0 + stan::math::square(stan::math::abs(bs_mat(c, t) ))); // Jacobian for LT_theta -> LT_a
     }
   }
 
   ////////////////////// Weibull priors for  b's / corr
   for (int t = 0; t < n_tests; ++t) {
-    target += stan::math::weibull_lpdf(  bs_nd(t) ,   LT_b_priors_shape(0, t), LT_b_priors_scale(0, t)  );
-    target += stan::math::weibull_lpdf(  bs_d(t)  ,   LT_b_priors_shape(1, t), LT_b_priors_scale(1, t)  );
+      if (LT_prior_corr_bs == "Weibull") {
+        target_AD += stan::math::weibull_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = scale/sigma
+        target_AD += stan::math::weibull_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = shape/alpha, b = scale/sigma
+      } else if (LT_prior_corr_bs == "gamma") {
+        target_AD += stan::math::gamma_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = inv_scale/beta
+        target_AD += stan::math::gamma_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = shape/alpha, b = inv_scale/beta
+      } else if (LT_prior_corr_bs == "uniform") {
+        // target_AD += stan::math::uniform_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = min, b = max
+        // target_AD += stan::math::uniform_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = min, b = max
+      }
   }
 
-  target +=  (bs_raw_mat).sum()  - known_bs_raw_sum ; // Jacobian b -> raw_b
-
+  // if (LT_prior_corr_bs != "uniform") {
+  //   for (int c = 0; c < n_class; ++c) {
+  //     for (int t = 0; t < n_tests; ++t) {
+  //       if (LT_known_bs_indicator(c, t) == 0) { // Jacobian b -> raw_b - known values don't contribute to lp/grad.
+  //         target_AD += bs_raw_mat(c, t);
+  //       }
+  //     }
+  //   }
+  // }
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////// likelihood
   Eigen::Matrix<stan::math::var, -1, 1>	   y1(n_tests);
@@ -373,11 +444,15 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   }
   
 
-  Eigen::Matrix<stan::math::var, -1, -1 >  log_prev  =  Eigen::Matrix<stan::math::var, -1, -1>::Zero(1, 2);
-  for (int c = 0; c < 2; c++) {
-    log_prev(0, c) =  stan::math::log(prev_var(0, c));
+  // Eigen::Matrix<stan::math::var, -1, -1 >  log_prev  =  Eigen::Matrix<stan::math::var, -1, -1>::Zero(1, 2);
+  // for (int c = 0; c < 2; c++) {
+  //   log_prev(0, c) =  stan::math::log(prev_var(0, c));
+  // }
+  Eigen::Matrix<stan::math::var, -1, -1> log_prev = Eigen::Matrix<stan::math::var, -1, -1>::Zero(n_pops, n_class); //// ----
+  if (n_class > 1) { //// ----
+    log_prev = stan::math::log(prev_var);
   }
-
+  
   int counter = 0;
 
   if (Phi_type == "Phi") {
@@ -448,7 +523,8 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
       }
 
       stan::math::var log_posterior = stan::math::log_sum_exp(lp);
-      target += log_posterior;
+      target_AD += log_posterior;
+      if (out_mat.size() >= 1 + n_params + N) out_mat(1 + n_params + n) = log_posterior.val();
 
     } // end of n loop
 
@@ -522,13 +598,14 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
       }
 
       stan::math::var log_posterior = stan::math::log_sum_exp(lp);
-      target += log_posterior;
+      target_AD += log_posterior;
+      if (out_mat.size() >= 1 + n_params + N) out_mat(1 + n_params + n) = log_posterior.val();
     } // end of n loop
 
   }
 
-  target +=  log_jac_u;
-  double log_prob = target.val();
+  target_AD +=  log_jac_u;
+  double log_prob = target_AD.val();
 
   //////////////////// calculate gradients
   out_mat(0) = log_prob;
@@ -541,9 +618,9 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
           theta_grad.push_back(theta_var(i));
         }
 
-         std::vector<double> gradient_std_vec(n_params, 0.0);
+        std::vector<double> gradient_std_vec(n_params, 0.0);
 
-         target.grad(theta_grad, gradient_std_vec);
+        target_AD.grad(theta_grad, gradient_std_vec);
 
         Eigen::Matrix<double, -1, 1>  gradient_vec(n_params);
         gradient_vec = std_vec_to_Eigen_vec(gradient_std_vec);
@@ -558,8 +635,8 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
         }
 
         std::vector<double> gradient_std_vec(n_us, 0.0);
-
-        target.grad(theta_grad, gradient_std_vec);
+ 
+        target_AD.grad(theta_grad, gradient_std_vec);
 
         Eigen::Matrix<double, -1, 1>  gradient_vec(n_us);
         gradient_vec = std_vec_to_Eigen_vec(gradient_std_vec);
@@ -576,7 +653,7 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
 
         std::vector<double> gradient_std_vec(n_params_main, 0.0);
 
-        target.grad(theta_grad, gradient_std_vec);
+        target_AD.grad(theta_grad, gradient_std_vec);
 
 
         Eigen::Matrix<double, -1, 1>  gradient_vec(n_params_main);
@@ -596,7 +673,7 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
  //  
  //  std::vector<double> gradient_std_vec(n_params, 0.0);
  //  
- //  target.grad(theta_grad, gradient_std_vec);
+ //  target_AD.grad(theta_grad, gradient_std_vec);
  //  
  //  Eigen::Matrix<double, -1, 1>  gradient_vec(n_params);
  //  gradient_vec = std_vec_to_Eigen_vec(gradient_std_vec);
@@ -605,7 +682,7 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
 
  
   
-  stan::math::recover_memory_nested();  
+  //// nested_autodiff_scope releases the tape, including on exceptions.  
  
   //// return(out_mat);
  
@@ -762,7 +839,6 @@ Eigen::Matrix<double, -1, 1>    fn_lp_and_grad_LC_LT_AD_log_scale(  const Eigen:
 
 
  
-
 
 
 

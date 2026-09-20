@@ -1,3 +1,4 @@
+
 #pragma once 
  
 #ifndef FN_WRAPPERS_STAN_HPP
@@ -30,37 +31,37 @@ using namespace Eigen;
 
 
 
-inline double mvp_std_exp(double x) { 
+ALWAYS_INLINE double mvp_std_exp(double x) { 
      return stan::math::exp(x);
 }
-inline double mvp_std_log(double x) { 
+ALWAYS_INLINE double mvp_std_log(double x) { 
   return stan::math::log(x);
 }
-inline double mvp_std_log1p(double x) { 
+ALWAYS_INLINE double mvp_std_log1p(double x) { 
   return stan::math::log1p(x);
 }
-inline double mvp_std_log1m(double x) { 
+ALWAYS_INLINE double mvp_std_log1m(double x) { 
   return stan::math::log1m(x);
 } 
-inline double mvp_std_logit(double x) { 
+ALWAYS_INLINE double mvp_std_logit(double x) { 
   return stan::math::logit(x);
 } 
-inline double mvp_std_tanh(double x) { 
+ALWAYS_INLINE double mvp_std_tanh(double x) { 
   return stan::math::tanh(x);
 } 
-inline double mvp_std_Phi_approx(double x) { 
+ALWAYS_INLINE double mvp_std_Phi_approx(double x) { 
   return stan::math::Phi_approx(x);
 }
-inline double mvp_std_Phi(double x) { 
+ALWAYS_INLINE double mvp_std_Phi(double x) { 
   return stan::math::Phi(x);
 }
-inline double mvp_std_inv_Phi(double x) { 
+ALWAYS_INLINE double mvp_std_inv_Phi(double x) { 
   return stan::math::inv_Phi(x);
 }
-inline double mvp_std_inv_logit(double x) { 
+ALWAYS_INLINE double mvp_std_inv_logit(double x) { 
   return stan::math::inv_logit(x);
 }
-inline double mvp_std_log_inv_logit(double x) { 
+ALWAYS_INLINE double mvp_std_log_inv_logit(double x) { 
   return stan::math::log_inv_logit(x); 
 }
 

@@ -9,7 +9,7 @@
             
             ## Set brigestan and cmdstanr environment variables / directories 
             ##  bs_dir <- bridgestan_path()
-            cmdstan_dir <- BayesMVP:::cmdstanr_path()
+            cmdstan_dir <- cmdstanr_path()
   
             if (.Platform$OS.type == "windows") {
               
@@ -72,6 +72,8 @@
 .onLoad <- function(libname, 
                     pkgname) {
 
+  require(RcppParallel)
+  
   # try({ (.make_user_dir(libname, pkgname)) })
   try({ (.setup_env_onload(libname, pkgname)) })
 
@@ -84,6 +86,8 @@
 #' @export
 .onAttach <- function(libname, 
                       pkgname) {
+  
+  require(RcppParallel)
  
   ## try({ (.make_user_dir(libname, pkgname)) })
   try({ (.setup_env_onload(libname, pkgname)) })
@@ -95,6 +99,8 @@
 #' @export
 .First.lib <- function(libname, 
                        pkgname) {
+  
+  require(RcppParallel)
  
   ## try({ (.make_user_dir(libname, pkgname)) })
   try({ (.setup_env_onload(libname, pkgname)) })

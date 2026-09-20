@@ -31,13 +31,17 @@
 )
 
 
+
+#' rcmd_running
+#' @export
 rcmd_running <- function() {
   nchar(Sys.getenv('R_TESTS')) != 0
 }
 
 
 
-
+#' colourise
+#' @export
 colourise <- function(text, fg = "black", bg = NULL) {
   
   term <- Sys.getenv()["TERM"]
@@ -61,4 +65,9 @@ colourise <- function(text, fg = "black", bg = NULL) {
   paste0(init, text, reset)
   
 }
+
+
+
+
+
 

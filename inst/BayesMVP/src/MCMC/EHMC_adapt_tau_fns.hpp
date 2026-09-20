@@ -37,14 +37,17 @@ Eigen::Matrix<double, -1, 1>  fn_update_tau_w_diag_M_ADAM(   const Eigen::Ref<co
                                              const Eigen::Ref<const Eigen::Matrix<double, -1, 1>>  sqrt_M_vec, 
                                              const double tau_m_adam,   
                                              const double tau_v_adam,  
-                                             const double tau_ii
+                                             const double tau_ii,
+                                             const double beta1_adam,
+                                             const double beta2_adam,
+                                             const double eps_adam
  ) {
 
    
    const double eta_w = 3.0;
-   const double beta1_adam = 0.0; // ADAM hyperparameter 1   
-   const double beta2_adam = 0.95; // ADAM hyperparameter 2
-   const double eps_adam = 1e-8; // ADAM "eps" for numerical stability
+   // const double beta1_adam = 0.0; // ADAM hyperparameter 1   
+   // const double beta2_adam = 0.95; // ADAM hyperparameter 2
+   // const double eps_adam = 1e-8; // ADAM "eps" for numerical stability
    const double rho = 1.0;
    
    const double tau_initial = tau;
@@ -134,14 +137,17 @@ Eigen::Matrix<double, -1, 1> fn_update_tau_w_dense_M_ADAM(  const Eigen::Ref<con
                                             const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> M_dense_sqrt, 
                                             const double tau_m_adam,   
                                             const double tau_v_adam,  
-                                            const double  tau_ii
+                                            const double  tau_ii,
+                                            const double beta1_adam,
+                                            const double beta2_adam,
+                                            const double eps_adam
 ) {
   
   
   const double eta_w = 3.0;
-  const double beta1_adam = 0.0; // ADAM hyperparameter 1   
-  const double beta2_adam = 0.95; // ADAM hyperparameter 2
-  const double eps_adam = 1e-8; // ADAM "eps" for numerical stability
+  // const double beta1_adam = 0.0; // ADAM hyperparameter 1   
+  // const double beta2_adam = 0.95; // ADAM hyperparameter 2
+  // const double eps_adam = 1e-8; // ADAM "eps" for numerical stability
   const double rho = 1.0;
   
   const double tau_initial = tau;
