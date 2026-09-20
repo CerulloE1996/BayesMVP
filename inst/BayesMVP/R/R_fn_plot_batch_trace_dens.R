@@ -120,7 +120,7 @@ plot_multiple_params_batched <- function(draws_array,
                     }
                     
                     
-                        plots <- BayesMVP:::plot_param_group_batched( draws_array = draws_array, 
+                        plots <- plot_param_group_batched( draws_array = draws_array, 
                                                                       param_prefix = prefix, 
                                                                       plot_type = plot_type, 
                                                                       batch_size = batch_size)

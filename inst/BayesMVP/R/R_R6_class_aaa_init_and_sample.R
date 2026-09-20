@@ -121,6 +121,20 @@ MVP_model <- R6Class("MVP_model",
                           Model_type = NULL, 
                           #'@field init_object Initialization object.
                           init_object = NULL,
+                          #'@field is_compiled Whether the model has been compiled
+                          is_compiled = NULL,
+                          #'@field n_nuisance_override Override for number of nuisance parameters
+                          n_nuisance_override = NULL,
+                          #'@field stanc_args Arguments for Stan compiler (for BridgeStan)
+                          stanc_args = NULL,
+                          #'@field make_args C++/make arguments used to compile the generated C++ of the Stan model (e.g. list("STAN_THREADS=true")); distinct from stanc_args.
+                          make_args = NULL,
+                          #'@field Stan_cpp_user_header User C++ header file path
+                          Stan_cpp_user_header = NULL,
+                          #'@field Stan_cpp_flags C++ compiler flags
+                          Stan_cpp_flags = NULL,
+                          #'@field Stan_model_file_path Path to Stan model file
+                          Stan_model_file_path = NULL,
                           #'@field result Model results object.
                           result = NULL, 
                           #'@field model_fit_object Model fit object.
@@ -241,6 +255,12 @@ MVP_model <- R6Class("MVP_model",
                           sample_nuisance = NULL,
                           #'@field n_chains_burnin The total number of burn-in chains. The default is Min(8, n_cores), where n_cores is the number of cores on the CPU. 
                           n_chains_burnin = NULL,
+                          #'@field use_disk Whether the sampling traces were stored in RAM (FALSE) or on disk (TRUE). Set by $sample() and re-used by $summary() so the summary reads the same storage mode.
+                          use_disk = NULL,
+                          #'@field compile_choice The "compile" argument captured at construction (used if initialisation is deferred to $sample()).
+                          compile_choice = NULL,
+                          #'@field force_recompile_choice The "force_recompile" argument captured at construction (used if initialisation is deferred to $sample()).
+                          force_recompile_choice = NULL,
                           
                           ## ---------- constructor - initialize using the initialise_model fn (this wraps the initialise_model function with $new()) - store all important parameters
                           #'@description
@@ -267,59 +287,111 @@ MVP_model <- R6Class("MVP_model",
                           #'@return Returns self$init_object, an object generated from the "BayesMVP::initialise_model" function which contains information such as which 
                           #'model type (\code{Model_type}) to use. 
                           initialize = function(Model_type, 
-                                                y, 
-                                                N,
-                                                n_params_main,
-                                                n_nuisance,
-                                                init_lists_per_chain,
-                                                n_chains_burnin,  
-                                                compile = TRUE,
-                                                force_recompile = TRUE,
-                                                model_args_list = NULL,  
-                                                Stan_data_list = NULL,  
+                                                ##
                                                 sample_nuisance = NULL,
+                                                n_nuisance_override = NULL,
+                                                ##
+                                                model_args_list = NULL,  # For internal/hard-coded models 
+                                                ##
+                                                Stan_data_list = NULL,  # Optional AT THIS STAGE for Stan models
                                                 Stan_model_file_path = NULL,
+                                                ##
                                                 Stan_cpp_user_header = NULL,
                                                 Stan_cpp_flags = NULL,
-                                                ...) {
-                        
-                                    # ------ store important parameters as class members
-                                    self$Model_type <- Model_type
-                                    self$y <- y
-                                    self$N <- N
-                                    self$n_params_main <- n_params_main
-                                    self$n_nuisance <- n_nuisance
-                                    self$init_lists_per_chain <- init_lists_per_chain
-                                    self$model_args_list <- model_args_list
-                                    self$Stan_data_list <- Stan_data_list
-                                    self$sample_nuisance <- sample_nuisance
-                                    self$n_chains_burnin <- n_chains_burnin
-                                    
-                                    ## set bs environment variable (otherwise it'll try downloading it even if already installed...)
-                                    bs_path <- BayesMVP:::bridgestan_path()
-                                    Sys.setenv(BRIDGESTAN = bs_path)
-                                          
-                                    # -----------  call initialising fn -------------------------------------------------------------------------------------------------------------------
-                                    self$init_object <-   BayesMVP:::initialise_model(  Model_type = Model_type,
-                                                                                        compile = compile,
-                                                                                        force_recompile = force_recompile,
-                                                                                        cmdstanr_model_fit_obj = NULL,
-                                                                                        y = y,
-                                                                                        N = N,
-                                                                                        n_params_main = n_params_main,
-                                                                                        n_nuisance = n_nuisance, 
-                                                                                        init_lists_per_chain = init_lists_per_chain,
-                                                                                        sample_nuisance = sample_nuisance,
-                                                                                        model_args_list = model_args_list,
-                                                                                        Stan_data_list = Stan_data_list,
-                                                                                        Stan_model_file_path = Stan_model_file_path,
-                                                                                        Stan_cpp_user_header = Stan_cpp_user_header,
-                                                                                        Stan_cpp_flags = Stan_cpp_flags,
-                                                                                        n_chains_burnin = n_chains_burnin,
-                                                                                        ...)
+                                                stanc_args = NULL,
+                                                make_args = NULL,
+                                                ##
+                                                compile = TRUE,
+                                                force_recompile = FALSE) {
                             
+                                    if (Model_type == "Stan") {
+                                      if (is.null(Stan_model_file_path)) {
+                                        stop("Stan_model_file_path required for Stan models")
+                                      }
+                                    } else {
+                                      # For internal models, we just store the model type
+                                      # The actual model will be initialized when data is provided in sample()
+                                    }
+                                    ## ------ store important parameters as class members
+                                    self$Model_type <- Model_type
+                                    ##
+                                    ## set bs environment variable (otherwise it'll try downloading it even if already installed...)
+                                    bs_path <- bridgestan_path()
+                                    Sys.setenv(BRIDGESTAN = bs_path)
+                                    ##
+                                    ## ---- PRESERVE the constructor inputs so that deferred
+                                    ## initialisation (below) and $sample() can always re-create
+                                    ## the model (previously these were overwritten with
+                                    ## NULL$... lookups and lost when init was deferred):
+                                    self$sample_nuisance <- sample_nuisance
+                                    self$n_nuisance_override <- n_nuisance_override
+                                    ##
+                                    self$model_args_list <- model_args_list
+                                    ##
+                                    self$Stan_data_list <- Stan_data_list
+                                    self$Stan_model_file_path <- Stan_model_file_path
+                                    ##
+                                    self$Stan_cpp_user_header <- Stan_cpp_user_header
+                                    self$Stan_cpp_flags <- Stan_cpp_flags
+                                    self$stanc_args <- stanc_args
+                                    self$make_args <- make_args
+                                    ##
+                                    self$compile_choice <- compile
+                                    self$force_recompile_choice <- force_recompile
+                                    ##
+                                    ## If data provided, compile now. Otherwise defer to sample()
+                                    if (!is.null(Stan_data_list) || !is.null(model_args_list)) {
+                                      
+                                          ## Compile with provided data
+                                          self$init_object <-   initialise_model(   Model_type = Model_type,
+                                                                                    ##
+                                                                                    sample_nuisance = sample_nuisance,
+                                                                                    n_nuisance_override = n_nuisance_override,
+                                                                                    ##
+                                                                                    model_args_list = model_args_list, # For internal/hard-coded models 
+                                                                                    ##
+                                                                                    Stan_data_list = Stan_data_list, ## for user-supplied Stan models
+                                                                                    Stan_model_file_path = Stan_model_file_path, ## for user-supplied Stan models
+                                                                                    ##
+                                                                                    # n_chains_burnin = n_chains_burnin,
+                                                                                    # init_lists_per_chain = init_lists_per_chain,
+                                                                                    ##
+                                                                                    compile = compile,
+                                                                                    force_recompile = force_recompile,
+                                                                                    ##
+                                                                                    cmdstanr_model_fit_obj = NULL, ## ignore this
+                                                                                    ##
+                                                                                    Stan_cpp_user_header = Stan_cpp_user_header,
+                                                                                    Stan_cpp_flags = Stan_cpp_flags,
+                                                                                    stanc_args = stanc_args,
+                                                                                    make_args = make_args)
+                                          self$is_compiled <- TRUE
+                                         
+                                    } else {
+                                           
+                                          self$is_compiled <- FALSE ## deferred - initialised in $sample()
+                                    }
+                                    ##
+                                    ## ---- take the RESOLVED state from the fresh init object
+                                    ## (kept only when initialisation happened NOW; the raw
+                                    ## inputs above survive when it is deferred):
+                                    if (!is.null(self$init_object)) {
+                                      ##
+                                      self$model_args_list <- self$init_object$model_args_list
+                                      ##
+                                      self$Stan_data_list <- self$init_object$Stan_data_list 
+                                      self$Stan_model_file_path <- self$init_object$Stan_model_file_path
+                                      ##
+                                      self$Stan_cpp_user_header <- self$init_object$Stan_cpp_user_header
+                                      self$Stan_cpp_flags <- self$init_object$Stan_cpp_flags
+                                      self$stanc_args <- self$init_object$stanc_args
+                                      self$make_args <- self$init_object$make_args
+                                      ##
+                                      self$n_nuisance <- self$init_object$n_nuisance
+                                      self$n_params_main <- self$init_object$n_params_main
+                                      ##
+                                    }
                            },
-                          
                           ## --------  wrap the sample fn -----------------------------------------------------------------------------------------------------------------------------
                           #'@description
                           #'Sample from the model
@@ -340,6 +412,8 @@ MVP_model <- R6Class("MVP_model",
                           #'@param partitioned_HMC Whether to sample all parameters at once (note: wont use diffusion HMC) or whether to alternate between sampling the nuisance 
                           #'parameters and the main model parameters. 
                           #'@param diffusion_HMC Whether to use diffusion-pathspace HMC (Beskos et al) to sample nuisance parameters. Default is TRUE. 
+                          #'@param diffusion_HMC_integrator Joint diffusion integrator: "kick_flow_kick" (default) or "flow_kick_flow".
+                          #'@param debug_burnin_timing Collect burn-in timing and per-chain integrator step diagnostics. Default FALSE.
                           #'@param vect_type The SIMD (single-nstruction, multiple-data) vectorisation type to use for math functions (such as log, exp, Phi, etc).
                           #'The default is AVX-512 if available, then AVX2 if not, and if neither AVX-512 nor AVX2 are available
                           #'(e.g., on ARM-based CPU's such as Apple systems), then BayesMVP will use the Stan C++ math library functions, and they will decide what
@@ -356,10 +430,49 @@ MVP_model <- R6Class("MVP_model",
                           #'@param adapt_delta The Metropolis-Hastings target acceptance rate. Default is 0.80. If there are divergences, sometimes increasing this can help, at the cost 
                           #'of efficiency (since this will decrease the step-size (epsilon) and increase the number of leapfrog steps (L) per iteration).
                           #'@param learning_rate The ADAM learning rate (LR) for learning the appropriate HMC step-size (\eqn{\epsilon}) and HMC path length (\eqn{\tau = L \cdot \epsilon})
-                          #'during the burnin period. The default depends on the length of burnin chosen as follows: if \code{n_burnin} < 249, then LR=0.10, if it's between 250 and 
-                          #'500 then LR = 0.075, and if the burnin length is between 501 and 750 then LR=0.05, and finally if the burnin is >750 iterations then LR=0.025.
-                          #'@param clip_iter The number of iterations to perform MALA (i.e., one leapfrog step) on (first clip_iter iterations) for the burnin period. 
-                          #'The default depends on the length of the burnin period. 
+                          #'during the burnin period. The default depends on the length of the burnin, and is the pairing selected by pilot study 7:
+                          #'LR = 0.0125, 0.025, 0.05 and 0.075 for \code{n_burnin} = 1000, 500, 250 and 125 respectively. Burnin lengths BETWEEN those
+                          #'values are interpolated linearly in \eqn{\log(n\_burnin)} vs \eqn{\log(LR)} (i.e. a piecewise power law), which over
+                          #'[250, 1000] is exactly \eqn{LR = 12.5 / n\_burnin}; the short [125, 250] segment is deliberately shallower than that.
+                          #'Outside [125, 1000] the nearest segment's slope is continued, capped at LR = 0.125 so that a very short burnin cannot
+                          #'produce an unstable rate.
+                          #'@param n_refresh How often to report burnin progress, as an INTERVAL in iterations: progress is printed every
+                          #'\code{n_refresh} iterations (the same convention as Stan's \code{refresh}). \code{NULL} (the default) uses
+                          #'\code{n_burnin / 20}, i.e. about twenty reports across the burnin. Larger values are quieter.
+                          #'@param learning_rate_initial A HIGH ADAM learning rate held for the first \code{learning_rate_initial_iter} burnin
+                          #'iterations, then dropped to \code{learning_rate}. The learning rate drives BOTH the step-size (\eqn{\epsilon}) and the
+                          #'path-length (\eqn{\tau}) adaptation, so holding it high lets the adaptation move a long way early instead of creeping,
+                          #'while the later, finer adaptation still runs at the normal rate. Default is \code{0.10}; pass \code{NULL} (or \code{NA})
+                          #'to switch the hold off.
+                          #'@param learning_rate_initial_iter How many burnin iterations to hold \code{learning_rate_initial} for. The default is
+                          #'\code{n_burnin / 10}, i.e. 50 iterations at \code{n_burnin} = 500, scaled proportionally to other burnin lengths.
+                          #'@param eps_initial A deliberately LARGE HMC step-size (\eqn{\epsilon}) held for the first \code{eps_initial_iter} burnin
+                          #'iterations, so that the chains cover ground quickly before the usual step-size takes over. During this window the path
+                          #'length is one leapfrog step (MALA), so these are large single steps. After the window, \eqn{\epsilon} is handed back to
+                          #'the value it would otherwise have started from (the automatic heuristic) and adapted as normal, with the ADAM moments
+                          #'reset so the warm-start value is not carried forward. Default is \code{NULL} (OFF); set a positive value to enable it.
+                          #'Capped by \code{max_eps_main} / \code{max_eps_nuisance}.
+                          #'@param eps_initial_iter How many burnin iterations to hold \code{eps_initial} for. The default is \code{n_burnin / 10},
+                          #'i.e. the 50 iterations found to work well at \code{n_burnin} = 500, scaled proportionally to other burnin lengths.
+                          #'@param n_nuisance_to_track How many nuisance (latent-variable) coordinates the sampler keeps a trace of.
+                          #'The trace is only ever read by the post-hoc \code{param_constrain} step, which needs it solely when the model
+                          #'being constrained declares the nuisance block (an external Stan model with a nuisance block, or \code{latent_trait});
+                          #'the other built-in skeletons declare the main parameters only, so for them the trace has no reader and storing it is
+                          #'pure memory traffic (tens of GB per run at \code{n_nuisance} = 60,000). \code{NULL} (the default) decides this
+                          #'automatically from the model's unconstrained dimension; \code{0} never stores it; \code{n_nuisance} always does. Any other value is refused: the trace is all-or-nothing (a partial
+                          #'buffer is grown to the full length on the first write, so e.g. 1 would cost exactly as much as keeping everything).
+                          #'@param clip_iter The number of iterations to perform MALA (i.e., one leapfrog step) on (first clip_iter iterations) for the burnin period.
+                          #'The default depends on the length of the burnin period, and is the configuration selected by pilot study 7:
+                          #'\code{clip_iter} = 150, 75, 50 and 30 for \code{n_burnin} = 1000, 500, 250 and 125 respectively (banded, so e.g. any
+                          #'\code{n_burnin} in [250, 500) takes 50; outside [125, 1000] the nearest band's ratio is extrapolated).
+                          #'Update: at exactly \code{n_burnin = 125}, the default is now \code{clip_iter = 20}; the historical values above
+                          #'are retained for reference. Other burnin lengths and explicit overrides are unchanged.
+                          #'@param clip_iter_tau The iteration at which the path-length (tau) adaptation stops being clipped during the burnin period.
+                          #'The default likewise follows pilot study 7, where it is \code{clip_iter + int}: \code{clip_iter_tau} = 350, 175, 125 and 80
+                          #'for \code{n_burnin} = 1000, 500, 250 and 125 respectively. Note this also sets the default \code{gap}, which is
+                          #'\code{clip_iter + clip_iter_tau} when \code{gap} is left NULL.
+                          #'Update: at exactly \code{n_burnin = 125}, \code{clip_iter_tau = 50} gives the requested 40-percent handover.
+                          #'The burn-in routine uses \code{clip_iter_tau} as its effective handover, overriding the incoming \code{gap}.
                           #'@param interval_width_main How often to update the metric (which is either empirical or Hessian-informed, and can be diagonal or dense) for the 
                           #'main parameters during the burnin period. The default used depends on the length of the burnin period. 
                           #'@param interval_width_nuisance How often to update the metric (which is empirical and diagonal) for the nuisance parameters during the burnin period.
@@ -384,287 +497,388 @@ MVP_model <- R6Class("MVP_model",
                           #'@param ... Additional arguments passed to sampling.
                           #'@return Returns self invisibly, allowing for method chaining of this classes (MVP_model) methods. E.g.: model$sample(...)$summary(...). 
                           #'
-                          sample = function(  init_lists_per_chain = self$init_lists_per_chain,
-                                              model_args_list = self$model_args_list,
+                          #'@param burnin_TBB_pool_equals_n_chains NULL defaults to TRUE for built-in models, which use OpenMP within chains.
+                          #'External Stan models always force FALSE, even when TRUE is supplied, so nested TBB likelihood work can use
+                          #'n_chains_burnin * n_threads_WCP_burnin threads. Built-in models can explicitly select FALSE.
+                          sample = function(  force_recompile = FALSE,
+                                              ##
+                                              n_chains_burnin = self$n_chains_burnin,
+                                              init_lists_per_chain = self$init_lists_per_chain,
+                                              ##
+                                              parallel_method = NULL,
+                                              ##
                                               Stan_data_list = self$Stan_data_list,
-                                              parallel_method = "RcppParallel",
-                                              y = self$y,
-                                              N = self$N,
+                                              model_args_list = self$model_args_list,
+                                              ##
+                                              sample_nuisance =   self$sample_nuisance,
+                                              n_nuisance_override = self$n_nuisance_override,
+                                              ##
+                                              seed = NULL,
+                                              n_burnin = NULL,
+                                              n_adapt = NULL,
+                                              gap = NULL,
+                                              ##
+                                              n_chains_sampling = NULL,
+                                              n_superchains = NULL,
+                                              n_iter = NULL,
+                                              ##
+                                              adapt_delta = NULL,
+                                              learning_rate = NULL,
+                                              ##
+                                              tau_mult  = NULL,
+                                              tau_initial = NULL,
                                               ##
                                               manual_tau = NULL,
                                               tau_if_manual = NULL,
                                               ##
-                                              sample_nuisance =   self$sample_nuisance,
-                                              partitioned_HMC = FALSE,
-                                              diffusion_HMC = FALSE,
+                                              burnin_algorithm = NULL,
+                                              partitioned_HMC = NULL,
+                                              diffusion_HMC = NULL,
+                                              ##
+                                              clip_iter = NULL,
+                                              clip_iter_tau = NULL,
+                                              ##
+                                              n_refresh = NULL,
+                                              use_proposed = NULL,
+                                              ##
+                                              beta1_adam = 0.00,
+                                              beta2_adam = 0.95,
+                                              eps_adam = 1e-8,
+                                              ##
+                                              force_autodiff = NULL,
+                                              force_PartialLog = NULL,
+                                              multi_attempts = NULL,
+                                              ##
+                                              force_autodiff_for_metric = TRUE,
+                                              force_PartialLog_for_metric = FALSE,
+                                              force_multi_attempts_for_metric = FALSE,
+                                              ##
                                               vect_type = NULL,
                                               Phi_type = "Phi",
-                                              n_params_main = self$n_params_main,
-                                              n_nuisance = self$n_nuisance,
-                                              n_chains_burnin = self$n_chains_burnin,
-                                              n_chains_sampling = NULL,
-                                              n_superchains = NULL,
-                                              seed = NULL,
-                                              n_burnin = 500,
-                                              n_iter = 1000,
-                                              adapt_delta = 0.80,
-                                              learning_rate = NULL,
-                                              clip_iter = NULL,
-                                              interval_width_main = NULL,
-                                              interval_width_nuisance = NULL,
-                                              force_autodiff = FALSE,
-                                              force_PartialLog = FALSE,
-                                              multi_attempts = TRUE,
-                                              max_L = 1024,
-                                              tau_mult = 1.60,
-                                              metric_type_main = "Empirical",
-                                              metric_shape_main = "diag",
-                                              metric_type_nuisance = "Empirical",
+                                              inv_Phi_type = "inv_Phi",
+                                              ##
+                                              metric_type_main = NULL,
+                                              metric_shape_main = NULL,
                                               ratio_M_main = NULL,
-                                              ratio_M_us = NULL,
-                                              force_recompile = FALSE,
-                                              ...) {
+                                              interval_width_main = NULL,
+                                              ##
+                                              metric_type_nuisance = NULL,
+                                              metric_shape_nuisance = NULL,
+                                              ratio_M_nuisance = NULL,
+                                              interval_width_nuisance = NULL,
+                                              ##
+                                              metric_estimator = "pooled",
+                                              ##
+                                              M_decay_type = NULL,
+                                              M_decay_power = NULL,
+                                              M_decay_scale = NULL,
+                                              ##
+                                              max_tau_main = 25.0,
+                                              max_tau_nuisance = 25.0,
+                                              ##
+                                              max_eps_main = NULL,
+                                              max_eps_nuisance = NULL,
+                                              ##
+                                              learning_rate_initial = 0.10,
+                                              learning_rate_initial_iter = NULL,
+                                              ##
+                                              eps_initial = NULL,
+                                              eps_initial_iter = NULL,
+                                              ##
+                                              max_L = NULL,
+                                              ##
+                                              n_nuisance_to_track = NULL,
+                                              ##
+                                              use_disk = NULL,
+                                              ##
+                                              n_threads_WCP_burnin = 1,
+                                              n_threads_WCP_sampling = 1,
+                                              num_chunks_burnin = NULL,
+                                              num_chunks_sampling = NULL,
+                                              ##
+                                              reorder_cols_MVP = FALSE,
+                                              diffusion_HMC_integrator = "kick_flow_kick",
+                                              debug_burnin_timing = FALSE,
+                                              ##
+                                              ## Explicit access to the options already supported by R_fn_sample_model.
+                                              debug = FALSE,
+                                              stream = NULL,
+                                              nuisance_jitter_scale = 0.25,
+                                              tau_if_manual_in_L_units = NULL,
+                                              tau_objective = NULL,
+                                              tau_weight_by_p_jump = NULL,
+                                              tau_ramp = NULL,
+                                              eps_reinit_at_ChEES_handover = NULL,
+                                              theta_hat_us_rule = NULL,
+                                              theta_hat_us_freeze_iter = NULL,
+                                              burnin_schedule = "automatic",
+                                              metric_adaptation_end_iter = NULL,
+                                              pre_burnin_n_iter = NULL,
+                                              pre_burnin_L = NULL,
+                                              share_tau_ii_across_chains_in_burnin = NULL,
+                                              burnin_TBB_pool_equals_n_chains = NULL,
+                                              store_log_lik_trace = NULL,
+                                              use_disk_path = "/tmp/hmc_traces",
+                                              test_perm_override = NULL
+                                              ##
+                                             ) {
+                            ## Resolve here for R6 callers; R_fn_sample_model also enforces this for direct callers.
+                            if (identical(x = self$Model_type, y = "Stan")) {
+                                if (isTRUE(x = burnin_TBB_pool_equals_n_chains)) {
+                                    message("burnin_TBB_pool_equals_n_chains = TRUE is overridden to FALSE for Stan models to allow TBB within-chain parallelism.")
+                                }
+                                burnin_TBB_pool_equals_n_chains <-  FALSE
+                            } else {
+                                burnin_TBB_pool_equals_n_chains <-  if (is.null(x = burnin_TBB_pool_equals_n_chains)) TRUE else
+                                                                      isTRUE(x = burnin_TBB_pool_equals_n_chains)
+                            }
+                            ##
+                            ## ---- DEFERRED initialisation: if $new() was called without data,
+                            ## initialise NOW with the preserved constructor inputs (the data must
+                            ## be supplied to this $sample() call):
+                            if (is.null(self$init_object)) {
+                              ##
+                              self$init_object <-   initialise_model(   Model_type = self$Model_type,
+                                                                        ##
+                                                                        sample_nuisance = self$sample_nuisance,
+                                                                        n_nuisance_override = self$n_nuisance_override,
+                                                                        ##
+                                                                        model_args_list = model_args_list,
+                                                                        ##
+                                                                        Stan_data_list = Stan_data_list,
+                                                                        Stan_model_file_path = self$Stan_model_file_path,
+                                                                        ##
+                                                                        compile = if (is.null(self$compile_choice)) TRUE else self$compile_choice,
+                                                                        force_recompile = if (is.null(self$force_recompile_choice)) force_recompile else self$force_recompile_choice,
+                                                                        ##
+                                                                        cmdstanr_model_fit_obj = NULL,
+                                                                        ##
+                                                                        Stan_cpp_user_header = self$Stan_cpp_user_header,
+                                                                        Stan_cpp_flags = self$Stan_cpp_flags,
+                                                                        stanc_args = self$stanc_args,
+                                                                        make_args = self$make_args)
+                              ##
+                              self$is_compiled <- TRUE
+                              ##
+                              self$model_args_list <- self$init_object$model_args_list
+                              ##
+                              self$Stan_data_list <- self$init_object$Stan_data_list
+                              self$Stan_model_file_path <- self$init_object$Stan_model_file_path
+                              ##
+                              self$Stan_cpp_user_header <- self$init_object$Stan_cpp_user_header
+                              self$Stan_cpp_flags <- self$init_object$Stan_cpp_flags
+                              self$stanc_args <- self$init_object$stanc_args
+                              self$make_args <- self$init_object$make_args
+                              ##
+                              self$n_nuisance <- self$init_object$n_nuisance
+                              self$n_params_main <- self$init_object$n_params_main
+                              ##
+                            }
+                            ##
+                            ## validate initialization:
+                            ##
+                            if (is.null(self$init_object)) {
+                              stop("Model was not properly initialized")
+                            }
+                            ##
+                            ## ---- resolve the storage mode ONCE, and record it so that
+                            ## $summary() reads the same storage mode that sampling used:
+                            if (is.null(use_disk)) {
+                              use_disk <- if (is.null(self$use_disk)) FALSE else self$use_disk
+                            }
+                            self$use_disk <- use_disk
+                            ##
+                            if (!(is.null(Stan_data_list))) { 
+                              self$Stan_data_list <- Stan_data_list
+                            }
+                            if (!(is.null(model_args_list))) { 
+                              self$model_args_list <- model_args_list
+                            }
+                            ##
+                            if (!(is.null(n_chains_burnin))) { 
+                              self$n_chains_burnin <- n_chains_burnin
+                            }
+                            if (!(is.null(init_lists_per_chain))) { 
+                              self$init_lists_per_chain <- init_lists_per_chain
+                            }
+                            if (!(is.null(sample_nuisance))) { 
+                              self$sample_nuisance <- sample_nuisance
+                            }
+                            if (!(is.null(n_nuisance_override))) { 
+                              self$n_nuisance_override <- n_nuisance_override
+                            }
                             
-                                                   # require(dqrng)
-                                                   # ## Set the standard R seed:
-                                                   # set.seed(seed)
-                                                   # ## Set global seed for PCG64:
-                                                   # # dqrng::dqrng_set_state("pcg64")
-                                                   # # dqrng::dqset.seed(seed)
-                                                   # 
-                                                   # set.seed(seed)
-                                                   # library(dqrng)
-                                                   # ##dqrng::dqrng_set_state("pcg64")
-                                                   # 
-                                                   # for (i in 1:n_chains_sampling) {
-                                                   #   dqrng::dqset.seed(seed, i)
-                                                   # }
-                            
-                                                   ## validate initialization
-                                                   if (is.null(self$init_object)) {
-                                                     stop("Model was not properly initialize")
-                                                   }
-                            
-                                                    max_eps_main <- max_eps_us <- 100
-                                                    
-                                                    ## Helper function:
-                                                    if_null_then_set_to <- function(x, set_to_this_if_null) { 
-                                                        if (is.null(x)) {
-                                                          return(set_to_this_if_null)
-                                                        }
-                                                        return(x)
-                                                    }
-                                                    
-                                                    manual_tau <- if_null_then_set_to(manual_tau, FALSE)
-                                                    message(print(paste("manual_tau = ", manual_tau)))
-                                                    
-                                                    vect_type <- if_null_then_set_to(vect_type, BayesMVP:::detect_vectorization_support())
-                                                    message(print(paste("vect_type = ", vect_type)))
-                                                    
-                                                    #### Currently for nuisance sampling only diagonal-Euclidean metric is available 
-                                                    ## metric_type_nuisance  <- "Empirical"
-                                                    metric_shape_nuisance <- "diag"
-                                                    
-                                                    if (force_autodiff == TRUE) { 
-                                                      force_PartialLog <- TRUE
-                                                    }
-                        
-                                                    ## params that cannot be updated using "$sample()":
-                                                    Model_type <- self$Model_type 
-                                                    init_object <- self$init_object
-                                                    
-                                                    ## bookmark : For the latent_trait model, the MANUAL-LOG-SCALE lp_grad function isn't yet working fully, so don't use it and print error
-                                                    if (Model_type == "latent_trait") {
-                                                      if (force_PartialLog == TRUE) {
-                                                         stop("Error: the * MANUAL * LOG-SCALE lp_grad function isn't yet working fully, please set force_PartialLog = FALSE\n
-                                                              However, note that the autodiff (AD) version is working. ")
-                                                      }
-                                                    }
-                                                    
-                                                    if (partitioned_HMC == FALSE) { 
-                                                      if (diffusion_HMC == TRUE) { 
-                                                        stop("Diffusion-pathspace HMC is only allowed if partitioned_HMC is set to TRUE - \n
-                                                             since we can only sample the nuisance parameters using diffusion-pathspace HMC; \n
-                                                             also, ensure that your model has latent variables/ nuisasnce parameters wich \n
-                                                             are (approximately) normaly distributed on the raw (unconstrained) scale")
-                                                      }
-                                                    }
-                                                    
-                                                    if (is.null(diffusion_HMC)) {
-                                                      warning("'diffusion_HMC' not specificed (either TRUE of FALSE) - using default (standard, non-diffusion HMC)")
-                                                      diffusion_HMC <- FALSE 
-                                                    }
+                            # if (is.null(clip_iter)) {
+                            #       if (n_burnin > 999) {
+                            #         clip_iter <-  round(n_burnin/20, 0)  ## round(n_burnin/10, 0)   
+                            #       } else if ((n_burnin > 499) && (n_burnin < 1000)) { 
+                            #         clip_iter <-  round(n_burnin/20, 0)  ## round(n_burnin/10, 0)  
+                            #       } else if (n_burnin %in% c(250:499)) { 
+                            #         clip_iter <-  25 #  round(n_burnin/10, 0) # 50 # 15
+                            #       } else if (n_burnin %in% c(150:249)) { 
+                            #         clip_iter <-  25 # 30 # 2  #  round(n_burnin/20, 0) # 25
+                            #       } else {  # 149 or less
+                            #         clip_iter <-  15 #  20 # 10 # 5 
+                            #       }
+                            # }
+                            ##
+                            # ## Nuisance params:
+                            # n_nuisance <- if_null_then_set_to(n_nuisance, self$n_nuisance)
+                            # if (n_nuisance == 0) {
+                            #   diffusion_HMC <- FALSE ## diffusion_HMC only done for nuisance 
+                            #   partitioned_HMC <- FALSE ## nothing to partition if no nuisance params!
+                            # }
+                            ##
+                            # n_adapt <- if_null_then_set_to(n_adapt, n_burnin - round(n_burnin/10))
+                            # gap <- if_null_then_set_to(gap, clip_iter  + round(n_adapt / 5))
+                            # ##
+                            # interval_width_main <- if_null_then_set_to(interval_width_main, round(n_burnin/10))
+                            # interval_width_nuisance <- if_null_then_set_to(interval_width_nuisance, round(n_burnin/10))
+                            # ##
+                            # clip_iter_tau <- if_null_then_set_to(clip_iter_tau, round(0.3*n_burnin))
+                            ##
+                            ###  partitioned_HMC <- TRUE # currently only TRUE is supported. 
+                            ## inv_Phi_type <- ifelse(Phi_type == "Phi", "inv_Phi", "inv_Phi_approx") # inv_Phi_type is not modifiable 
 
-                                                    if (partitioned_HMC == TRUE) {
-                                                      sample_nuisance <- TRUE
-                                                    } 
-                                                    
-                                                    if (metric_type_main == "Hessian") { 
-                                                      
-                                                            interval_width_main <- if_null_then_set_to(interval_width_main, 50)
+                            # -----------  call R_fn_sample_model fn ---------------------------------------------------------------------------------------------------
+                            self$result <-       R_fn_sample_model(   
+                                                            init_object = self$init_object,
                                                             ##
-                                                            ratio_M_main <- if_null_then_set_to(ratio_M_main, 0.75)
-                                                            ratio_M_us <- if_null_then_set_to(ratio_M_us, 0.25)
+                                                            # Model_type = self$Model_type, ## cannot be changed in "$sample()"
                                                             ##
-                                                            interval_width_nuisance <- if_null_then_set_to(interval_width_nuisance, interval_width_main)
-                                                      
-                                                    } else if (metric_type_main == "Empirical") { 
-                                                      
-                                                            interval_width_main <- if_null_then_set_to(interval_width_main, 50)
+                                                            n_chains_burnin = n_chains_burnin,
+                                                            init_lists_per_chain = init_lists_per_chain,
                                                             ##
-                                                            ratio_M_main <- if_null_then_set_to(ratio_M_main, 0.50)
-                                                            ratio_M_us <- if_null_then_set_to(ratio_M_us, 0.25)
+                                                            parallel_method = parallel_method,
                                                             ##
-                                                            interval_width_nuisance <- if_null_then_set_to(interval_width_nuisance, interval_width_main)
-                                                      
-                                                    }
-                                                    
-                                                    params_same <- 1
-                                                    
-                                                    {
-                                                      # first update class members if new values provided
-                                                      if (!identical(self$N, N))  { self$N <- N ; params_same <- 0 }
-                                                      if (!identical(self$y, y))  { self$y <- y ; params_same <- 0 }
-                                                      if (!identical(self$sample_nuisance, sample_nuisance))  { self$sample_nuisance <- sample_nuisance ; params_same <- 0 } ## Don't need to update (??? - BOOKMARK)
-                                                      if (!identical(self$Stan_data_list, Stan_data_list))  { self$Stan_data_list <- Stan_data_list ; params_same <- 0 } ## Don't need to update as JSON updated whenever Stan_data_list is!! (??? - BOOKMARK)
-                                                      ##
-                                                      if (!identical(self$n_params_main, n_params_main))  { self$n_params_main <- n_params_main ; params_same <- 0 }
-                                                      if (!identical(self$n_nuisance, n_nuisance))  { self$n_nuisance <- n_nuisance ; params_same <- 0 }
-                                                      ##
-                                                      if (!identical(self$n_chains_burnin, n_chains_burnin))  { self$n_chains_burnin <- n_chains_burnin ; params_same <- 0 }
-                                                      if (!identical(self$init_lists_per_chain, init_lists_per_chain))  { self$init_lists_per_chain <- init_lists_per_chain ; params_same <- 0 }
-                                                      ##
-                                                      if (!identical(self$model_args_list, model_args_list))  { self$model_args_list <- model_args_list ; params_same <- 0 }
-                                                    }
-                                                    
-                                                    ## Currently n_nuisance_to_track must be equal to n_nuisance (otherwise the summary estimates computed won't be correct! as they rely on the u's)
-                                                    n_nuisance_to_track <- self$n_nuisance
-                                                    
-                                                    # then update model if any of needed parameters changed
-                                                    if (params_same == 0) {
-                                                      
-                                                        # ---------- call update_model fn  ------------------------------------------------------------------------------------------------ 
-                                                            self$init_object <-   BayesMVP:::update_model(    Model_type = Model_type, 
-                                                                                                              init_object = init_object,
-                                                                                                              y = self$y,
-                                                                                                              N = self$N,
-                                                                                                              force_recompile = force_recompile,
-                                                                                                              init_lists_per_chain = self$init_lists_per_chain,
-                                                                                                              sample_nuisance = self$sample_nuisance,
-                                                                                                              model_args_list = self$model_args_list,
-                                                                                                              Stan_data_list =  self$Stan_data_list,
-                                                                                                              n_params_main =   self$n_params_main,
-                                                                                                              n_nuisance = self$n_nuisance, 
-                                                                                                              n_chains_burnin = self$n_chains_burnin)
-                                                      
-                                                    }
-                                                    
-                                                    if (!is.null(adapt_delta) && (adapt_delta <= 0 || adapt_delta >= 1)) {
-                                                      stop("adapt_delta must be between 0 and 1")
-                                                    }
-                                                    
-                                                    LR_main <- learning_rate
-                                                    LR_us <- learning_rate
-                                                    
-                                                    if (is.null(LR_main))  { 
-                                                      if (n_burnin < 249) LR <- 0.10
-                                                      if (n_burnin %in% c(250:500)) LR <- 0.075
-                                                      if (n_burnin %in% c(501:750)) LR <- 0.05
-                                                      if (n_burnin > 750)           LR <- 0.025
-                                                      LR_main  <- LR
-                                                    }
-                                                    
-                                                    if (is.null(LR_us))  { 
-                                                      if (n_burnin < 249) LR <- 0.10
-                                                      if (n_burnin %in% c(250:500)) LR <- 0.075
-                                                      if (n_burnin %in% c(501:750)) LR <- 0.05
-                                                      if (n_burnin > 750)           LR <- 0.025
-                                                      LR_us  <- LR
-                                                    }
-                                                    
-                                                    if (is.null(clip_iter)) {
-                                                          if (n_burnin > 999) {
-                                                            clip_iter <-  round(n_burnin/20, 0)  ## round(n_burnin/10, 0)   
-                                                          } else if ((n_burnin > 499) && (n_burnin < 1000)) { 
-                                                            clip_iter <-  round(n_burnin/20, 0)  ## round(n_burnin/10, 0)  
-                                                          } else if (n_burnin %in% c(250:499)) { 
-                                                            clip_iter <-  25 #  round(n_burnin/10, 0) # 50 # 15
-                                                          } else if (n_burnin %in% c(150:249)) { 
-                                                            clip_iter <-  25 # 30 # 2  #  round(n_burnin/20, 0) # 25
-                                                          } else {  # 149 or less
-                                                            clip_iter <-  15 #  20 # 10 # 5 
-                                                          }
-                                                    }
-                                                    
-                                                    ## Nuisance params:
-                                                    n_nuisance <- if_null_then_set_to(n_nuisance, self$n_nuisance)
-                                                    if (n_nuisance == 0) {
-                                                      diffusion_HMC <- FALSE ## diffusion_HMC only done for nuisance 
-                                                      partitioned_HMC <- FALSE ## nothing to partition if no nuisance params!
-                                                    }
-                                                    ##
-                                                    gap <- n_adapt <- NULL
-                                                    n_adapt <- if_null_then_set_to(n_adapt, n_burnin - round(n_burnin/10))
-                                                    gap <- if_null_then_set_to(gap, clip_iter  + round(n_adapt / 5))
-                                                    interval_width_main <- if_null_then_set_to(interval_width_main, round(n_burnin/10))
-                                                    interval_width_nuisance <- if_null_then_set_to(interval_width_nuisance, round(n_burnin/10))
-                                                    
-                                                  ###  partitioned_HMC <- TRUE # currently only TRUE is supported. 
-                                                    inv_Phi_type <- ifelse(Phi_type == "Phi", "inv_Phi", "inv_Phi_approx") # inv_Phi_type is not modifiable 
-                   
-                                                    # -----------  call R_fn_sample_model fn ---------------------------------------------------------------------------------------------------
-                                                    self$result <-       BayesMVP:::R_fn_sample_model(    Model_type = Model_type,
-                                                                                                          init_object = self$init_object ,
-                                                                                                          init_lists_per_chain = self$init_lists_per_chain,
-                                                                                                          vect_type = vect_type,
-                                                                                                          parallel_method = parallel_method,
-                                                                                                          Phi_type = Phi_type,
-                                                                                                          inv_Phi_type = inv_Phi_type,
-                                                                                                          Stan_data_list = self$Stan_data_list,
-                                                                                                          model_args_list = self$model_args_list,
-                                                                                                          y =  self$y,
-                                                                                                          N =  self$N,
-                                                                                                          n_params_main = self$n_params_main,
-                                                                                                          n_nuisance = self$n_nuisance,
-                                                                                                          ##
-                                                                                                          manual_tau = manual_tau,
-                                                                                                          tau_if_manual = tau_if_manual,
-                                                                                                          ##
-                                                                                                          sample_nuisance =   self$sample_nuisance,
-                                                                                                          n_chains_burnin =  self$n_chains_burnin,
-                                                                                                          seed = seed,
-                                                                                                          n_iter = n_iter,
-                                                                                                          n_burnin = n_burnin,
-                                                                                                          n_chains_sampling = n_chains_sampling,
-                                                                                                          n_superchains = n_superchains,
-                                                                                                          diffusion_HMC = diffusion_HMC,
-                                                                                                          partitioned_HMC = partitioned_HMC,
-                                                                                                          adapt_delta = adapt_delta,
-                                                                                                          LR_us = learning_rate,
-                                                                                                          LR_main = learning_rate,
-                                                                                                          clip_iter = clip_iter,
-                                                                                                          n_adapt = n_adapt,
-                                                                                                          gap = gap,
-                                                                                                          ratio_M_us = ratio_M_us,
-                                                                                                          ratio_M_main = ratio_M_main,
-                                                                                                          interval_width_main = interval_width_main,
-                                                                                                          interval_width_nuisance = interval_width_nuisance,
-                                                                                                          force_autodiff = force_autodiff,
-                                                                                                          force_PartialLog = force_PartialLog,
-                                                                                                          multi_attempts = multi_attempts,
-                                                                                                          max_eps_main = max_eps_main,
-                                                                                                          max_eps_us = max_eps_us,
-                                                                                                          max_L = max_L,
-                                                                                                          tau_mult = tau_mult,
-                                                                                                          metric_type_main = metric_type_main,
-                                                                                                          metric_shape_main = metric_shape_main,
-                                                                                                          metric_type_nuisance = metric_type_nuisance,
-                                                                                                          metric_shape_nuisance = metric_shape_nuisance,
-                                                                                                          n_nuisance_to_track = n_nuisance_to_track)
-                                                    
-                                                    return(self)
-                                              
-                                              
+                                                            Stan_data_list = Stan_data_list, 
+                                                            model_args_list = model_args_list,
+                                                            ##
+                                                            sample_nuisance =   sample_nuisance,
+                                                            n_nuisance_override = n_nuisance_override,
+                                                            ##
+                                                            seed = seed,
+                                                            n_burnin = n_burnin,
+                                                            n_adapt = n_adapt,
+                                                            gap = gap,
+                                                            ##
+                                                            n_chains_sampling = n_chains_sampling,
+                                                            n_superchains = n_superchains,
+                                                            n_iter = n_iter,
+                                                            ##
+                                                            adapt_delta = adapt_delta,
+                                                            learning_rate = learning_rate,
+                                                            ##
+                                                            tau_mult = tau_mult,
+                                                            tau_initial = tau_initial,
+                                                            ##
+                                                            manual_tau = manual_tau,
+                                                            tau_if_manual = tau_if_manual,
+                                                            ##
+                                                            burnin_algorithm = burnin_algorithm,
+                                                            diffusion_HMC = diffusion_HMC,
+                                                            diffusion_HMC_integrator = diffusion_HMC_integrator,
+                                                            debug_burnin_timing = debug_burnin_timing,
+                                                            debug = debug,
+                                                            stream = stream,
+                                                            nuisance_jitter_scale = nuisance_jitter_scale,
+                                                            tau_if_manual_in_L_units = tau_if_manual_in_L_units,
+                                                            tau_objective = tau_objective,
+                                                            tau_weight_by_p_jump = tau_weight_by_p_jump,
+                                                            tau_ramp = tau_ramp,
+                                                            eps_reinit_at_ChEES_handover = eps_reinit_at_ChEES_handover,
+                                                            theta_hat_us_rule = theta_hat_us_rule,
+                                                            theta_hat_us_freeze_iter = theta_hat_us_freeze_iter,
+                                                            burnin_schedule = burnin_schedule,
+                                                            metric_adaptation_end_iter = metric_adaptation_end_iter,
+                                                            pre_burnin_n_iter = pre_burnin_n_iter,
+                                                            pre_burnin_L = pre_burnin_L,
+                                                            share_tau_ii_across_chains_in_burnin = share_tau_ii_across_chains_in_burnin,
+                                                            burnin_TBB_pool_equals_n_chains = burnin_TBB_pool_equals_n_chains,
+                                                            store_log_lik_trace = store_log_lik_trace,
+                                                            use_disk_path = use_disk_path,
+                                                            test_perm_override = test_perm_override,
+                                                            partitioned_HMC = partitioned_HMC,
+                                                            ##
+                                                            clip_iter = clip_iter,
+                                                            clip_iter_tau = clip_iter_tau,
+                                                            ##
+                                                            n_refresh = n_refresh,
+                                                            use_proposed = use_proposed,
+                                                            ##
+                                                            beta1_adam = beta1_adam,
+                                                            beta2_adam = beta2_adam,
+                                                            eps_adam = eps_adam,
+                                                            ##
+                                                            force_autodiff = force_autodiff,
+                                                            force_PartialLog = force_PartialLog,
+                                                            multi_attempts = multi_attempts,
+                                                            ##
+                                                            force_autodiff_for_metric = force_autodiff_for_metric,
+                                                            force_PartialLog_for_metric = force_PartialLog_for_metric,
+                                                            force_multi_attempts_for_metric = force_multi_attempts_for_metric,
+                                                            ##
+                                                            vect_type = vect_type,
+                                                            Phi_type = Phi_type,
+                                                            inv_Phi_type = inv_Phi_type,
+                                                            ##
+                                                            metric_type_main = metric_type_main,
+                                                            metric_shape_main = metric_shape_main,
+                                                            ratio_M_main = ratio_M_main,
+                                                            interval_width_main = interval_width_main,
+                                                            ##
+                                                            metric_type_nuisance = metric_type_nuisance,
+                                                            metric_shape_nuisance = metric_shape_nuisance,
+                                                            ratio_M_nuisance = ratio_M_nuisance,
+                                                            interval_width_nuisance = interval_width_nuisance,
+                                                            ##
+                                                            metric_estimator = metric_estimator,
+                                                            ##
+                                                            M_decay_type = M_decay_type,
+                                                            M_decay_power = M_decay_power,
+                                                            M_decay_scale = M_decay_scale,
+                                                            ##
+                                                            max_tau_main = max_tau_main,
+                                                            max_tau_nuisance = max_tau_nuisance,
+                                                            ##
+                                                            max_eps_main = max_eps_main,
+                                                            max_eps_nuisance = max_eps_nuisance,
+                                                            ##
+                                                            learning_rate_initial = learning_rate_initial,
+                                                            learning_rate_initial_iter = learning_rate_initial_iter,
+                                                            ##
+                                                            eps_initial = eps_initial,
+                                                            eps_initial_iter = eps_initial_iter,
+                                                            ##
+                                                            max_L = max_L,
+                                                            ##
+                                                            n_nuisance_to_track = n_nuisance_to_track,
+                                                            ##
+                                                            use_disk = use_disk,
+                                                            ##
+                                                            n_threads_WCP_burnin = n_threads_WCP_burnin,
+                                                            n_threads_WCP_sampling = n_threads_WCP_sampling,
+                                                            num_chunks_burnin = num_chunks_burnin,
+                                                            num_chunks_sampling = num_chunks_sampling,
+                                                            ##
+                                                            reorder_cols_MVP = reorder_cols_MVP)
+                            
+                            ## ---- refresh object state after sampling: the sampler returns an
+                            ## UPDATED init_object (it re-initialises the model internally), so
+                            ## keep the class in sync (n_nuisance / n_params_main, compiled flag,
+                            ## resolved paths):
+                            if (!is.null(self$result$init_object)) {
+                              self$init_object <- self$result$init_object
+                              ##
+                              self$n_nuisance <- self$init_object$n_nuisance
+                              self$n_params_main <- self$init_object$n_params_main
+                              ##
+                              self$Stan_model_file_path <- self$init_object$Stan_model_file_path
+                              ##
+                            }
+                            self$is_compiled <- TRUE
+                            
+                            return(self)
                             
                           },
                           
@@ -696,39 +910,59 @@ MVP_model <- R6Class("MVP_model",
                           summary = function(       compute_main_params = TRUE,
                                                     compute_transformed_parameters = TRUE,
                                                     compute_generated_quantities = TRUE,
+                                                    ##
                                                     save_log_lik_trace = TRUE,
                                                     save_nuisance_trace = FALSE,
+                                                    ##
                                                     compute_nested_rhat = NULL,
                                                     n_superchains = NULL,
+                                                    ##
                                                     save_trace_tibbles = FALSE,
-                                                    ...) {
-                            
-                            
-                            init_object <- self$init_object
-                            Model_type <- self$Model_type
-                            result <- self$result
-                            n_nuisance <- self$n_nuisance
+                                                    ##
+                                                    n_iter_to_store = NULL,
+                                                    ##
+                                                    use_disk = NULL,
+                                                    use_disk_path = "/tmp/hmc_traces",
+                                                    use_disk_path_post_hoc_dir = "/tmp/constrain_traces"
+                                                    ) {
                             
                                 # validate initialization
-                                if (is.null(init_object)) {
+                                if (is.null(self$init_object)) {
                                   stop("Model was not properly initialize")
+                                }
+                                if (is.null(self$result)) {
+                                  stop("Model has not been sampled yet - call $sample() before $summary().")
+                                }
+                                ##
+                                ## ---- use the SAME storage mode that sampling used (self$use_disk
+                                ## is recorded by $sample()):
+                                if (is.null(use_disk)) {
+                                  use_disk <- if (is.null(self$use_disk)) FALSE else self$use_disk
                                 }
                                 
                                 # create model fit object (includes model summary tables + traces + divergence info) by calling "BayesMVP::create_summary_and_traces" ----------------------
-                                self$model_fit_object <-           BayesMVP:::create_summary_and_traces(    model_results = result,
-                                                                                                            init_object = init_object,
-                                                                                                            n_nuisance = n_nuisance,
-                                                                                                            compute_main_params = compute_main_params,
-                                                                                                            compute_transformed_parameters = compute_transformed_parameters,
-                                                                                                            compute_generated_quantities = compute_generated_quantities,
-                                                                                                            save_log_lik_trace = save_log_lik_trace,
-                                                                                                            save_nuisance_trace = save_nuisance_trace,
-                                                                                                            compute_nested_rhat = compute_nested_rhat,
-                                                                                                            n_superchains = n_superchains,
-                                                                                                            save_trace_tibbles = save_trace_tibbles)
+                                self$model_fit_object <-           create_summary_and_traces(     model_results = self$result,
+                                                                                                  ##
+                                                                                                  compute_main_params = compute_main_params,
+                                                                                                  compute_transformed_parameters = compute_transformed_parameters,
+                                                                                                  compute_generated_quantities = compute_generated_quantities,
+                                                                                                  ##
+                                                                                                  save_log_lik_trace = save_log_lik_trace,
+                                                                                                  save_nuisance_trace = save_nuisance_trace,
+                                                                                                  ##
+                                                                                                  compute_nested_rhat = compute_nested_rhat,
+                                                                                                  n_superchains = n_superchains,
+                                                                                                  ##
+                                                                                                  save_trace_tibbles = save_trace_tibbles,
+                                                                                                  ##
+                                                                                                  n_iter_to_store = n_iter_to_store,
+                                                                                                  ##
+                                                                                                  use_disk = use_disk,
+                                                                                                  use_disk_path = use_disk_path,
+                                                                                                  use_disk_path_post_hoc_dir = use_disk_path_post_hoc_dir)
                                 
                                 # return the plotting class instance with the summary
-                                MVP_class_plot_object <- BayesMVP::MVP_plot_and_diagnose$new(  model_summary =   self$model_fit_object,
+                                MVP_class_plot_object <- MVP_plot_and_diagnose$new(  model_summary =   self$model_fit_object,
                                                                                                init_object = self$init_object,
                                                                                                n_nuisance = self$n_nuisance)
                                 
@@ -738,12 +972,5 @@ MVP_model <- R6Class("MVP_model",
                           
             )
 )
-
-
-
-
-
-
-
 
 

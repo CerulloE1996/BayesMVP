@@ -96,7 +96,8 @@ void                             fn_lp_grad_LT_LC_multi_attempts_InPlace_process
                                                                                       const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                                                                       const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                       const std::string grad_option,
-                                                                                      const Model_fn_args_struct &Model_args_as_cpp_struct
+                                                                                      const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                                      const bool use_autodiff_fallback = true
 ) {
 
  
@@ -127,32 +128,33 @@ void                             fn_lp_grad_LT_LC_multi_attempts_InPlace_process
     
   } 
   
-  //// NOTE: LOG-SCALE FN NOT YET WORKING FOR THE LATENT_TRAIT MODEL (LT_b's part) - SO JUST GO STRAIGHT TO AD FUNCTION
-  // ///// 2nd attempt (if first fails) - uses log-scale but NOT autodiff 
+  // // NOTE: LOG-SCALE FN NOT YET WORKING FOR THE LATENT_TRAIT MODEL (LT_b's part) - SO JUST GO STRAIGHT TO AD FUNCTION
+  // ///// 2nd attempt (if first fails) - uses log-scale but NOT autodiff
   // if   (NaN_or_Inf_indicator == 1) {  ///  if ( (NaN_or_Inf_indicator == 1) || ( (force_autodiff == false) && (force_PartialLog == true)   ) ) {
-  //   
+  // 
   //       NaN_or_Inf_indicator = 0;  // Reset main_div indicator
   //       out_mat = out_mat_orig;
-  //       
-  //       fn_lp_grad_LT_LC_PartialLog_MD_and_AD_InPlace_process(   out_mat, 
+  // 
+  //       fn_lp_grad_LT_LC_PartialLog_MD_and_AD_InPlace_process(   out_mat,
   //                                                                theta_main_vec_ref,
   //                                                                theta_us_vec_ref,
   //                                                                y_ref,
   //                                                                grad_option,
   //                                                                Model_args_as_cpp_struct);
-  //       
-  //       if (is_NaN_or_Inf_Eigen(out_mat)) { 
+  // 
+  //       if (is_NaN_or_Inf_Eigen(out_mat)) {
   //         NaN_or_Inf_indicator = 1;
-  //       } 
-  //   
+  //       }
+  // 
   // }
   
   ///// 3rd attempt (if second fails)
-  if   (NaN_or_Inf_indicator == 1) {  ///  if ( (NaN_or_Inf_indicator == 1) ||  ( (force_autodiff == true) && (force_PartialLog == true)  )  )  {
+  if (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) {  //// preserve the existing standard -> autodiff fallback unless explicitly disabled
     
         NaN_or_Inf_indicator = 0;  // Reset main_div indicator
         out_mat = out_mat_orig;
         
+        try {
         fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_process(     out_mat, 
                                                                theta_main_vec_ref,
                                                                theta_us_vec_ref,
@@ -163,22 +165,18 @@ void                             fn_lp_grad_LT_LC_multi_attempts_InPlace_process
         if (is_NaN_or_Inf_Eigen(out_mat)) { 
           NaN_or_Inf_indicator = 1;
         } 
+        } catch (const std::exception &) {
+          NaN_or_Inf_indicator = 1;
+        }
     
   }
 
  
  
  
+  if (NaN_or_Inf_indicator == 1) {
+        out_mat = out_mat_orig;
+        out_mat(0) = std::numeric_limits<double>::quiet_NaN();
+  }
+
 }
-
-
-
-
-
-
-
-
-
-
-
-

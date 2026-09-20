@@ -126,6 +126,20 @@ This class handles:
 
 \item{\code{init_object}}{Initialization object.}
 
+\item{\code{is_compiled}}{Whether the model has been compiled}
+
+\item{\code{n_nuisance_override}}{Override for number of nuisance parameters}
+
+\item{\code{stanc_args}}{Arguments for Stan compiler (for BridgeStan)}
+
+\item{\code{make_args}}{C++/make arguments used to compile the generated C++ of the Stan model (e.g. list("STAN_THREADS=true")); distinct from stanc_args.}
+
+\item{\code{Stan_cpp_user_header}}{User C++ header file path}
+
+\item{\code{Stan_cpp_flags}}{C++ compiler flags}
+
+\item{\code{Stan_model_file_path}}{Path to Stan model file}
+
 \item{\code{result}}{Model results object.}
 
 \item{\code{model_fit_object}}{Model fit object.}
@@ -233,6 +247,12 @@ your Stan model.}
 \item{\code{sample_nuisance}}{Whether or not to sample the high-dimensional nuisance/latent variable vector.}
 
 \item{\code{n_chains_burnin}}{The total number of burn-in chains. The default is Min(8, n_cores), where n_cores is the number of cores on the CPU.}
+
+\item{\code{use_disk}}{Whether the sampling traces were stored in RAM (FALSE) or on disk (TRUE). Set by $sample() and re-used by $summary() so the summary reads the same storage mode.}
+
+\item{\code{compile_choice}}{The "compile" argument captured at construction (used if initialisation is deferred to $sample()).}
+
+\item{\code{force_recompile_choice}}{The "force_recompile" argument captured at construction (used if initialisation is deferred to $sample()).}
 }
 \if{html}{\out{</div>}}
 }
@@ -253,21 +273,17 @@ Create a new MVP model object
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{MVP_model$new(
   Model_type,
-  y,
-  N,
-  n_params_main,
-  n_nuisance,
-  init_lists_per_chain,
-  n_chains_burnin,
-  compile = TRUE,
-  force_recompile = TRUE,
+  sample_nuisance = NULL,
+  n_nuisance_override = NULL,
   model_args_list = NULL,
   Stan_data_list = NULL,
-  sample_nuisance = NULL,
   Stan_model_file_path = NULL,
   Stan_cpp_user_header = NULL,
   Stan_cpp_flags = NULL,
-  ...
+  stanc_args = NULL,
+  make_args = NULL,
+  compile = TRUE,
+  force_recompile = FALSE
 )}\if{html}{\out{</div>}}
 }
 
@@ -275,6 +291,25 @@ Create a new MVP model object
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{Model_type}}{Type of model ("MVP", "LC-MVP", etc.). See class documentation for details.}
+
+\item{\code{sample_nuisance}}{Whether to sample nuisance parameters. See class documentation for details.}
+
+\item{\code{model_args_list}}{List of model arguments. See class documentation for details.}
+
+\item{\code{Stan_data_list}}{List of Stan data (optional). See class documentation for details.}
+
+\item{\code{Stan_model_file_path}}{The file path to the Stan model, only needed if \code{Model_type = "Stan"}.}
+
+\item{\code{Stan_cpp_user_header}}{The file path to a user-supplied C++ .hpp file to be compiled together with the Stan model. This is optional and only needed if you want to use custom C++ functions in your
+Stan model, and is only relvant if \code{Model_type = "Stan"}.}
+
+\item{\code{Stan_cpp_flags}}{User-supplied R list containing comma-separated values of compiler flags (e.g. CXX_FLAGS, etc) to be passed on
+to cmdstanr - the Stan model will then be compiled using these flags. This is optional and only needed if you want to use custom C++ functions in your Stan model.
+Only relevant if \code{Model_type = "Stan"}.}
+
+\item{\code{compile}}{Compile the (possibly dummy if using built-in models) Stan model.}
+
+\item{\code{force_recompile}}{Force-compile the (possibly dummy if using built-in models) Stan model.}
 
 \item{\code{y}}{The dataset. See class documentation for details.}
 
@@ -287,25 +322,6 @@ Create a new MVP model object
 \item{\code{init_lists_per_chain}}{List of initial values for each chain. See class documentation for details.}
 
 \item{\code{n_chains_burnin}}{Number of chains used for burnin. See class documentation for details.}
-
-\item{\code{compile}}{Compile the (possibly dummy if using built-in models) Stan model.}
-
-\item{\code{force_recompile}}{Force-compile the (possibly dummy if using built-in models) Stan model.}
-
-\item{\code{model_args_list}}{List of model arguments. See class documentation for details.}
-
-\item{\code{Stan_data_list}}{List of Stan data (optional). See class documentation for details.}
-
-\item{\code{sample_nuisance}}{Whether to sample nuisance parameters. See class documentation for details.}
-
-\item{\code{Stan_model_file_path}}{The file path to the Stan model, only needed if \code{Model_type = "Stan"}.}
-
-\item{\code{Stan_cpp_user_header}}{The file path to a user-supplied C++ .hpp file to be compiled together with the Stan model. This is optional and only needed if you want to use custom C++ functions in your
-Stan model, and is only relvant if \code{Model_type = "Stan"}.}
-
-\item{\code{Stan_cpp_flags}}{User-supplied R list containing comma-separated values of compiler flags (e.g. CXX_FLAGS, etc) to be passed on
-to cmdstanr - the Stan model will then be compiled using these flags. This is optional and only needed if you want to use custom C++ functions in your Stan model.
-Only relevant if \code{Model_type = "Stan"}.}
 
 \item{\code{...}}{Additional arguments passed to BayesMVP::initialise_model.}
 }
@@ -323,61 +339,137 @@ model type (\code{Model_type}) to use.
 Sample from the model
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{MVP_model$sample(
-  init_lists_per_chain = self$init_lists_per_chain,
-  model_args_list = self$model_args_list,
-  Stan_data_list = self$Stan_data_list,
-  parallel_method = "RcppParallel",
-  y = self$y,
-  N = self$N,
-  manual_tau = NULL,
-  tau_if_manual = NULL,
-  sample_nuisance = self$sample_nuisance,
-  partitioned_HMC = FALSE,
-  diffusion_HMC = FALSE,
-  vect_type = NULL,
-  Phi_type = "Phi",
-  n_params_main = self$n_params_main,
-  n_nuisance = self$n_nuisance,
+  force_recompile = FALSE,
   n_chains_burnin = self$n_chains_burnin,
+  init_lists_per_chain = self$init_lists_per_chain,
+  parallel_method = NULL,
+  Stan_data_list = self$Stan_data_list,
+  model_args_list = self$model_args_list,
+  sample_nuisance = self$sample_nuisance,
+  n_nuisance_override = self$n_nuisance_override,
+  seed = NULL,
+  n_burnin = NULL,
+  n_adapt = NULL,
+  gap = NULL,
   n_chains_sampling = NULL,
   n_superchains = NULL,
-  seed = NULL,
-  n_burnin = 500,
-  n_iter = 1000,
-  adapt_delta = 0.8,
+  n_iter = NULL,
+  adapt_delta = NULL,
   learning_rate = NULL,
+  tau_mult = NULL,
+  tau_initial = NULL,
+  manual_tau = NULL,
+  tau_if_manual = NULL,
+  burnin_algorithm = NULL,
+  partitioned_HMC = NULL,
+  diffusion_HMC = NULL,
   clip_iter = NULL,
+  clip_iter_tau = NULL,
+  n_refresh = NULL,
+  use_proposed = NULL,
+  beta1_adam = 0,
+  beta2_adam = 0.95,
+  eps_adam = 0.00000001,
+  force_autodiff = NULL,
+  force_PartialLog = NULL,
+  multi_attempts = NULL,
+  force_autodiff_for_metric = TRUE,
+  force_PartialLog_for_metric = FALSE,
+  force_multi_attempts_for_metric = FALSE,
+  vect_type = NULL,
+  Phi_type = "Phi",
+  inv_Phi_type = "inv_Phi",
+  metric_type_main = NULL,
+  metric_shape_main = NULL,
+  ratio_M_main = NULL,
   interval_width_main = NULL,
+  metric_type_nuisance = NULL,
+  metric_shape_nuisance = NULL,
+  ratio_M_nuisance = NULL,
   interval_width_nuisance = NULL,
-  force_autodiff = FALSE,
-  force_PartialLog = FALSE,
-  multi_attempts = TRUE,
-  max_L = 1024,
-  tau_mult = 1.6,
-  metric_type_main = "Hessian",
-  metric_shape_main = "diag",
-  metric_type_nuisance = "Empirical",
-  ratio_M_main = 0.25,
-  ratio_M_us = 0.25,
-  force_recompile = FALSE,
-  ...
+  metric_estimator = "pooled",
+  M_decay_type = NULL,
+  M_decay_power = NULL,
+  M_decay_scale = NULL,
+  max_tau_main = 25,
+  max_tau_nuisance = 25,
+  max_eps_main = NULL,
+  max_eps_nuisance = NULL,
+  learning_rate_initial = 0.1,
+  learning_rate_initial_iter = NULL,
+  eps_initial = NULL,
+  eps_initial_iter = NULL,
+  max_L = NULL,
+  n_nuisance_to_track = NULL,
+  use_disk = NULL,
+  n_threads_WCP_burnin = 1,
+  n_threads_WCP_sampling = 1,
+  num_chunks_burnin = NULL,
+  num_chunks_sampling = NULL,
+  reorder_cols_MVP = FALSE,
+  diffusion_HMC_integrator = "kick_flow_kick",
+  debug_burnin_timing = FALSE,
+  debug = FALSE,
+  stream = NULL,
+  nuisance_jitter_scale = 0.25,
+  tau_if_manual_in_L_units = NULL,
+  tau_objective = NULL,
+  tau_weight_by_p_jump = NULL,
+  tau_ramp = NULL,
+  eps_reinit_at_ChEES_handover = NULL,
+  theta_hat_us_rule = NULL,
+  theta_hat_us_freeze_iter = NULL,
+  burnin_schedule = "automatic",
+  metric_adaptation_end_iter = NULL,
+  pre_burnin_n_iter = NULL,
+  pre_burnin_L = NULL,
+  share_tau_ii_across_chains_in_burnin = NULL,
+  burnin_TBB_pool_equals_n_chains = NULL,
+  store_log_lik_trace = NULL,
+  use_disk_path = "/tmp/hmc_traces",
+  test_perm_override = NULL
 )}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
+\item{\code{force_recompile}}{Recompile the (possibly dummy if using built-in model) Stan model.}
+
+\item{\code{n_chains_burnin}}{Number of chains used for burnin. See class documentation for details.}
+
 \item{\code{init_lists_per_chain}}{List of initial values for each chain. See class documentation for details.}
-
-\item{\code{model_args_list}}{List of model arguments. See class documentation for details.}
-
-\item{\code{Stan_data_list}}{List of Stan data (optional). See class documentation for details.}
 
 \item{\code{parallel_method}}{The method to use for parallelisation (multithreading) in C++. Default is "RcppParallel". Can be changed to "OpenMP", if available.}
 
-\item{\code{y}}{The dataset. See class documentation for details.}
+\item{\code{Stan_data_list}}{List of Stan data (optional). See class documentation for details.}
 
-\item{\code{N}}{The sample size. See class documentation for details.}
+\item{\code{model_args_list}}{List of model arguments. See class documentation for details.}
+
+\item{\code{sample_nuisance}}{Whether to sample nuisance parameters. See class documentation for details.}
+
+\item{\code{seed}}{Random MCMC seed.}
+
+\item{\code{n_burnin}}{The number of burnin iterations. Default is 500.}
+
+\item{\code{n_chains_sampling}}{Number of chains used for sampling (i.e., post-burnin). Note that this must match the length of "init_lists_per_chain".}
+
+\item{\code{n_superchains}}{Number of superchains for nested R-hat (nR-hat; see Margossian et al, 2023) computation.}
+
+\item{\code{n_iter}}{The number of sampling (i.e., post-burnin) iterations. Default is 1000.}
+
+\item{\code{adapt_delta}}{The Metropolis-Hastings target acceptance rate. Default is 0.80. If there are divergences, sometimes increasing this can help, at the cost
+of efficiency (since this will decrease the step-size (epsilon) and increase the number of leapfrog steps (L) per iteration).}
+
+\item{\code{learning_rate}}{The ADAM learning rate (LR) for learning the appropriate HMC step-size (\eqn{\epsilon}) and HMC path length (\eqn{\tau = L \cdot \epsilon})
+during the burnin period. The default depends on the length of the burnin, and is the pairing selected by pilot study 7:
+LR = 0.0125, 0.025, 0.05 and 0.075 for \code{n_burnin} = 1000, 500, 250 and 125 respectively. Burnin lengths BETWEEN those
+values are interpolated linearly in \eqn{\log(n\_burnin)} vs \eqn{\log(LR)} (i.e. a piecewise power law), which over
+\link{250, 1000} is exactly \eqn{LR = 12.5 / n\_burnin}; the short \link{125, 250} segment is deliberately shallower than that.
+Outside \link{125, 1000} the nearest segment's slope is continued, capped at LR = 0.125 so that a very short burnin cannot
+produce an unstable rate.}
+
+\item{\code{tau_mult}}{The SNAPER-HMC algorithm multiplier to use when adjusting the path length during the burnin phase.}
 
 \item{\code{manual_tau}}{If \code{FALSE}, then SNAPER-HMC will be used to adapt \eqn{\tau} during the burnin phase. Otherwise if \code{TRUE}, \eqn{\tau} will be
 fixed to the value given in the \code{tau_if_manual} argument.}
@@ -388,51 +480,28 @@ given, then this value of tau will be used for both the main parameter sampling 
 path lengths for the main and nuisance parameters, provide a vector instead. E.g.  \code{tau_if_manual = c(0.50, 2.0)} will mean that
 \eqn{\tau} = 0.50 is used for the main parameters and \eqn{\tau} = 2.0 is used for the nuisance parameters.}
 
-\item{\code{sample_nuisance}}{Whether to sample nuisance parameters. See class documentation for details.}
-
 \item{\code{partitioned_HMC}}{Whether to sample all parameters at once (note: wont use diffusion HMC) or whether to alternate between sampling the nuisance
 parameters and the main model parameters.}
 
 \item{\code{diffusion_HMC}}{Whether to use diffusion-pathspace HMC (Beskos et al) to sample nuisance parameters. Default is TRUE.}
 
-\item{\code{vect_type}}{The SIMD (single-nstruction, multiple-data) vectorisation type to use for math functions (such as log, exp, Phi, etc).
-The default is AVX-512 if available, then AVX2 if not, and if neither AVX-512 nor AVX2 are available
-(e.g., on ARM-based CPU's such as Apple systems), then BayesMVP will use the Stan C++ math library functions, and they will decide what
-vectorisation type to use. More vectorisation types will be supported in the future.}
-
-\item{\code{Phi_type}}{Type of Phi() function implementation to use, where Phi() is the standard normal CDF. Can be either "Phi" (the default) or "Phi_approx()".}
-
-\item{\code{n_params_main}}{Number of main parameters. See class documentation for details.}
-
-\item{\code{n_nuisance}}{Number of nuisance parameters. See class documentation for details.}
-
-\item{\code{n_chains_burnin}}{Number of chains used for burnin. See class documentation for details.}
-
-\item{\code{n_chains_sampling}}{Number of chains used for sampling (i.e., post-burnin). Note that this must match the length of "init_lists_per_chain".}
-
-\item{\code{n_superchains}}{Number of superchains for nested R-hat (nR-hat; see Margossian et al, 2023) computation.}
-
-\item{\code{seed}}{Random MCMC seed.}
-
-\item{\code{n_burnin}}{The number of burnin iterations. Default is 500.}
-
-\item{\code{n_iter}}{The number of sampling (i.e., post-burnin) iterations. Default is 1000.}
-
-\item{\code{adapt_delta}}{The Metropolis-Hastings target acceptance rate. Default is 0.80. If there are divergences, sometimes increasing this can help, at the cost
-of efficiency (since this will decrease the step-size (epsilon) and increase the number of leapfrog steps (L) per iteration).}
-
-\item{\code{learning_rate}}{The ADAM learning rate (LR) for learning the appropriate HMC step-size (\eqn{\epsilon}) and HMC path length (\eqn{\tau = L \cdot \epsilon})
-during the burnin period. The default depends on the length of burnin chosen as follows: if \code{n_burnin} < 249, then LR=0.10, if it's between 250 and
-500 then LR = 0.075, and if the burnin length is between 501 and 750 then LR=0.05, and finally if the burnin is >750 iterations then LR=0.025.}
-
 \item{\code{clip_iter}}{The number of iterations to perform MALA (i.e., one leapfrog step) on (first clip_iter iterations) for the burnin period.
-The default depends on the length of the burnin period.}
+The default depends on the length of the burnin period, and is the configuration selected by pilot study 7:
+\code{clip_iter} = 150, 75, 50 and 30 for \code{n_burnin} = 1000, 500, 250 and 125 respectively (banded, so e.g. any
+\code{n_burnin} in [250, 500) takes 50; outside \link{125, 1000} the nearest band's ratio is extrapolated).
+Update: at exactly \code{n_burnin = 125}, the default is now \code{clip_iter = 20}; the historical values above
+are retained for reference. Other burnin lengths and explicit overrides are unchanged.}
 
-\item{\code{interval_width_main}}{How often to update the metric (which is either empirical or Hessian-informed, and can be diagonal or dense) for the
-main parameters during the burnin period. The default used depends on the length of the burnin period.}
+\item{\code{clip_iter_tau}}{The iteration at which the path-length (tau) adaptation stops being clipped during the burnin period.
+The default likewise follows pilot study 7, where it is \code{clip_iter + int}: \code{clip_iter_tau} = 350, 175, 125 and 80
+for \code{n_burnin} = 1000, 500, 250 and 125 respectively. Note this also sets the default \code{gap}, which is
+\code{clip_iter + clip_iter_tau} when \code{gap} is left NULL.
+Update: at exactly \code{n_burnin = 125}, \code{clip_iter_tau = 50} gives the requested 40-percent handover.
+The burn-in routine uses \code{clip_iter_tau} as its effective handover, overriding the incoming \code{gap}.}
 
-\item{\code{interval_width_nuisance}}{How often to update the metric (which is empirical and diagonal) for the nuisance parameters during the burnin period.
-The default used depends on the length of the burnin period.}
+\item{\code{n_refresh}}{How often to report burnin progress, as an INTERVAL in iterations: progress is printed every
+\code{n_refresh} iterations (the same convention as Stan's \code{refresh}). \code{NULL} (the default) uses
+\code{n_burnin / 20}, i.e. about twenty reports across the burnin. Larger values are quieter.}
 
 \item{\code{force_autodiff}}{Whether to use (force) autodiff instead of the built-in manual gradients. This is only relevant for the built-in models, not
 Stan models. The default is \code{FALSE}.}
@@ -442,10 +511,12 @@ automatically be set to \code{TRUE}, since autodiff is only available for partia
 
 \item{\code{multi_attempts}}{Whether}
 
-\item{\code{max_L}}{The maximum number of leapfrog steps. This is similar to \code{max_treedepth} in Stan. The default is 1024 (which is equivalent to the default
-\code{max_treedepth = 10} in Stan).}
+\item{\code{vect_type}}{The SIMD (single-nstruction, multiple-data) vectorisation type to use for math functions (such as log, exp, Phi, etc).
+The default is AVX-512 if available, then AVX2 if not, and if neither AVX-512 nor AVX2 are available
+(e.g., on ARM-based CPU's such as Apple systems), then BayesMVP will use the Stan C++ math library functions, and they will decide what
+vectorisation type to use. More vectorisation types will be supported in the future.}
 
-\item{\code{tau_mult}}{The SNAPER-HMC algorithm multiplier to use when adjusting the path length during the burnin phase.}
+\item{\code{Phi_type}}{Type of Phi() function implementation to use, where Phi() is the standard normal CDF. Can be either "Phi" (the default) or "Phi_approx()".}
 
 \item{\code{metric_type_main}}{The type of metric to use for the main parameters, which is adapted during the burnin period. Can be either \code{"Hessian"} or
 \code{"Empirical"}, where the former uses second derivative information and the latter uses the SD of the posterior computed whilst sampling. The default
@@ -454,13 +525,63 @@ is \code{"Hessian"} if \code{n_params_main < 250} and \code{"Empirical"} otherwi
 \item{\code{metric_shape_main}}{The shape of the metric to use for the main parameters, which is adapted during the burnin period. Can be either \code{"diag"} or
 \code{"dense"}. The default is \code{"diag"} (i.e. a diagonal metric).}
 
-\item{\code{metric_type_nuisance}}{The type of metric to use for the nuisance parameters, which is adapted during the burnin period. Can be "diag" or "unit".}
-
 \item{\code{ratio_M_main}}{Ratio to use for the metric. Main parameters.}
 
-\item{\code{ratio_M_us}}{Ratio to use for the metric. Nuisance parameters.}
+\item{\code{interval_width_main}}{How often to update the metric (which is either empirical or Hessian-informed, and can be diagonal or dense) for the
+main parameters during the burnin period. The default used depends on the length of the burnin period.}
 
-\item{\code{force_recompile}}{Recompile the (possibly dummy if using built-in model) Stan model.}
+\item{\code{metric_type_nuisance}}{The type of metric to use for the nuisance parameters, which is adapted during the burnin period. Can be "diag" or "unit".}
+
+\item{\code{interval_width_nuisance}}{How often to update the metric (which is empirical and diagonal) for the nuisance parameters during the burnin period.
+The default used depends on the length of the burnin period.}
+
+\item{\code{learning_rate_initial}}{A HIGH ADAM learning rate held for the first \code{learning_rate_initial_iter} burnin
+iterations, then dropped to \code{learning_rate}. The learning rate drives BOTH the step-size (\eqn{\epsilon}) and the
+path-length (\eqn{\tau}) adaptation, so holding it high lets the adaptation move a long way early instead of creeping,
+while the later, finer adaptation still runs at the normal rate. Default is \code{0.10}; pass \code{NULL} (or \code{NA})
+to switch the hold off.}
+
+\item{\code{learning_rate_initial_iter}}{How many burnin iterations to hold \code{learning_rate_initial} for. The default is
+\code{n_burnin / 10}, i.e. 50 iterations at \code{n_burnin} = 500, scaled proportionally to other burnin lengths.}
+
+\item{\code{eps_initial}}{A deliberately LARGE HMC step-size (\eqn{\epsilon}) held for the first \code{eps_initial_iter} burnin
+iterations, so that the chains cover ground quickly before the usual step-size takes over. During this window the path
+length is one leapfrog step (MALA), so these are large single steps. After the window, \eqn{\epsilon} is handed back to
+the value it would otherwise have started from (the automatic heuristic) and adapted as normal, with the ADAM moments
+reset so the warm-start value is not carried forward. Default is \code{NULL} (OFF); set a positive value to enable it.
+Capped by \code{max_eps_main} / \code{max_eps_nuisance}.}
+
+\item{\code{eps_initial_iter}}{How many burnin iterations to hold \code{eps_initial} for. The default is \code{n_burnin / 10},
+i.e. the 50 iterations found to work well at \code{n_burnin} = 500, scaled proportionally to other burnin lengths.}
+
+\item{\code{max_L}}{The maximum number of leapfrog steps. This is similar to \code{max_treedepth} in Stan. The default is 1024 (which is equivalent to the default
+\code{max_treedepth = 10} in Stan).}
+
+\item{\code{n_nuisance_to_track}}{How many nuisance (latent-variable) coordinates the sampler keeps a trace of.
+The trace is only ever read by the post-hoc \code{param_constrain} step, which needs it solely when the model
+being constrained declares the nuisance block (an external Stan model with a nuisance block, or \code{latent_trait});
+the other built-in skeletons declare the main parameters only, so for them the trace has no reader and storing it is
+pure memory traffic (tens of GB per run at \code{n_nuisance} = 60,000). \code{NULL} (the default) decides this
+automatically from the model's unconstrained dimension; \code{0} never stores it; \code{n_nuisance} always does. Any other value is refused: the trace is all-or-nothing (a partial
+buffer is grown to the full length on the first write, so e.g. 1 would cost exactly as much as keeping everything).}
+
+\item{\code{diffusion_HMC_integrator}}{Joint diffusion integrator: "kick_flow_kick" (default) or "flow_kick_flow".}
+
+\item{\code{debug_burnin_timing}}{Collect burn-in timing and per-chain integrator step diagnostics. Default FALSE.}
+
+\item{\code{burnin_TBB_pool_equals_n_chains}}{NULL defaults to TRUE for built-in models, which use OpenMP within chains.
+External Stan models always force FALSE, even when TRUE is supplied, so nested TBB likelihood work can use
+n_chains_burnin * n_threads_WCP_burnin threads. Built-in models can explicitly select FALSE.}
+
+\item{\code{y}}{The dataset. See class documentation for details.}
+
+\item{\code{N}}{The sample size. See class documentation for details.}
+
+\item{\code{n_params_main}}{Number of main parameters. See class documentation for details.}
+
+\item{\code{n_nuisance}}{Number of nuisance parameters. See class documentation for details.}
+
+\item{\code{ratio_M_us}}{Ratio to use for the metric. Nuisance parameters.}
 
 \item{\code{...}}{Additional arguments passed to sampling.}
 }
@@ -485,7 +606,10 @@ Create and compute summary statistics, traces and model diagnostics.
   compute_nested_rhat = NULL,
   n_superchains = NULL,
   save_trace_tibbles = FALSE,
-  ...
+  n_iter_to_store = NULL,
+  use_disk = NULL,
+  use_disk_path = "/tmp/hmc_traces",
+  use_disk_path_post_hoc_dir = "/tmp/constrain_traces"
 )}\if{html}{\out{</div>}}
 }
 

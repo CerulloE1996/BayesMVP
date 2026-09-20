@@ -80,7 +80,7 @@ inline std::string windows_error_str() {
  
  
  
- std::string normalize_windows_path(const std::string &path) {
+std::string normalize_windows_path(const std::string &path) {
    
    std::string normalized = path;
    
@@ -107,41 +107,43 @@ inline std::string windows_error_str() {
    
    return result;
    
- }
+}
  
  
  
  
  
- ////  Struct to hold the model handle and function pointers
- struct ModelHandle_struct {
+////  Struct to hold the model handle and function pointers
+struct ModelHandle_struct {
 
    void* bs_handle = nullptr;
    bs_model* (*bs_model_construct)(const char*, unsigned int, char**) = nullptr;
    int (*bs_log_density_gradient)(bs_model*, bool, bool, const double*, double*, double*, char**) = nullptr;
    int (*bs_param_constrain)(bs_model*, bool, bool, const double*, double*, bs_rng*, char**) = nullptr;
+   int (*bs_param_unc_num)(const bs_model*) = nullptr;
    bs_rng* (*bs_rng_construct)(unsigned int, char**) = nullptr;
    void (*bs_model_destruct)(bs_model*) = nullptr;
    void (*bs_rng_destruct)(bs_rng*) = nullptr;
    
- };
+};
  
  
  
  
  
- struct Stan_model_struct {
+struct Stan_model_struct {
    
    void* bs_handle = nullptr; // has no arguments
    bs_model* bs_model_ptr = nullptr; // has no arguments
    bs_model* (*bs_model_construct)(const char*, unsigned int, char**) = nullptr;
    int (*bs_log_density_gradient)(bs_model*, bool, bool, const double*, double*, double*, char**) = nullptr;
    int (*bs_param_constrain)(bs_model*, bool, bool, const double*, double*, bs_rng*, char**) = nullptr;
+   int (*bs_param_unc_num)(const bs_model*) = nullptr;
    bs_rng* (*bs_rng_construct)(unsigned int, char**) = nullptr;
    void (*bs_model_destruct)(bs_model*) = nullptr;
    void (*bs_rng_destruct)(bs_rng*) = nullptr;
    
- };
+};
  
  
  
@@ -264,6 +266,16 @@ Stan_model_struct fn_load_Stan_model_and_data( const std::string &model_so_file,
              throw std::runtime_error("Error loading symbol 'bs_param_constrain': " + std::string(dlerror()));
            } 
            
+           // Resolve the bs_param_unc_num symbol (number of UNCONSTRAINED parameters -
+           // used to validate that the nuisance + main blocks cover every declared
+           // coordinate before constraining draws or evaluating gradients).
+           typedef int (*bs_param_unc_num_func)(const bs_model*);
+           bs_param_unc_num_func bs_param_unc_num = (bs_param_unc_num_func)dlsym(bs_handle, "bs_param_unc_num");
+           if (!bs_param_unc_num) { 
+             dlclose(bs_handle);
+             throw std::runtime_error("Error loading symbol 'bs_param_unc_num': " + std::string(dlerror()));
+           } 
+           
            // Resolve the bs_rng_construct symbol
            typedef bs_rng* (*bs_rng_construct_func)(unsigned int, char**);
            bs_rng_construct_func bs_rng_construct = (bs_rng_construct_func)dlsym(bs_handle, "bs_rng_construct"); 
@@ -292,6 +304,7 @@ Stan_model_struct fn_load_Stan_model_and_data( const std::string &model_so_file,
                                               bs_model_construct,
                                               bs_log_density_gradient, 
                                               bs_param_constrain, 
+                                              bs_param_unc_num,
                                               bs_rng_construct,
                                               bs_model_destruct,
                                               bs_rng_destruct};
@@ -308,6 +321,7 @@ Stan_model_struct fn_load_Stan_model_and_data( const std::string &model_so_file,
                    bs_model_construct,        
                    bs_log_density_gradient, 
                    bs_param_constrain, 
+                   bs_param_unc_num,
                    bs_rng_construct,
                    bs_model_destruct,
                    bs_rng_destruct};   
@@ -337,32 +351,25 @@ Eigen::Matrix<double, -1, 1> fn_Stan_compute_log_prob_grad(    const Stan_model_
                throw std::runtime_error("Output vector size mismatch");
              } 
              
+             //// The COMPLETE unconstrained vector (nuisance block first, then main block)
+             //// must be passed to BridgeStan: every declared coordinate participates in the
+             //// log-density. Previously n_nuisance <= 10 dropped the nuisance block entirely
+             //// (and misplaced the gradient), which silently corrupted lp/grad for small
+             //// nuisance blocks. n_nuisance == 0 is handled naturally (empty head).
+             if (params.size() != (n_nuisance + n_params_main)) {
+               throw std::runtime_error("Parameter vector size does not match n_nuisance + n_params_main");
+             }
+             
              double log_prob_val = 0.0;
              char* error_msg = nullptr;
              
-             int result;
-             
-             if (n_nuisance > 10) {
-               
-                   result = Stan_model_as_cpp_struct.bs_log_density_gradient(  Stan_model_as_cpp_struct.bs_model_ptr,
-                                                                               true,
-                                                                               true,
-                                                                               params.data(),
-                                                                               &log_prob_val,
-                                                                               lp_and_grad_outs.segment(1, n_params).data(),
-                                                                               &error_msg);
-               
-             } else { 
-               
-                   result = Stan_model_as_cpp_struct.bs_log_density_gradient(  Stan_model_as_cpp_struct.bs_model_ptr,
-                                                                               true,
-                                                                               true,
-                                                                               params.data(),
-                                                                               &log_prob_val,
-                                                                               lp_and_grad_outs.segment(1 + n_nuisance, n_params_main).data(),
-                                                                               &error_msg);
-               
-             }
+             int result = Stan_model_as_cpp_struct.bs_log_density_gradient(  Stan_model_as_cpp_struct.bs_model_ptr,
+                                                                             true,
+                                                                             true,
+                                                                             params.data(),
+                                                                             &log_prob_val,
+                                                                             lp_and_grad_outs.segment(1, n_params).data(),
+                                                                             &error_msg);
              
              if (result != 0) {
                throw std::runtime_error("Gradient computation failed: " + 

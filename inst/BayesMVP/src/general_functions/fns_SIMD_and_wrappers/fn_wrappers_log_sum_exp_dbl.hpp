@@ -1,11 +1,11 @@
+
 #pragma once 
 
 
 #ifndef FN_WRAPPERS_LOG_SUM_EXP_DBL_HPP
 #define FN_WRAPPERS_LOG_SUM_EXP_DBL_HPP
 
- 
-  
+
 #include <stan/math/prim/fun/sqrt.hpp>
 #include <stan/math/prim/fun/log.hpp>
 #include <stan/math/prim/prob/std_normal_log_qf.hpp>
@@ -14,26 +14,21 @@
 #include <stan/math/prim/fun/Phi_approx.hpp>
 #include <stan/math/prim/fun/tanh.hpp>
 #include <stan/math/prim/fun/log_inv_logit.hpp>
- 
+
+
 #include <Eigen/Dense>
 #include <Eigen/Core>
- 
+
+
 #include <immintrin.h>
 
- 
 
- 
+
+
 using namespace Eigen;
 
 
- 
 
- 
- 
- 
-  
-
- 
 
 ALWAYS_INLINE  void log_sum_exp_general(      const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> log_vals,  
                                               const std::string &vect_type_exp,

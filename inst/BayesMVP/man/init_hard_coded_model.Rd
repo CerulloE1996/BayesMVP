@@ -4,9 +4,8 @@
 \alias{init_hard_coded_model}
 \title{init_hard_coded_model}
 \usage{
-init_hard_coded_model(Model_type, y, N = N, model_args_list = list(), ...)
+init_hard_coded_model(Model_type, model_args_list)
 }
 \description{
 init_hard_coded_model
 }
-\keyword{internal}

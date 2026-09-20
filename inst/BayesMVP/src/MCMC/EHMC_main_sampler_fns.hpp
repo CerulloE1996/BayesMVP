@@ -46,10 +46,11 @@ ALWAYS_INLINE  bool check_divergence(   double log_ratio,
         return true;  // Reject non-finite proposals
       }
       
-      Eigen::Matrix<double, -1, -1> lp_and_grad_outs_copy = result_input.lp_and_grad_outs();
+      // Eigen::Matrix<double, -1, -1> lp_and_grad_outs_copy = result_input.lp_and_grad_outs();
       
       /// first check is any NaN or Inf values 
-      if (is_NaN_or_Inf_Eigen(lp_and_grad_outs_copy) == true) { 
+      // if (is_NaN_or_Inf_Eigen(lp_and_grad_outs_copy) == true) {
+      if (is_NaN_or_Inf_Eigen(result_input.lp_and_grad_outs()) == true) {
      
             // for (int i = 0; i < lp_and_grad_outs.size(); ++i) {
             //   if (std::isnan(lp_and_grad_outs(i)) || std::isinf(lp_and_grad_outs(i))) {
@@ -75,6 +76,7 @@ ALWAYS_INLINE  bool check_divergence(   double log_ratio,
       // if (std::abs(log_ratio) > 10000) {
       //   return true;  // Reject suspiciously large energy differences
       // }
+      if (std::abs(log_ratio) > 1000.0) return true;
     
       return false; // If no issues detected
   
@@ -138,6 +140,8 @@ ALWAYS_INLINE  void leapfrog_integrator_dense_M_standard_HMC_main_InPlace(    Ei
                                                                               const std::string &grad_option,
                                                                               const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                               const Stan_model_struct &Stan_model_as_cpp_struct,
+                                                                              std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                              const int n_threads_WCP,
                                                                               std::function<void(Eigen::Ref<Eigen::Matrix<double, -1, 1>>,
                                                                                                  const std::string &,
                                                                                                  const bool, const bool, const bool,
@@ -146,7 +150,9 @@ ALWAYS_INLINE  void leapfrog_integrator_dense_M_standard_HMC_main_InPlace(    Ei
                                                                                                  const Eigen::Ref<const Eigen::Matrix<int, -1, -1>>,
                                                                                                  const std::string &,
                                                                                                  const Model_fn_args_struct &,
-                                                                                                 const Stan_model_struct &)> fn_lp_grad_InPlace
+                                                                                                 const Stan_model_struct &,
+                                                                                                 std::vector<LC_MVP_workspace_struct> &,
+                                                                                                 const int &)> fn_lp_grad_InPlace
 
 ) {
 
@@ -158,6 +164,9 @@ ALWAYS_INLINE  void leapfrog_integrator_dense_M_standard_HMC_main_InPlace(    Ei
       Eigen::Matrix<double, -1, 1> grad_main =  lp_and_grad_outs.segment(1 + n_nuisance, n_params_main);
 
       for (int l = 0; l < L_ii; l++) {
+            if (Model_args_as_cpp_struct.burnin_leapfrog_steps != nullptr) {
+                ++(*Model_args_as_cpp_struct.burnin_leapfrog_steps);
+            }
 
             // Update velocity (first half step)
             //Eigen::Matrix<double, -1, 1> temp_1 = M_inv_dense_main * grad_main;
@@ -171,7 +180,10 @@ ALWAYS_INLINE  void leapfrog_integrator_dense_M_standard_HMC_main_InPlace(    Ei
                                Model_type, force_autodiff, force_PartialLog, multi_attempts,
                                theta_main_vec_proposed_ref, theta_us_vec_initial_ref, y_ref, grad_option,
                                Model_args_as_cpp_struct,
-                               Stan_model_as_cpp_struct);
+                               Stan_model_as_cpp_struct, 
+                               LC_MVP_ws_structs,
+                               n_threads_WCP);
+            if (!std::isfinite(lp_and_grad_outs(0))) return; 
             grad_main =   lp_and_grad_outs.segment(1 + n_nuisance, n_params_main);
 
             // Update velocity (second half step)
@@ -218,6 +230,8 @@ ALWAYS_INLINE  void leapfrog_integrator_diag_M_standard_HMC_main_InPlace(       
                                                                                                 const std::string &grad_option,
                                                                                                 const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                                                 const Stan_model_struct &Stan_model_as_cpp_struct,
+                                                                                                std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                                                const int n_threads_WCP,
                                                                                                 std::function<void(Eigen::Ref<Eigen::Matrix<double, -1, 1>>,
                                                                                                                    const std::string &,
                                                                                                                    const bool, const bool, const bool,
@@ -226,7 +240,9 @@ ALWAYS_INLINE  void leapfrog_integrator_diag_M_standard_HMC_main_InPlace(       
                                                                                                                    const Eigen::Ref<const Eigen::Matrix<int, -1, -1>>,
                                                                                                                    const std::string &,
                                                                                                                    const Model_fn_args_struct &,
-                                                                                                                   const Stan_model_struct & )> fn_lp_grad_InPlace
+                                                                                                                   const Stan_model_struct &, 
+                                                                                                                   std::vector<LC_MVP_workspace_struct> &,
+                                                                                                                   const int &)> fn_lp_grad_InPlace
 
 ) {
 
@@ -238,6 +254,9 @@ ALWAYS_INLINE  void leapfrog_integrator_diag_M_standard_HMC_main_InPlace(       
       Eigen::Matrix<double, -1, 1> grad_main =   lp_and_grad_outs.segment(1 + n_nuisance, n_params_main);
 
       for (int l = 0; l < L_ii; l++) {
+            if (Model_args_as_cpp_struct.burnin_leapfrog_steps != nullptr) {
+                ++(*Model_args_as_cpp_struct.burnin_leapfrog_steps);
+            }
 
             // Update velocity (first half step)
             velocity_main_vec_proposed_ref.array() +=   0.5 * eps * M_inv_main_vec.array() *  grad_main.array()   ;
@@ -250,7 +269,10 @@ ALWAYS_INLINE  void leapfrog_integrator_diag_M_standard_HMC_main_InPlace(       
                                Model_type, force_autodiff, force_PartialLog, multi_attempts,
                                theta_main_vec_proposed_ref, theta_us_vec_initial_ref, y_ref, grad_option,
                                Model_args_as_cpp_struct,
-                               Stan_model_as_cpp_struct);
+                               Stan_model_as_cpp_struct, 
+                               LC_MVP_ws_structs,
+                               n_threads_WCP);
+            if (!std::isfinite(lp_and_grad_outs(0))) return; 
             grad_main =   lp_and_grad_outs.segment(1 + n_nuisance, n_params_main);
 
             // Update velocity (second half step)
@@ -296,7 +318,9 @@ ALWAYS_INLINE  void                                        fn_standard_HMC_main_
                                                                                                                    const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                                                                    EHMC_fn_args_struct  &EHMC_args_as_cpp_struct, /// pass by ref. to modify (???)
                                                                                                                    const EHMC_Metric_struct   &EHMC_Metric_struct_as_cpp_struct,
-                                                                                                                   const Stan_model_struct &Stan_model_as_cpp_struct
+                                                                                                                   const Stan_model_struct &Stan_model_as_cpp_struct,
+                                                                                                                   std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                                                                   const int n_threads_WCP
 ) {
 
 
@@ -362,7 +386,11 @@ ALWAYS_INLINE  void                                        fn_standard_HMC_main_
                                         y_ref, 
                                         grad_option,
                                         Model_args_as_cpp_struct,  
-                                        Stan_model_as_cpp_struct);
+                                        Stan_model_as_cpp_struct, 
+                                        LC_MVP_ws_structs,
+                                        n_threads_WCP);
+                
+                result_input.lp_and_grad_outs_0() = result_input.lp_and_grad_outs(); // ----
                 
                 log_posterior_0 =  result_input.lp_and_grad_outs()(0);
                 U_x_initial = - log_posterior_0; //// initial energy
@@ -381,7 +409,9 @@ ALWAYS_INLINE  void                                        fn_standard_HMC_main_
                                                                                       force_autodiff, force_PartialLog, multi_attempts,
                                                                                       grad_option,
                                                                                       Model_args_as_cpp_struct,
-                                                                                      Stan_model_as_cpp_struct,
+                                                                                      Stan_model_as_cpp_struct, 
+                                                                                      LC_MVP_ws_structs,
+                                                                                      n_threads_WCP,
                                                                                       fn_lp_grad_InPlace);
                   
                 } else { 
@@ -398,13 +428,16 @@ ALWAYS_INLINE  void                                        fn_standard_HMC_main_
                                                                                       force_autodiff, force_PartialLog, multi_attempts,
                                                                                       grad_option,
                                                                                       Model_args_as_cpp_struct,
-                                                                                      Stan_model_as_cpp_struct,
+                                                                                      Stan_model_as_cpp_struct, 
+                                                                                      LC_MVP_ws_structs,
+                                                                                      n_threads_WCP,
                                                                                       fn_lp_grad_InPlace);
                   
                 }
                 
                 //// proposed lp  
                 log_posterior_prop =  result_input.lp_and_grad_outs()(0);
+                if (EHMC_args_as_cpp_struct.record_kinetic_energy_tau_derivatives) result_input.record_kinetic_energy_rate_main();
                 U_x_prop = - log_posterior_prop; // initial energy
               
                 //////////////////////////////////////////////////////////////////    M-H acceptance step  (i.e, Accept/Reject step)

@@ -11,14 +11,86 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// checkCPUFeatures
-Rcpp::List checkCPUFeatures();
-RcppExport SEXP _BayesMVP_checkCPUFeatures() {
+// Rcpp_compute_LC_MVOP_Se_Sp_baseline
+List Rcpp_compute_LC_MVOP_Se_Sp_baseline(NumericVector trace_beta_flat, IntegerVector beta_dims, CharacterVector beta_names, NumericVector trace_C_flat, IntegerVector C_dims, CharacterVector C_names, List baseline_case_nd, List baseline_case_d, IntegerVector n_covs_nd, IntegerVector n_covs_d, int n_binary_tests, int n_ordinal_tests, IntegerVector n_thr_per_ord_test, std::string C_param_name);
+RcppExport SEXP _BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline(SEXP trace_beta_flatSEXP, SEXP beta_dimsSEXP, SEXP beta_namesSEXP, SEXP trace_C_flatSEXP, SEXP C_dimsSEXP, SEXP C_namesSEXP, SEXP baseline_case_ndSEXP, SEXP baseline_case_dSEXP, SEXP n_covs_ndSEXP, SEXP n_covs_dSEXP, SEXP n_binary_testsSEXP, SEXP n_ordinal_testsSEXP, SEXP n_thr_per_ord_testSEXP, SEXP C_param_nameSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    rcpp_result_gen = Rcpp::wrap(checkCPUFeatures());
+    Rcpp::traits::input_parameter< NumericVector >::type trace_beta_flat(trace_beta_flatSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type beta_dims(beta_dimsSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type beta_names(beta_namesSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type trace_C_flat(trace_C_flatSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type C_dims(C_dimsSEXP);
+    Rcpp::traits::input_parameter< CharacterVector >::type C_names(C_namesSEXP);
+    Rcpp::traits::input_parameter< List >::type baseline_case_nd(baseline_case_ndSEXP);
+    Rcpp::traits::input_parameter< List >::type baseline_case_d(baseline_case_dSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type n_covs_nd(n_covs_ndSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type n_covs_d(n_covs_dSEXP);
+    Rcpp::traits::input_parameter< int >::type n_binary_tests(n_binary_testsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_ordinal_tests(n_ordinal_testsSEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type n_thr_per_ord_test(n_thr_per_ord_testSEXP);
+    Rcpp::traits::input_parameter< std::string >::type C_param_name(C_param_nameSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_compute_LC_MVOP_Se_Sp_baseline(trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name));
     return rcpp_result_gen;
+END_RCPP
+}
+// cpp_fn_post_burnin_prep_for_sampling
+List cpp_fn_post_burnin_prep_for_sampling(int n_chains_burnin, int n_chains_sampling, int n_superchains, int n_params_main, int n_nuisance, const Eigen::Matrix<double, -1, -1>& theta_main_in, const Eigen::Matrix<double, -1, -1>& theta_us_in, double nuisance_jitter_scale, int seed);
+RcppExport SEXP _BayesMVP_cpp_fn_post_burnin_prep_for_sampling(SEXP n_chains_burninSEXP, SEXP n_chains_samplingSEXP, SEXP n_superchainsSEXP, SEXP n_params_mainSEXP, SEXP n_nuisanceSEXP, SEXP theta_main_inSEXP, SEXP theta_us_inSEXP, SEXP nuisance_jitter_scaleSEXP, SEXP seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< int >::type n_chains_burnin(n_chains_burninSEXP);
+    Rcpp::traits::input_parameter< int >::type n_chains_sampling(n_chains_samplingSEXP);
+    Rcpp::traits::input_parameter< int >::type n_superchains(n_superchainsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_params_main(n_params_mainSEXP);
+    Rcpp::traits::input_parameter< int >::type n_nuisance(n_nuisanceSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, -1>& >::type theta_main_in(theta_main_inSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, -1>& >::type theta_us_in(theta_us_inSEXP);
+    Rcpp::traits::input_parameter< double >::type nuisance_jitter_scale(nuisance_jitter_scaleSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    rcpp_result_gen = Rcpp::wrap(cpp_fn_post_burnin_prep_for_sampling(n_chains_burnin, n_chains_sampling, n_superchains, n_params_main, n_nuisance, theta_main_in, theta_us_in, nuisance_jitter_scale, seed));
+    return rcpp_result_gen;
+END_RCPP
+}
+// set_debug_cutpoint_grads
+void set_debug_cutpoint_grads(bool val);
+RcppExport SEXP _BayesMVP_set_debug_cutpoint_grads(SEXP valSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< bool >::type val(valSEXP);
+    set_debug_cutpoint_grads(val);
+    return R_NilValue;
+END_RCPP
+}
+// fn_get_stan_load_time_sec
+double fn_get_stan_load_time_sec();
+RcppExport SEXP _BayesMVP_fn_get_stan_load_time_sec() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(fn_get_stan_load_time_sec());
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_get_stan_load_count
+double fn_get_stan_load_count();
+RcppExport SEXP _BayesMVP_fn_get_stan_load_count() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(fn_get_stan_load_count());
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_reset_stan_load_timer
+void fn_reset_stan_load_timer();
+RcppExport SEXP _BayesMVP_fn_reset_stan_load_timer() {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    fn_reset_stan_load_timer();
+    return R_NilValue;
 END_RCPP
 }
 // Rcpp_wrapper_EIGEN_double_mat
@@ -152,6 +224,53 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// fn_Rcpp_compute_PD_Hessian_diag
+Rcpp::List fn_Rcpp_compute_PD_Hessian_diag(const double shrinkage_factor, const double num_diff_e, const std::string Model_type, const bool force_autodiff, const bool force_PartialLog, const bool multi_attempts, const Eigen::Matrix<double, -1, 1> theta_main_vec, const Eigen::Matrix<double, -1, 1> theta_us_vec, const Eigen::Matrix<int, -1, -1> y, const Rcpp::List Model_args_as_Rcpp_List);
+RcppExport SEXP _BayesMVP_fn_Rcpp_compute_PD_Hessian_diag(SEXP shrinkage_factorSEXP, SEXP num_diff_eSEXP, SEXP Model_typeSEXP, SEXP force_autodiffSEXP, SEXP force_PartialLogSEXP, SEXP multi_attemptsSEXP, SEXP theta_main_vecSEXP, SEXP theta_us_vecSEXP, SEXP ySEXP, SEXP Model_args_as_Rcpp_ListSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const double >::type shrinkage_factor(shrinkage_factorSEXP);
+    Rcpp::traits::input_parameter< const double >::type num_diff_e(num_diff_eSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type Model_type(Model_typeSEXP);
+    Rcpp::traits::input_parameter< const bool >::type force_autodiff(force_autodiffSEXP);
+    Rcpp::traits::input_parameter< const bool >::type force_PartialLog(force_PartialLogSEXP);
+    Rcpp::traits::input_parameter< const bool >::type multi_attempts(multi_attemptsSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, 1> >::type theta_main_vec(theta_main_vecSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, 1> >::type theta_us_vec(theta_us_vecSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<int, -1, -1> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type Model_args_as_Rcpp_List(Model_args_as_Rcpp_ListSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_Rcpp_compute_PD_Hessian_diag(shrinkage_factor, num_diff_e, Model_type, force_autodiff, force_PartialLog, multi_attempts, theta_main_vec, theta_us_vec, y, Model_args_as_Rcpp_List));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_Rcpp_wrapper_update_M_diag_Hessian
+Rcpp::List fn_Rcpp_wrapper_update_M_diag_Hessian(Eigen::Matrix<double, -1, 1> M_main_vec, Eigen::Matrix<double, -1, 1> M_inv_main_vec, const double shrinkage_factor, const double ratio_Hess_main, const int interval_width, const double num_diff_e, const std::string Model_type, const bool force_autodiff, const bool force_PartialLog, const bool multi_attempts, const Eigen::Matrix<double, -1, 1> theta_main_vec, const Eigen::Matrix<double, -1, 1> theta_us_vec, const Eigen::Matrix<int, -1, -1> y, const Rcpp::List Model_args_as_Rcpp_List, const double ii, const double n_burnin, const std::string metric_type);
+RcppExport SEXP _BayesMVP_fn_Rcpp_wrapper_update_M_diag_Hessian(SEXP M_main_vecSEXP, SEXP M_inv_main_vecSEXP, SEXP shrinkage_factorSEXP, SEXP ratio_Hess_mainSEXP, SEXP interval_widthSEXP, SEXP num_diff_eSEXP, SEXP Model_typeSEXP, SEXP force_autodiffSEXP, SEXP force_PartialLogSEXP, SEXP multi_attemptsSEXP, SEXP theta_main_vecSEXP, SEXP theta_us_vecSEXP, SEXP ySEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP iiSEXP, SEXP n_burninSEXP, SEXP metric_typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Matrix<double, -1, 1> >::type M_main_vec(M_main_vecSEXP);
+    Rcpp::traits::input_parameter< Eigen::Matrix<double, -1, 1> >::type M_inv_main_vec(M_inv_main_vecSEXP);
+    Rcpp::traits::input_parameter< const double >::type shrinkage_factor(shrinkage_factorSEXP);
+    Rcpp::traits::input_parameter< const double >::type ratio_Hess_main(ratio_Hess_mainSEXP);
+    Rcpp::traits::input_parameter< const int >::type interval_width(interval_widthSEXP);
+    Rcpp::traits::input_parameter< const double >::type num_diff_e(num_diff_eSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type Model_type(Model_typeSEXP);
+    Rcpp::traits::input_parameter< const bool >::type force_autodiff(force_autodiffSEXP);
+    Rcpp::traits::input_parameter< const bool >::type force_PartialLog(force_PartialLogSEXP);
+    Rcpp::traits::input_parameter< const bool >::type multi_attempts(multi_attemptsSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, 1> >::type theta_main_vec(theta_main_vecSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, 1> >::type theta_us_vec(theta_us_vecSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<int, -1, -1> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type Model_args_as_Rcpp_List(Model_args_as_Rcpp_ListSEXP);
+    Rcpp::traits::input_parameter< const double >::type ii(iiSEXP);
+    Rcpp::traits::input_parameter< const double >::type n_burnin(n_burninSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type metric_type(metric_typeSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_Rcpp_wrapper_update_M_diag_Hessian(M_main_vec, M_inv_main_vec, shrinkage_factor, ratio_Hess_main, interval_width, num_diff_e, Model_type, force_autodiff, force_PartialLog, multi_attempts, theta_main_vec, theta_us_vec, y, Model_args_as_Rcpp_List, ii, n_burnin, metric_type));
+    return rcpp_result_gen;
+END_RCPP
+}
 // fn_find_initial_eps_main_and_us
 Rcpp::List fn_find_initial_eps_main_and_us(Eigen::Matrix<double, -1, 1> theta_main_vec_initial_ref, Eigen::Matrix<double, -1, 1> theta_us_vec_initial_ref, const bool partitioned_HMC, const double seed, const std::string Model_type, const bool force_autodiff, const bool force_PartialLog, const bool multi_attempts, Eigen::Matrix<int, -1, -1> y_ref, const Rcpp::List Model_args_as_Rcpp_List, Rcpp::List EHMC_args_as_Rcpp_List, const Rcpp::List EHMC_Metric_as_Rcpp_List);
 RcppExport SEXP _BayesMVP_fn_find_initial_eps_main_and_us(SEXP theta_main_vec_initial_refSEXP, SEXP theta_us_vec_initial_refSEXP, SEXP partitioned_HMCSEXP, SEXP seedSEXP, SEXP Model_typeSEXP, SEXP force_autodiffSEXP, SEXP force_PartialLogSEXP, SEXP multi_attemptsSEXP, SEXP y_refSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP) {
@@ -255,8 +374,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM
-Eigen::Matrix<double, -1, 1> fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(const Eigen::Matrix<double, -1, 1> eigen_vector, const double eigen_max, const Eigen::Matrix<double, -1, 1> theta_vec_initial, const Eigen::Matrix<double, -1, 1> theta_vec_prop, const Eigen::Matrix<double, -1, 1> snaper_m_vec, const Eigen::Matrix<double, -1, 1> velocity_prop, const Eigen::Matrix<double, -1, 1> velocity_0, double tau, const double LR, const double ii, const double n_burnin, const Eigen::Matrix<double, -1, 1> sqrt_M_vec, double tau_m_adam, double tau_v_adam, const double tau_ii);
-RcppExport SEXP _BayesMVP_fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(SEXP eigen_vectorSEXP, SEXP eigen_maxSEXP, SEXP theta_vec_initialSEXP, SEXP theta_vec_propSEXP, SEXP snaper_m_vecSEXP, SEXP velocity_propSEXP, SEXP velocity_0SEXP, SEXP tauSEXP, SEXP LRSEXP, SEXP iiSEXP, SEXP n_burninSEXP, SEXP sqrt_M_vecSEXP, SEXP tau_m_adamSEXP, SEXP tau_v_adamSEXP, SEXP tau_iiSEXP) {
+Eigen::Matrix<double, -1, 1> fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(const Eigen::Matrix<double, -1, 1> eigen_vector, const double eigen_max, const Eigen::Matrix<double, -1, 1> theta_vec_initial, const Eigen::Matrix<double, -1, 1> theta_vec_prop, const Eigen::Matrix<double, -1, 1> snaper_m_vec, const Eigen::Matrix<double, -1, 1> velocity_prop, const Eigen::Matrix<double, -1, 1> velocity_0, double tau, const double LR, const double ii, const double n_burnin, const Eigen::Matrix<double, -1, 1> sqrt_M_vec, double tau_m_adam, double tau_v_adam, const double tau_ii, const double beta1_adam, const double beta2_adam, const double eps_adam);
+RcppExport SEXP _BayesMVP_fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(SEXP eigen_vectorSEXP, SEXP eigen_maxSEXP, SEXP theta_vec_initialSEXP, SEXP theta_vec_propSEXP, SEXP snaper_m_vecSEXP, SEXP velocity_propSEXP, SEXP velocity_0SEXP, SEXP tauSEXP, SEXP LRSEXP, SEXP iiSEXP, SEXP n_burninSEXP, SEXP sqrt_M_vecSEXP, SEXP tau_m_adamSEXP, SEXP tau_v_adamSEXP, SEXP tau_iiSEXP, SEXP beta1_adamSEXP, SEXP beta2_adamSEXP, SEXP eps_adamSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -275,13 +394,16 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type tau_m_adam(tau_m_adamSEXP);
     Rcpp::traits::input_parameter< double >::type tau_v_adam(tau_v_adamSEXP);
     Rcpp::traits::input_parameter< const double >::type tau_ii(tau_iiSEXP);
-    rcpp_result_gen = Rcpp::wrap(fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(eigen_vector, eigen_max, theta_vec_initial, theta_vec_prop, snaper_m_vec, velocity_prop, velocity_0, tau, LR, ii, n_burnin, sqrt_M_vec, tau_m_adam, tau_v_adam, tau_ii));
+    Rcpp::traits::input_parameter< const double >::type beta1_adam(beta1_adamSEXP);
+    Rcpp::traits::input_parameter< const double >::type beta2_adam(beta2_adamSEXP);
+    Rcpp::traits::input_parameter< const double >::type eps_adam(eps_adamSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(eigen_vector, eigen_max, theta_vec_initial, theta_vec_prop, snaper_m_vec, velocity_prop, velocity_0, tau, LR, ii, n_burnin, sqrt_M_vec, tau_m_adam, tau_v_adam, tau_ii, beta1_adam, beta2_adam, eps_adam));
     return rcpp_result_gen;
 END_RCPP
 }
 // fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM
-Eigen::Matrix<double, -1, 1> fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM(const Eigen::Matrix<double, -1, 1> eigen_vector, const double eigen_max, const Eigen::Matrix<double, -1, 1> theta_vec_initial, const Eigen::Matrix<double, -1, 1> theta_vec_prop, const Eigen::Matrix<double, -1, 1> snaper_m_vec, const Eigen::Matrix<double, -1, 1> velocity_prop, const Eigen::Matrix<double, -1, 1> velocity_0, double tau, const double LR, const double ii, const double n_burnin, const Eigen::Matrix<double, -1, -1> M_dense_sqrt, double tau_m_adam, double tau_v_adam, const double tau_ii);
-RcppExport SEXP _BayesMVP_fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM(SEXP eigen_vectorSEXP, SEXP eigen_maxSEXP, SEXP theta_vec_initialSEXP, SEXP theta_vec_propSEXP, SEXP snaper_m_vecSEXP, SEXP velocity_propSEXP, SEXP velocity_0SEXP, SEXP tauSEXP, SEXP LRSEXP, SEXP iiSEXP, SEXP n_burninSEXP, SEXP M_dense_sqrtSEXP, SEXP tau_m_adamSEXP, SEXP tau_v_adamSEXP, SEXP tau_iiSEXP) {
+Eigen::Matrix<double, -1, 1> fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM(const Eigen::Matrix<double, -1, 1> eigen_vector, const double eigen_max, const Eigen::Matrix<double, -1, 1> theta_vec_initial, const Eigen::Matrix<double, -1, 1> theta_vec_prop, const Eigen::Matrix<double, -1, 1> snaper_m_vec, const Eigen::Matrix<double, -1, 1> velocity_prop, const Eigen::Matrix<double, -1, 1> velocity_0, double tau, const double LR, const double ii, const double n_burnin, const Eigen::Matrix<double, -1, -1> M_dense_sqrt, double tau_m_adam, double tau_v_adam, const double tau_ii, const double beta1_adam, const double beta2_adam, const double eps_adam);
+RcppExport SEXP _BayesMVP_fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM(SEXP eigen_vectorSEXP, SEXP eigen_maxSEXP, SEXP theta_vec_initialSEXP, SEXP theta_vec_propSEXP, SEXP snaper_m_vecSEXP, SEXP velocity_propSEXP, SEXP velocity_0SEXP, SEXP tauSEXP, SEXP LRSEXP, SEXP iiSEXP, SEXP n_burninSEXP, SEXP M_dense_sqrtSEXP, SEXP tau_m_adamSEXP, SEXP tau_v_adamSEXP, SEXP tau_iiSEXP, SEXP beta1_adamSEXP, SEXP beta2_adamSEXP, SEXP eps_adamSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -300,7 +422,10 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type tau_m_adam(tau_m_adamSEXP);
     Rcpp::traits::input_parameter< double >::type tau_v_adam(tau_v_adamSEXP);
     Rcpp::traits::input_parameter< const double >::type tau_ii(tau_iiSEXP);
-    rcpp_result_gen = Rcpp::wrap(fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM(eigen_vector, eigen_max, theta_vec_initial, theta_vec_prop, snaper_m_vec, velocity_prop, velocity_0, tau, LR, ii, n_burnin, M_dense_sqrt, tau_m_adam, tau_v_adam, tau_ii));
+    Rcpp::traits::input_parameter< const double >::type beta1_adam(beta1_adamSEXP);
+    Rcpp::traits::input_parameter< const double >::type beta2_adam(beta2_adamSEXP);
+    Rcpp::traits::input_parameter< const double >::type eps_adam(eps_adamSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM(eigen_vector, eigen_max, theta_vec_initial, theta_vec_prop, snaper_m_vec, velocity_prop, velocity_0, tau, LR, ii, n_burnin, M_dense_sqrt, tau_m_adam, tau_v_adam, tau_ii, beta1_adam, beta2_adam, eps_adam));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -372,8 +497,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // fn_compute_param_constrain_from_trace_parallel
-Rcpp::List fn_compute_param_constrain_from_trace_parallel(const std::vector<Eigen::Matrix<double, -1, -1>> unc_params_trace_input_main, const std::vector<Eigen::Matrix<double, -1, -1>> unc_params_trace_input_nuisance, const std::vector<int> pars_indicies_to_track, const int n_params_full, const int n_nuisance, const int n_params_main, const bool include_nuisance, const std::string model_so_file, const std::string json_file_path);
-RcppExport SEXP _BayesMVP_fn_compute_param_constrain_from_trace_parallel(SEXP unc_params_trace_input_mainSEXP, SEXP unc_params_trace_input_nuisanceSEXP, SEXP pars_indicies_to_trackSEXP, SEXP n_params_fullSEXP, SEXP n_nuisanceSEXP, SEXP n_params_mainSEXP, SEXP include_nuisanceSEXP, SEXP model_so_fileSEXP, SEXP json_file_pathSEXP) {
+Rcpp::List fn_compute_param_constrain_from_trace_parallel(const std::vector<Eigen::Matrix<double, -1, -1>> unc_params_trace_input_main, const std::vector<Eigen::Matrix<double, -1, -1>> unc_params_trace_input_nuisance, const std::vector<int> pars_indicies_to_track, const int n_params_full, const int n_params_main, const int n_nuisance, const std::string model_so_file, const std::string json_file_path, const bool use_disk, const std::string trace_dir);
+RcppExport SEXP _BayesMVP_fn_compute_param_constrain_from_trace_parallel(SEXP unc_params_trace_input_mainSEXP, SEXP unc_params_trace_input_nuisanceSEXP, SEXP pars_indicies_to_trackSEXP, SEXP n_params_fullSEXP, SEXP n_params_mainSEXP, SEXP n_nuisanceSEXP, SEXP model_so_fileSEXP, SEXP json_file_pathSEXP, SEXP use_diskSEXP, SEXP trace_dirSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -381,18 +506,35 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const std::vector<Eigen::Matrix<double, -1, -1>> >::type unc_params_trace_input_nuisance(unc_params_trace_input_nuisanceSEXP);
     Rcpp::traits::input_parameter< const std::vector<int> >::type pars_indicies_to_track(pars_indicies_to_trackSEXP);
     Rcpp::traits::input_parameter< const int >::type n_params_full(n_params_fullSEXP);
+    Rcpp::traits::input_parameter< const int >::type n_params_main(n_params_mainSEXP);
     Rcpp::traits::input_parameter< const int >::type n_nuisance(n_nuisanceSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type model_so_file(model_so_fileSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type json_file_path(json_file_pathSEXP);
+    Rcpp::traits::input_parameter< const bool >::type use_disk(use_diskSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type trace_dir(trace_dirSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_compute_param_constrain_from_trace_parallel(unc_params_trace_input_main, unc_params_trace_input_nuisance, pars_indicies_to_track, n_params_full, n_params_main, n_nuisance, model_so_file, json_file_path, use_disk, trace_dir));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_compute_param_constrain_from_trace_v2
+Rcpp::List fn_compute_param_constrain_from_trace_v2(const std::vector<Eigen::Matrix<double, -1, -1>>& unc_params_trace_input_main, const int n_params_full, const int n_params_main, const bool include_nuisance, const std::string model_so_file, const std::string json_file_path);
+RcppExport SEXP _BayesMVP_fn_compute_param_constrain_from_trace_v2(SEXP unc_params_trace_input_mainSEXP, SEXP n_params_fullSEXP, SEXP n_params_mainSEXP, SEXP include_nuisanceSEXP, SEXP model_so_fileSEXP, SEXP json_file_pathSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::vector<Eigen::Matrix<double, -1, -1>>& >::type unc_params_trace_input_main(unc_params_trace_input_mainSEXP);
+    Rcpp::traits::input_parameter< const int >::type n_params_full(n_params_fullSEXP);
     Rcpp::traits::input_parameter< const int >::type n_params_main(n_params_mainSEXP);
     Rcpp::traits::input_parameter< const bool >::type include_nuisance(include_nuisanceSEXP);
     Rcpp::traits::input_parameter< const std::string >::type model_so_file(model_so_fileSEXP);
     Rcpp::traits::input_parameter< const std::string >::type json_file_path(json_file_pathSEXP);
-    rcpp_result_gen = Rcpp::wrap(fn_compute_param_constrain_from_trace_parallel(unc_params_trace_input_main, unc_params_trace_input_nuisance, pars_indicies_to_track, n_params_full, n_nuisance, n_params_main, include_nuisance, model_so_file, json_file_path));
+    rcpp_result_gen = Rcpp::wrap(fn_compute_param_constrain_from_trace_v2(unc_params_trace_input_main, n_params_full, n_params_main, include_nuisance, model_so_file, json_file_path));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_fn_RcppParallel_EHMC_sampling
-Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling(const int n_threads_R, const int seed_R, const int n_iter_R, const bool iter_one_by_one, const bool partitioned_HMC_R, const std::string Model_type_R, const bool sample_nuisance_R, const bool force_autodiff_R, const bool force_PartialLog_R, const bool multi_attempts_R, const int n_nuisance_to_track, const Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains_input_from_R, const Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains_input_from_R, const Eigen::Matrix<int, -1, -1> y_Eigen_R, const Rcpp::List Model_args_as_Rcpp_List, const Rcpp::List EHMC_args_as_Rcpp_List, const Rcpp::List EHMC_Metric_as_Rcpp_List);
-RcppExport SEXP _BayesMVP_Rcpp_fn_RcppParallel_EHMC_sampling(SEXP n_threads_RSEXP, SEXP seed_RSEXP, SEXP n_iter_RSEXP, SEXP iter_one_by_oneSEXP, SEXP partitioned_HMC_RSEXP, SEXP Model_type_RSEXP, SEXP sample_nuisance_RSEXP, SEXP force_autodiff_RSEXP, SEXP force_PartialLog_RSEXP, SEXP multi_attempts_RSEXP, SEXP n_nuisance_to_trackSEXP, SEXP theta_main_vectors_all_chains_input_from_RSEXP, SEXP theta_us_vectors_all_chains_input_from_RSEXP, SEXP y_Eigen_RSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP) {
+Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling(const int n_threads_R, const int seed_R, const int n_iter_R, const bool iter_one_by_one, const bool partitioned_HMC_R, const bool diffusion_HMC_R, const std::string Model_type_R, const bool sample_nuisance_R, const bool force_autodiff_R, const bool force_PartialLog_R, const bool multi_attempts_R, const int n_nuisance_to_track, const Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains_input_from_R, const Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains_input_from_R, const Eigen::Matrix<int, -1, -1> y_Eigen_R, const Rcpp::List Model_args_as_Rcpp_List, const Rcpp::List EHMC_args_as_Rcpp_List, const Rcpp::List EHMC_Metric_as_Rcpp_List, const bool use_disk, const std::string trace_dir, const int n_threads_WCP);
+RcppExport SEXP _BayesMVP_Rcpp_fn_RcppParallel_EHMC_sampling(SEXP n_threads_RSEXP, SEXP seed_RSEXP, SEXP n_iter_RSEXP, SEXP iter_one_by_oneSEXP, SEXP partitioned_HMC_RSEXP, SEXP diffusion_HMC_RSEXP, SEXP Model_type_RSEXP, SEXP sample_nuisance_RSEXP, SEXP force_autodiff_RSEXP, SEXP force_PartialLog_RSEXP, SEXP multi_attempts_RSEXP, SEXP n_nuisance_to_trackSEXP, SEXP theta_main_vectors_all_chains_input_from_RSEXP, SEXP theta_us_vectors_all_chains_input_from_RSEXP, SEXP y_Eigen_RSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP, SEXP use_diskSEXP, SEXP trace_dirSEXP, SEXP n_threads_WCPSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -401,6 +543,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type n_iter_R(n_iter_RSEXP);
     Rcpp::traits::input_parameter< const bool >::type iter_one_by_one(iter_one_by_oneSEXP);
     Rcpp::traits::input_parameter< const bool >::type partitioned_HMC_R(partitioned_HMC_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type diffusion_HMC_R(diffusion_HMC_RSEXP);
     Rcpp::traits::input_parameter< const std::string >::type Model_type_R(Model_type_RSEXP);
     Rcpp::traits::input_parameter< const bool >::type sample_nuisance_R(sample_nuisance_RSEXP);
     Rcpp::traits::input_parameter< const bool >::type force_autodiff_R(force_autodiff_RSEXP);
@@ -413,13 +556,16 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Rcpp::List >::type Model_args_as_Rcpp_List(Model_args_as_Rcpp_ListSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_Metric_as_Rcpp_List(EHMC_Metric_as_Rcpp_ListSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_fn_RcppParallel_EHMC_sampling(n_threads_R, seed_R, n_iter_R, iter_one_by_one, partitioned_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List));
+    Rcpp::traits::input_parameter< const bool >::type use_disk(use_diskSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type trace_dir(trace_dirSEXP);
+    Rcpp::traits::input_parameter< const int >::type n_threads_WCP(n_threads_WCPSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_fn_RcppParallel_EHMC_sampling(n_threads_R, seed_R, n_iter_R, iter_one_by_one, partitioned_HMC_R, diffusion_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, use_disk, trace_dir, n_threads_WCP));
     return rcpp_result_gen;
 END_RCPP
 }
 // fn_R_RcppParallel_EHMC_single_iter_burnin
-Rcpp::List fn_R_RcppParallel_EHMC_single_iter_burnin(int n_threads_R, int seed_R, int n_iter_R, int current_iter_R, int n_adapt, const bool burnin_indicator, std::string Model_type_R, bool sample_nuisance_R, bool force_autodiff_R, bool force_PartialLog_R, bool multi_attempts_R, const int n_nuisance_to_track, const double max_eps_main, const double max_eps_us, bool partitioned_HMC_R, const std::string metric_type_main, double shrinkage_factor, const std::string metric_type_nuisance, const double tau_main_target, const double tau_us_target, const int clip_iter, const int gap, const bool main_L_manual, const bool us_L_manual, const int L_main_if_manual, const int L_us_if_manual, const int max_L, const double tau_mult, const double ratio_M_us, const double ratio_Hess_main, const int M_interval_width, Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains_input_from_R, Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains_input_from_R, const Eigen::Matrix<int, -1, -1> y_Eigen_R, const Rcpp::List Model_args_as_Rcpp_List, Rcpp::List EHMC_args_as_Rcpp_List, Rcpp::List EHMC_Metric_as_Rcpp_List, Rcpp::List EHMC_burnin_as_Rcpp_List);
-RcppExport SEXP _BayesMVP_fn_R_RcppParallel_EHMC_single_iter_burnin(SEXP n_threads_RSEXP, SEXP seed_RSEXP, SEXP n_iter_RSEXP, SEXP current_iter_RSEXP, SEXP n_adaptSEXP, SEXP burnin_indicatorSEXP, SEXP Model_type_RSEXP, SEXP sample_nuisance_RSEXP, SEXP force_autodiff_RSEXP, SEXP force_PartialLog_RSEXP, SEXP multi_attempts_RSEXP, SEXP n_nuisance_to_trackSEXP, SEXP max_eps_mainSEXP, SEXP max_eps_usSEXP, SEXP partitioned_HMC_RSEXP, SEXP metric_type_mainSEXP, SEXP shrinkage_factorSEXP, SEXP metric_type_nuisanceSEXP, SEXP tau_main_targetSEXP, SEXP tau_us_targetSEXP, SEXP clip_iterSEXP, SEXP gapSEXP, SEXP main_L_manualSEXP, SEXP us_L_manualSEXP, SEXP L_main_if_manualSEXP, SEXP L_us_if_manualSEXP, SEXP max_LSEXP, SEXP tau_multSEXP, SEXP ratio_M_usSEXP, SEXP ratio_Hess_mainSEXP, SEXP M_interval_widthSEXP, SEXP theta_main_vectors_all_chains_input_from_RSEXP, SEXP theta_us_vectors_all_chains_input_from_RSEXP, SEXP y_Eigen_RSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP, SEXP EHMC_burnin_as_Rcpp_ListSEXP) {
+Rcpp::List fn_R_RcppParallel_EHMC_single_iter_burnin(int n_threads_R, int seed_R, int n_iter_R, int current_iter_R, int n_adapt, const bool burnin_indicator, std::string Model_type_R, bool sample_nuisance_R, bool force_autodiff_R, bool force_PartialLog_R, bool multi_attempts_R, const int n_nuisance_to_track, const double max_eps_main, const double max_eps_us, bool partitioned_HMC_R, bool diffusion_HMC_R, const std::string metric_type_main, double shrinkage_factor, const std::string metric_type_nuisance, const double tau_main_target, const double tau_us_target, const int clip_iter, const int gap, const bool main_L_manual, const bool us_L_manual, const int L_main_if_manual, const int L_us_if_manual, const int max_L, const double tau_mult, const double ratio_M_us, const double ratio_Hess_main, const int M_interval_width, Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains_input_from_R, Eigen::Matrix<double, -1, -1> velocity_main_vectors_all_chains_input_from_R, Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains_input_from_R, Eigen::Matrix<double, -1, -1> velocity_us_vectors_all_chains_input_from_R, const Eigen::Matrix<int, -1, -1> y_Eigen_R, const Rcpp::List Model_args_as_Rcpp_List, Rcpp::List EHMC_args_as_Rcpp_List, Rcpp::List EHMC_Metric_as_Rcpp_List, Rcpp::List EHMC_burnin_as_Rcpp_List, const int n_threads_WCP);
+RcppExport SEXP _BayesMVP_fn_R_RcppParallel_EHMC_single_iter_burnin(SEXP n_threads_RSEXP, SEXP seed_RSEXP, SEXP n_iter_RSEXP, SEXP current_iter_RSEXP, SEXP n_adaptSEXP, SEXP burnin_indicatorSEXP, SEXP Model_type_RSEXP, SEXP sample_nuisance_RSEXP, SEXP force_autodiff_RSEXP, SEXP force_PartialLog_RSEXP, SEXP multi_attempts_RSEXP, SEXP n_nuisance_to_trackSEXP, SEXP max_eps_mainSEXP, SEXP max_eps_usSEXP, SEXP partitioned_HMC_RSEXP, SEXP diffusion_HMC_RSEXP, SEXP metric_type_mainSEXP, SEXP shrinkage_factorSEXP, SEXP metric_type_nuisanceSEXP, SEXP tau_main_targetSEXP, SEXP tau_us_targetSEXP, SEXP clip_iterSEXP, SEXP gapSEXP, SEXP main_L_manualSEXP, SEXP us_L_manualSEXP, SEXP L_main_if_manualSEXP, SEXP L_us_if_manualSEXP, SEXP max_LSEXP, SEXP tau_multSEXP, SEXP ratio_M_usSEXP, SEXP ratio_Hess_mainSEXP, SEXP M_interval_widthSEXP, SEXP theta_main_vectors_all_chains_input_from_RSEXP, SEXP velocity_main_vectors_all_chains_input_from_RSEXP, SEXP theta_us_vectors_all_chains_input_from_RSEXP, SEXP velocity_us_vectors_all_chains_input_from_RSEXP, SEXP y_Eigen_RSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP, SEXP EHMC_burnin_as_Rcpp_ListSEXP, SEXP n_threads_WCPSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -438,6 +584,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type max_eps_main(max_eps_mainSEXP);
     Rcpp::traits::input_parameter< const double >::type max_eps_us(max_eps_usSEXP);
     Rcpp::traits::input_parameter< bool >::type partitioned_HMC_R(partitioned_HMC_RSEXP);
+    Rcpp::traits::input_parameter< bool >::type diffusion_HMC_R(diffusion_HMC_RSEXP);
     Rcpp::traits::input_parameter< const std::string >::type metric_type_main(metric_type_mainSEXP);
     Rcpp::traits::input_parameter< double >::type shrinkage_factor(shrinkage_factorSEXP);
     Rcpp::traits::input_parameter< const std::string >::type metric_type_nuisance(metric_type_nuisanceSEXP);
@@ -455,19 +602,95 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const double >::type ratio_Hess_main(ratio_Hess_mainSEXP);
     Rcpp::traits::input_parameter< const int >::type M_interval_width(M_interval_widthSEXP);
     Rcpp::traits::input_parameter< Eigen::Matrix<double, -1, -1> >::type theta_main_vectors_all_chains_input_from_R(theta_main_vectors_all_chains_input_from_RSEXP);
+    Rcpp::traits::input_parameter< Eigen::Matrix<double, -1, -1> >::type velocity_main_vectors_all_chains_input_from_R(velocity_main_vectors_all_chains_input_from_RSEXP);
     Rcpp::traits::input_parameter< Eigen::Matrix<double, -1, -1> >::type theta_us_vectors_all_chains_input_from_R(theta_us_vectors_all_chains_input_from_RSEXP);
+    Rcpp::traits::input_parameter< Eigen::Matrix<double, -1, -1> >::type velocity_us_vectors_all_chains_input_from_R(velocity_us_vectors_all_chains_input_from_RSEXP);
     Rcpp::traits::input_parameter< const Eigen::Matrix<int, -1, -1> >::type y_Eigen_R(y_Eigen_RSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List >::type Model_args_as_Rcpp_List(Model_args_as_Rcpp_ListSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type EHMC_Metric_as_Rcpp_List(EHMC_Metric_as_Rcpp_ListSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type EHMC_burnin_as_Rcpp_List(EHMC_burnin_as_Rcpp_ListSEXP);
-    rcpp_result_gen = Rcpp::wrap(fn_R_RcppParallel_EHMC_single_iter_burnin(n_threads_R, seed_R, n_iter_R, current_iter_R, n_adapt, burnin_indicator, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, max_eps_main, max_eps_us, partitioned_HMC_R, metric_type_main, shrinkage_factor, metric_type_nuisance, tau_main_target, tau_us_target, clip_iter, gap, main_L_manual, us_L_manual, L_main_if_manual, L_us_if_manual, max_L, tau_mult, ratio_M_us, ratio_Hess_main, M_interval_width, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, EHMC_burnin_as_Rcpp_List));
+    Rcpp::traits::input_parameter< const int >::type n_threads_WCP(n_threads_WCPSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_R_RcppParallel_EHMC_single_iter_burnin(n_threads_R, seed_R, n_iter_R, current_iter_R, n_adapt, burnin_indicator, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, max_eps_main, max_eps_us, partitioned_HMC_R, diffusion_HMC_R, metric_type_main, shrinkage_factor, metric_type_nuisance, tau_main_target, tau_us_target, clip_iter, gap, main_L_manual, us_L_manual, L_main_if_manual, L_us_if_manual, max_L, tau_mult, ratio_M_us, ratio_Hess_main, M_interval_width, theta_main_vectors_all_chains_input_from_R, velocity_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, velocity_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, EHMC_burnin_as_Rcpp_List, n_threads_WCP));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_create_persistent_burnin_worker
+SEXP fn_create_persistent_burnin_worker(const int n_threads_R, const bool partitioned_HMC_R, const bool diffusion_HMC_R, const std::string Model_type_R, const bool sample_nuisance_R, const bool force_autodiff_R, const bool force_PartialLog_R, const bool multi_attempts_R, const Eigen::Matrix<int, -1, -1> y_Eigen_R, const Rcpp::List Model_args_as_Rcpp_List, const Rcpp::List EHMC_args_as_Rcpp_List, const Rcpp::List EHMC_Metric_as_Rcpp_List, const int n_threads_WCP);
+RcppExport SEXP _BayesMVP_fn_create_persistent_burnin_worker(SEXP n_threads_RSEXP, SEXP partitioned_HMC_RSEXP, SEXP diffusion_HMC_RSEXP, SEXP Model_type_RSEXP, SEXP sample_nuisance_RSEXP, SEXP force_autodiff_RSEXP, SEXP force_PartialLog_RSEXP, SEXP multi_attempts_RSEXP, SEXP y_Eigen_RSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP, SEXP n_threads_WCPSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const int >::type n_threads_R(n_threads_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type partitioned_HMC_R(partitioned_HMC_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type diffusion_HMC_R(diffusion_HMC_RSEXP);
+    Rcpp::traits::input_parameter< const std::string >::type Model_type_R(Model_type_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type sample_nuisance_R(sample_nuisance_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type force_autodiff_R(force_autodiff_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type force_PartialLog_R(force_PartialLog_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type multi_attempts_R(multi_attempts_RSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<int, -1, -1> >::type y_Eigen_R(y_Eigen_RSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type Model_args_as_Rcpp_List(Model_args_as_Rcpp_ListSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_Metric_as_Rcpp_List(EHMC_Metric_as_Rcpp_ListSEXP);
+    Rcpp::traits::input_parameter< const int >::type n_threads_WCP(n_threads_WCPSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_create_persistent_burnin_worker(n_threads_R, partitioned_HMC_R, diffusion_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads_WCP));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_persistent_burnin_set_theta
+void fn_persistent_burnin_set_theta(SEXP worker_ptr, const Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains, const Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_set_theta(SEXP worker_ptrSEXP, SEXP theta_main_vectors_all_chainsSEXP, SEXP theta_us_vectors_all_chainsSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, -1> >::type theta_main_vectors_all_chains(theta_main_vectors_all_chainsSEXP);
+    Rcpp::traits::input_parameter< const Eigen::Matrix<double, -1, -1> >::type theta_us_vectors_all_chains(theta_us_vectors_all_chainsSEXP);
+    fn_persistent_burnin_set_theta(worker_ptr, theta_main_vectors_all_chains, theta_us_vectors_all_chains);
+    return R_NilValue;
+END_RCPP
+}
+// fn_persistent_burnin_update_adaptation
+void fn_persistent_burnin_update_adaptation(SEXP worker_ptr, const Rcpp::List EHMC_args_as_Rcpp_List, const Rcpp::List EHMC_Metric_as_Rcpp_List);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_update_adaptation(SEXP worker_ptrSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_Metric_as_Rcpp_List(EHMC_Metric_as_Rcpp_ListSEXP);
+    fn_persistent_burnin_update_adaptation(worker_ptr, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List);
+    return R_NilValue;
+END_RCPP
+}
+// fn_persistent_burnin_run_one_iter
+Rcpp::List fn_persistent_burnin_run_one_iter(SEXP worker_ptr, const int seed_R, const int current_iter_R);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_run_one_iter(SEXP worker_ptrSEXP, SEXP seed_RSEXP, SEXP current_iter_RSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< const int >::type seed_R(seed_RSEXP);
+    Rcpp::traits::input_parameter< const int >::type current_iter_R(current_iter_RSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_run_one_iter(worker_ptr, seed_R, current_iter_R));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_persistent_burnin_run_one_iter_profiled
+Rcpp::List fn_persistent_burnin_run_one_iter_profiled(SEXP worker_ptr, const int seed_R, const int current_iter_R);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_run_one_iter_profiled(SEXP worker_ptrSEXP, SEXP seed_RSEXP, SEXP current_iter_RSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< const int >::type seed_R(seed_RSEXP);
+    Rcpp::traits::input_parameter< const int >::type current_iter_R(current_iter_RSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_run_one_iter_profiled(worker_ptr, seed_R, current_iter_R));
     return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_fn_OpenMP_EHMC_sampling
-Rcpp::List Rcpp_fn_OpenMP_EHMC_sampling(const int n_threads_R, const int seed_R, const int n_iter_R, const bool iter_one_by_one, const bool partitioned_HMC_R, const std::string Model_type_R, const bool sample_nuisance_R, const bool force_autodiff_R, const bool force_PartialLog_R, const bool multi_attempts_R, const int n_nuisance_to_track, const Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains_input_from_R, const Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains_input_from_R, const Eigen::Matrix<int, -1, -1> y_Eigen_R, const Rcpp::List Model_args_as_Rcpp_List, const Rcpp::List EHMC_args_as_Rcpp_List, const Rcpp::List EHMC_Metric_as_Rcpp_List);
-RcppExport SEXP _BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling(SEXP n_threads_RSEXP, SEXP seed_RSEXP, SEXP n_iter_RSEXP, SEXP iter_one_by_oneSEXP, SEXP partitioned_HMC_RSEXP, SEXP Model_type_RSEXP, SEXP sample_nuisance_RSEXP, SEXP force_autodiff_RSEXP, SEXP force_PartialLog_RSEXP, SEXP multi_attempts_RSEXP, SEXP n_nuisance_to_trackSEXP, SEXP theta_main_vectors_all_chains_input_from_RSEXP, SEXP theta_us_vectors_all_chains_input_from_RSEXP, SEXP y_Eigen_RSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP) {
+Rcpp::List Rcpp_fn_OpenMP_EHMC_sampling(const int n_threads_R, const int seed_R, const int n_iter_R, const bool iter_one_by_one, const bool partitioned_HMC_R, const bool diffusion_HMC_R, const std::string Model_type_R, const bool sample_nuisance_R, const bool force_autodiff_R, const bool force_PartialLog_R, const bool multi_attempts_R, const int n_nuisance_to_track, const Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains_input_from_R, const Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains_input_from_R, const Eigen::Matrix<int, -1, -1> y_Eigen_R, const Rcpp::List Model_args_as_Rcpp_List, const Rcpp::List EHMC_args_as_Rcpp_List, const Rcpp::List EHMC_Metric_as_Rcpp_List, const int n_threads_WCP);
+RcppExport SEXP _BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling(SEXP n_threads_RSEXP, SEXP seed_RSEXP, SEXP n_iter_RSEXP, SEXP iter_one_by_oneSEXP, SEXP partitioned_HMC_RSEXP, SEXP diffusion_HMC_RSEXP, SEXP Model_type_RSEXP, SEXP sample_nuisance_RSEXP, SEXP force_autodiff_RSEXP, SEXP force_PartialLog_RSEXP, SEXP multi_attempts_RSEXP, SEXP n_nuisance_to_trackSEXP, SEXP theta_main_vectors_all_chains_input_from_RSEXP, SEXP theta_us_vectors_all_chains_input_from_RSEXP, SEXP y_Eigen_RSEXP, SEXP Model_args_as_Rcpp_ListSEXP, SEXP EHMC_args_as_Rcpp_ListSEXP, SEXP EHMC_Metric_as_Rcpp_ListSEXP, SEXP n_threads_WCPSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -476,6 +699,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const int >::type n_iter_R(n_iter_RSEXP);
     Rcpp::traits::input_parameter< const bool >::type iter_one_by_one(iter_one_by_oneSEXP);
     Rcpp::traits::input_parameter< const bool >::type partitioned_HMC_R(partitioned_HMC_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type diffusion_HMC_R(diffusion_HMC_RSEXP);
     Rcpp::traits::input_parameter< const std::string >::type Model_type_R(Model_type_RSEXP);
     Rcpp::traits::input_parameter< const bool >::type sample_nuisance_R(sample_nuisance_RSEXP);
     Rcpp::traits::input_parameter< const bool >::type force_autodiff_R(force_autodiff_RSEXP);
@@ -488,13 +712,19 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const Rcpp::List >::type Model_args_as_Rcpp_List(Model_args_as_Rcpp_ListSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
     Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_Metric_as_Rcpp_List(EHMC_Metric_as_Rcpp_ListSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_fn_OpenMP_EHMC_sampling(n_threads_R, seed_R, n_iter_R, iter_one_by_one, partitioned_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List));
+    Rcpp::traits::input_parameter< const int >::type n_threads_WCP(n_threads_WCPSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_fn_OpenMP_EHMC_sampling(n_threads_R, seed_R, n_iter_R, iter_one_by_one, partitioned_HMC_R, diffusion_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads_WCP));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_BayesMVP_checkCPUFeatures", (DL_FUNC) &_BayesMVP_checkCPUFeatures, 0},
+    {"_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline", (DL_FUNC) &_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline, 14},
+    {"_BayesMVP_cpp_fn_post_burnin_prep_for_sampling", (DL_FUNC) &_BayesMVP_cpp_fn_post_burnin_prep_for_sampling, 9},
+    {"_BayesMVP_set_debug_cutpoint_grads", (DL_FUNC) &_BayesMVP_set_debug_cutpoint_grads, 1},
+    {"_BayesMVP_fn_get_stan_load_time_sec", (DL_FUNC) &_BayesMVP_fn_get_stan_load_time_sec, 0},
+    {"_BayesMVP_fn_get_stan_load_count", (DL_FUNC) &_BayesMVP_fn_get_stan_load_count, 0},
+    {"_BayesMVP_fn_reset_stan_load_timer", (DL_FUNC) &_BayesMVP_fn_reset_stan_load_timer, 0},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_mat", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_mat, 4},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec, 4},
     {"_BayesMVP_Rcpp_wrapper_fn_lp_grad", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_fn_lp_grad, 9},
@@ -503,24 +733,32 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BayesMVP_detect_vectorization_support", (DL_FUNC) &_BayesMVP_detect_vectorization_support, 0},
     {"_BayesMVP_fn_Rcpp_compute_PD_Hessian_main", (DL_FUNC) &_BayesMVP_fn_Rcpp_compute_PD_Hessian_main, 10},
     {"_BayesMVP_fn_Rcpp_wrapper_update_M_dense_main_Hessian", (DL_FUNC) &_BayesMVP_fn_Rcpp_wrapper_update_M_dense_main_Hessian, 18},
+    {"_BayesMVP_fn_Rcpp_compute_PD_Hessian_diag", (DL_FUNC) &_BayesMVP_fn_Rcpp_compute_PD_Hessian_diag, 10},
+    {"_BayesMVP_fn_Rcpp_wrapper_update_M_diag_Hessian", (DL_FUNC) &_BayesMVP_fn_Rcpp_wrapper_update_M_diag_Hessian, 17},
     {"_BayesMVP_fn_find_initial_eps_main_and_us", (DL_FUNC) &_BayesMVP_fn_find_initial_eps_main_and_us, 12},
     {"_BayesMVP_fn_Rcpp_wrapper_adapt_eps_ADAM", (DL_FUNC) &_BayesMVP_fn_Rcpp_wrapper_adapt_eps_ADAM, 11},
     {"_BayesMVP_fn_update_snaper_m_and_s", (DL_FUNC) &_BayesMVP_fn_update_snaper_m_and_s, 4},
     {"_BayesMVP_fn_update_snaper_w_dense_M", (DL_FUNC) &_BayesMVP_fn_update_snaper_w_dense_M, 7},
     {"_BayesMVP_fn_update_snaper_w_diag_M", (DL_FUNC) &_BayesMVP_fn_update_snaper_w_diag_M, 7},
     {"_BayesMVP_fn_update_eigen_max_and_eigen_vec", (DL_FUNC) &_BayesMVP_fn_update_eigen_max_and_eigen_vec, 1},
-    {"_BayesMVP_fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM", (DL_FUNC) &_BayesMVP_fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM, 15},
-    {"_BayesMVP_fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM", (DL_FUNC) &_BayesMVP_fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM, 15},
+    {"_BayesMVP_fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM", (DL_FUNC) &_BayesMVP_fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM, 18},
+    {"_BayesMVP_fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM", (DL_FUNC) &_BayesMVP_fn_Rcpp_wrapper_update_tau_w_dense_M_ADAM, 18},
     {"_BayesMVP_Rcpp_det", (DL_FUNC) &_BayesMVP_Rcpp_det, 1},
     {"_BayesMVP_Rcpp_log_det", (DL_FUNC) &_BayesMVP_Rcpp_log_det, 1},
     {"_BayesMVP_Rcpp_solve", (DL_FUNC) &_BayesMVP_Rcpp_solve, 1},
     {"_BayesMVP_Rcpp_Chol", (DL_FUNC) &_BayesMVP_Rcpp_Chol, 1},
     {"_BayesMVP_Rcpp_near_PD", (DL_FUNC) &_BayesMVP_Rcpp_near_PD, 1},
     {"_BayesMVP_Rcpp_shrink_matrix", (DL_FUNC) &_BayesMVP_Rcpp_shrink_matrix, 2},
-    {"_BayesMVP_fn_compute_param_constrain_from_trace_parallel", (DL_FUNC) &_BayesMVP_fn_compute_param_constrain_from_trace_parallel, 9},
-    {"_BayesMVP_Rcpp_fn_RcppParallel_EHMC_sampling", (DL_FUNC) &_BayesMVP_Rcpp_fn_RcppParallel_EHMC_sampling, 17},
-    {"_BayesMVP_fn_R_RcppParallel_EHMC_single_iter_burnin", (DL_FUNC) &_BayesMVP_fn_R_RcppParallel_EHMC_single_iter_burnin, 38},
-    {"_BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling", (DL_FUNC) &_BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling, 17},
+    {"_BayesMVP_fn_compute_param_constrain_from_trace_parallel", (DL_FUNC) &_BayesMVP_fn_compute_param_constrain_from_trace_parallel, 10},
+    {"_BayesMVP_fn_compute_param_constrain_from_trace_v2", (DL_FUNC) &_BayesMVP_fn_compute_param_constrain_from_trace_v2, 6},
+    {"_BayesMVP_Rcpp_fn_RcppParallel_EHMC_sampling", (DL_FUNC) &_BayesMVP_Rcpp_fn_RcppParallel_EHMC_sampling, 21},
+    {"_BayesMVP_fn_R_RcppParallel_EHMC_single_iter_burnin", (DL_FUNC) &_BayesMVP_fn_R_RcppParallel_EHMC_single_iter_burnin, 42},
+    {"_BayesMVP_fn_create_persistent_burnin_worker", (DL_FUNC) &_BayesMVP_fn_create_persistent_burnin_worker, 13},
+    {"_BayesMVP_fn_persistent_burnin_set_theta", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_set_theta, 3},
+    {"_BayesMVP_fn_persistent_burnin_update_adaptation", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_update_adaptation, 3},
+    {"_BayesMVP_fn_persistent_burnin_run_one_iter", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_run_one_iter, 3},
+    {"_BayesMVP_fn_persistent_burnin_run_one_iter_profiled", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_run_one_iter_profiled, 3},
+    {"_BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling", (DL_FUNC) &_BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling, 19},
     {NULL, NULL, 0}
 };
 

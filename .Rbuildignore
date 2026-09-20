@@ -1,0 +1,15 @@
+^\.git$
+^\.gitignore$
+^\.agents$
+^\.claude$
+^\.codex$
+^\.mcp\.json$
+^AGENTS\.md$
+^CLAUDE\.md$
+^APMS_bridge$
+^dev_experiments$
+^DEVELOPMENT_SYNC\.md$
+^FLOW_KICK_FLOW\.md$
+^apms-.*\.html$
+^read-prior-.*\.html$
+^extract_cpp_from_chat\.py$

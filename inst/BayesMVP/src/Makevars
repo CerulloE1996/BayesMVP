@@ -29,10 +29,15 @@ override HAVE_CCACHE=$(if $(CCACHE_PATH),YES,)
 
 ## Set CCACHE prefix only if available
 ifneq (,$(HAVE_CCACHE))
-  override CCACHE=$(CCACHE_PATH)
+ override CCACHE=$(CCACHE_PATH)
 else
-  override CCACHE=
+ override CCACHE=
 endif
+##
+# override CCACHE=
+##
+## new:
+$(info CCACHE_PATH is: $(CCACHE_PATH)) 
 ##
 ## Custom user-supplied flags (if supplied):
 ## ifneq ($(USER_SUPPLIED_CCACHE_PATH),) ## i.e. if user supplies "USER_SUPPLIED_CCACHE_PATH" variable
@@ -53,12 +58,14 @@ override CLANG_CPP_COMPILER=clang
 ##
 override GCC_CXX_COMPILER=g++
 override GCC_CPP_COMPILER=gcc
+##
 ##  
 # ifneq (,$(wildcard $(AMD_AOCC_CXX_COMPILER))) ## if AOCC-clang is available (AMD only)
 #     override CXX_COMPILER = "$(AMD_AOCC_CXX_COMPILER)"
 #     override CPP_COMPILER = "$(AMD_AOCC_CPP_COMPILER)"
 #     override CXX_STD = CXX17 # Use C++17
-#     override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
+#     # override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
+#     override CPU_BASE_FLAGS = -O3  -march=znver4  -mtune=znver4
 #     ## CPU_BASE_FLAGS = -O3  -march=$(AMD_ZEN_VER)  -mtune=$(AMD_ZEN_VER)
 # else ifneq (,$(wildcard $(CLANG_CXX_COMPILER))) ## if "standard" clang++/clang is available
 #     override CXX_COMPILER = "$(CLANG_CXX_COMPILER)"
@@ -79,10 +86,11 @@ override GCC_CPP_COMPILER=gcc
 ##
 ## ---- To force gcc/g++: ## ---- BOOKMARK
 ##
-override CXX_COMPILER = $(GCC_CXX_COMPILER)
-override CPP_COMPILER = $(GCC_CPP_COMPILER)
+override CXX_COMPILER = $(GCC_CXX_COMPILER)  ## ---- BOOKMARK
+override CPP_COMPILER = $(GCC_CPP_COMPILER)  ## ---- BOOKMARK
 ##
 override CXX_STD = -std=gnu++17 # Use C++17
+##
 override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
 ##
 ##
@@ -266,9 +274,13 @@ override BASE_FLAGS =   $(CPU_FLAGS) \
                         -Wno-parentheses-equality \
                         -fPIC \
                         -D_REENTRANT -DSTAN_THREADS -pthread \
-                        -fpermissive \
-                        -DNDEBUG
+                        -DNDEBUG \
+                        -fpermissive
 ##
+##                      PKG_CXXFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
+## PKG_LIBS += -fsanitize=address,undefined
+##
+##                        -fpermissive \
 #### -fno-math-errno    -fno-signed-zeros  -fno-trapping-math  ### oordered from safest ( -fno-math-errno ) tto least-safe ( -fno-trapping-math)
 ## BASE_FLAGS += -DEIGEN_VECTORIZE
 ## BASE_FLAGS += -fopenmp
@@ -331,10 +343,12 @@ override PKG_CPPFLAGS = $(BASE_FLAGS) \
     -I"$(STAN_BASE)/mcmc" \
     -I"$(STAN_BASE)/analyze" \
     -I"$(BRIDGESTAN_SRC)"
-##
-override PKG_CXXFLAGS = $(PKG_CPPFLAGS)
-override CPPFLAGS = $(PKG_CPPFLAGS)
-override CXXFLAGS = $(PKG_CPPFLAGS)
+
+    
+##     -fsanitize=address,undefined -fno-omit-frame-pointer
+override PKG_CXXFLAGS = $(PKG_CPPFLAGS) 
+override CPPFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out on 27th Feb 2026)
+override CXXFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out on 27th Feb 2026)
 ##
 ifeq ($(HAVE_CCACHE),YES)
   override CC  = $(CCACHE) $(CPP_COMPILER)
@@ -405,6 +419,9 @@ ifneq ($(USER_SUPPLIED_PKG_LIBS),) ## i.e. if user-supplied variable is availabl
 	override PKG_LIBS+="$(USER_SUPPLIED_PKG_LIBS)"
 endif
 ##
+override GCC13_LIBDIR=$(shell $(CXX_COMPILER) -print-file-name=libstdc++.so.6 | xargs dirname)
+override PKG_LIBS += -Wl,-rpath,$(GCC13_LIBDIR)
+##
 ##  ---------------------  TBB libs --------------------------------
 ## seperate section for this not needed on linux?
 ## 
@@ -426,8 +443,20 @@ override USER_HOME_DUMMY_MODEL_SO=$(COPY_DIR_PATH)/dummy_stan_model_model.so
 $(info DUMMY_MODEL_SO is: $(USER_HOME_DUMMY_MODEL_SO))
 override PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO)
 ##
+#### PKG_LIBS+=-fsanitize=address,undefined ##
+##
 ## Link to permanent location:
 PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO) -Wl,-rpath,$(COPY_DIR_PATH) -Wl,-rpath,$(TBB_PATH),--no-as-needed
 ##
 ##
 
+
+##
+## ---- RcppParallel runtime symbols ---------------------------------------------------------------
+## RcppParallel's compiled package code (RcppParallel.so in its own libs dir) exports
+## RcppParallel::tbbParallelFor. The BayesMVP .so references it and, historically, relied on
+## RcppParallel's DLL already being loaded in the session (which makes R CMD INSTALL's
+## test-load phase, and any vanilla session, fail with "undefined symbol"). Link it
+## explicitly so the package loads cleanly everywhere:
+override RCPP_PARALLEL_LIB_DIR=$(shell "$(R_HOME)/bin/Rscript" --vanilla -e 'cat(system.file("libs", package = "RcppParallel"))')
+PKG_LIBS += $(RCPP_PARALLEL_LIB_DIR)/RcppParallel.so -Wl,-rpath,$(RCPP_PARALLEL_LIB_DIR)

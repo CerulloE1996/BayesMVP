@@ -14,7 +14,8 @@ setup_env_post_install <- function() {
           ## bs_dir <- bridgestan_path()
           ## cmdstan_dir <- cmdstanr_path()
           
-       
+          library(Rcpp)
+          library(RcppParallel)
           
           if (.Platform$OS.type == "windows") {
             mvp_user_dir <- file.path(Sys.getenv("USERPROFILE"), "BayesMVP")
@@ -94,6 +95,9 @@ setup_env_post_install <- function() {
 .onLoad <- function(libname, 
                     pkgname) {
   
+      library(Rcpp)
+      library(RcppParallel)
+  
       is_windows <- .Platform$OS.type == "windows"
       
       dll_path <- file.path(libname, 
@@ -129,8 +133,11 @@ setup_env_post_install <- function() {
 #' @export
 .onAttach <- function(libname, 
                       pkgname) {
-
-   setup_env_post_install()  
+  
+      library(Rcpp)
+      library(RcppParallel)
+  
+      setup_env_post_install()  
   
 }
 
@@ -140,8 +147,11 @@ setup_env_post_install <- function() {
 #' @export
 .First.lib <- function(libname, 
                        pkgname) {
- 
-   setup_env_post_install()  
+  
+      library(Rcpp)
+      library(RcppParallel)
+   
+      setup_env_post_install()  
   
 }
 

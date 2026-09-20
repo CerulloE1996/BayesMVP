@@ -5,6 +5,7 @@
 \title{R_fn_post_burnin_prep_for_sampling}
 \usage{
 R_fn_post_burnin_prep_for_sampling(
+  n_chains_burnin,
   n_chains_sampling,
   n_superchains,
   n_params_main,

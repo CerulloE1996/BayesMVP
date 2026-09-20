@@ -65,15 +65,19 @@ functions {
           // To get the bounds on Lij_new is
           // (bound - b1) / Ljj 
           
-          real low = max({-sqrt(l_ij_old) * D[j], lb - b1});
-          real up = min({sqrt(l_ij_old) * D[j], ub - b1});
+          real low = max({-sqrt(l_ij_old * D[j]), lb - b1});
+          real up = min({sqrt(l_ij_old * D[j]), ub - b1});
+          if (is_nan(low) || is_nan(up) || is_inf(low) || is_inf(up) || low >= up)
+              reject("empty or nonfinite correlation interval");
           
           real x = lb_ub_lp(off_raw[cnt], low, up);
           L[i, j] = x / D[j]; 
 
           target += -0.5 * log(D[j]);
           
-           l_ij_old *= 1 - (D[j] * L[i, j]^2) / l_ij_old;
+           l_ij_old -= D[j] * square(L[i, j]);
+           if (is_nan(l_ij_old) || is_inf(l_ij_old) || l_ij_old <= 0)
+               reject("nonpositive or nonfinite LDL remainder");
           
          // real mul = 1 - (D[j] * L[i, j]^2) / l_ij_old;
          // L[i, (j + 1):i - 1] *= mul;
@@ -82,6 +86,8 @@ functions {
         }
         D[i] = l_ij_old;
       }
+        if (is_nan(sum(D)) || is_inf(sum(D)) || min(D) <= 0)
+            reject("nonpositive or nonfinite LDL pivot");
         return diag_post_multiply(L, sqrt(D));
   }
   
@@ -243,8 +249,6 @@ model {
 }
 
  
-
-
 
 
 

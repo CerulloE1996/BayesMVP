@@ -4,9 +4,14 @@
 \alias{init_bs_model_external}
 \title{init_bs_model_external}
 \usage{
-init_bs_model_external(Stan_data_list, Stan_model_file_path)
+init_bs_model_external(
+  stream = NULL,
+  Stan_data_list,
+  Stan_model_file_path,
+  stanc_args = NULL,
+  make_args = NULL
+)
 }
 \description{
 init_bs_model_external
 }
-\keyword{internal}

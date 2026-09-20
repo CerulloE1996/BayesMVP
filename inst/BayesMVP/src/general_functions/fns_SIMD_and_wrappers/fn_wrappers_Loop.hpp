@@ -1,3 +1,4 @@
+
 #pragma once 
  
 #ifndef FN_WRAPPERS_LOOP_HPP
@@ -28,7 +29,7 @@ using namespace Eigen;
  
  
 template <typename T,  typename FuncDouble>
-ALWAYS_INLINE void fn_Loop_row_or_col_vector(      Eigen::Ref<T>  x, 
+inline void fn_Loop_row_or_col_vector(      Eigen::Ref<T>  x, 
                                                    const FuncDouble &fn_double) {
   
    const int N = x.size();
@@ -45,7 +46,7 @@ ALWAYS_INLINE void fn_Loop_row_or_col_vector(      Eigen::Ref<T>  x,
  
  
 template<typename T, typename FuncDouble>
-ALWAYS_INLINE void fn_Loop_matrix(  Eigen::Ref<T> x,
+inline void fn_Loop_matrix(  Eigen::Ref<T> x,
                                     const FuncDouble &fn_double) {
      
      const int rows = x.rows(); 
@@ -64,7 +65,7 @@ ALWAYS_INLINE void fn_Loop_matrix(  Eigen::Ref<T> x,
   
   
 template <typename T, typename FuncDouble>
-ALWAYS_INLINE void fn_Loop_dbl_Eigen( Eigen::Ref<T> x, 
+inline void fn_Loop_dbl_Eigen( Eigen::Ref<T> x, 
                                       const FuncDouble &fn_double) {
   
      constexpr int n_rows = T::RowsAtCompileTime;
@@ -93,7 +94,7 @@ ALWAYS_INLINE void fn_Loop_dbl_Eigen( Eigen::Ref<T> x,
 
 
 template<typename FuncDouble, typename FuncDouble_wo_checks, typename T>
-ALWAYS_INLINE void    fn_process_double_Loop_sub_function(     Eigen::Ref<T> x,  
+inline void    fn_process_double_Loop_sub_function(     Eigen::Ref<T> x,  
                                                                const FuncDouble &fn_fast_double_function,
                                                                const FuncDouble_wo_checks &fn_fast_double_function_wo_checks, 
                                                                const bool skip_checks) {
@@ -117,7 +118,7 @@ ALWAYS_INLINE void    fn_process_double_Loop_sub_function(     Eigen::Ref<T> x,
  
 
 template <typename T>
-ALWAYS_INLINE   void        fn_return_Loop(   Eigen::Ref<T> x,
+inline   void        fn_return_Loop(   Eigen::Ref<T> x,
                                        const std::string &fn,
                                        const bool &skip_checks) {
   

@@ -11,7 +11,8 @@ generate_summary_tibble(
   n_to_compute,
   compute_nested_rhat,
   n_chains,
-  n_superchains
+  n_superchains,
+  nested_rhat_grouping = NULL
 )
 }
 \description{

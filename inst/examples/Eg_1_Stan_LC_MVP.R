@@ -221,42 +221,42 @@ Model_type <- "Stan"
     }
 
 # 
+# # ##
+# Stan_data_list_save_1$n_class
+# Stan_data_list_save_1$n_pops
+# Stan_data_list_save_1$pop
+# Stan_data_list_save_1$n_covariates_max_nd
+# Stan_data_list_save_1$n_covariates_max_d
+# Stan_data_list_save_1$n_covariates_max
+# str(Stan_data_list_save_1$X_nd)
+# str(Stan_data_list_save_1$X_d)
 # ##
-Stan_data_list_save_1$n_class
-Stan_data_list_save_1$n_pops
-Stan_data_list_save_1$pop
-Stan_data_list_save_1$n_covariates_max_nd
-Stan_data_list_save_1$n_covariates_max_d
-Stan_data_list_save_1$n_covariates_max
-str(Stan_data_list_save_1$X_nd)
-str(Stan_data_list_save_1$X_d)
-##
-Stan_data_list_save_1$n_covs_per_outcome
-##
-Stan_data_list_save_1$corr_force_positive
-Stan_data_list_save_1$known_num
-##
-Stan_data_list_save_1$overflow_threshold
-Stan_data_list_save_1$underflow_threshold
-##
-Stan_data_list_save_1$prior_only
-Stan_data_list_save_1$prior_beta_mean
-Stan_data_list_save_1$prior_beta_sd
-Stan_data_list_save_1$prior_LKJ
-Stan_data_list_save_1$prior_p_alpha
-Stan_data_list_save_1$prior_p_beta
-##
-Stan_data_list_save_1$Phi_type
-Stan_data_list_save_1$handle_numerical_issues
-Stan_data_list_save_1$fully_vectorised
+# Stan_data_list_save_1$n_covs_per_outcome
 # ##
-
-
-str(Stan_init_list$u_raw)
-str(Stan_init_list$p_raw)
-str(Stan_init_list$beta_vec)
-str(Stan_init_list$off_raw)
-str(Stan_init_list$col_one_raw)
+# Stan_data_list_save_1$corr_force_positive
+# Stan_data_list_save_1$known_num
+# ##
+# Stan_data_list_save_1$overflow_threshold
+# Stan_data_list_save_1$underflow_threshold
+# ##
+# Stan_data_list_save_1$prior_only
+# Stan_data_list_save_1$prior_beta_mean
+# Stan_data_list_save_1$prior_beta_sd
+# Stan_data_list_save_1$prior_LKJ
+# Stan_data_list_save_1$prior_p_alpha
+# Stan_data_list_save_1$prior_p_beta
+# ##
+# Stan_data_list_save_1$Phi_type
+# Stan_data_list_save_1$handle_numerical_issues
+# Stan_data_list_save_1$fully_vectorised
+# # ##
+# 
+# 
+# str(Stan_init_list$u_raw)
+# str(Stan_init_list$p_raw)
+# str(Stan_init_list$beta_vec)
+# str(Stan_init_list$off_raw)
+# str(Stan_init_list$col_one_raw)
 
      ##  prior_beta_mean; position=1; dims declared=(2,5,1); dims found=(2,1,5) 
 
@@ -299,6 +299,22 @@ str(Stan_init_list$col_one_raw)
                                             n_chains_burnin = n_chains_burnin,
                                             n_params_main = n_params_main,
                                             n_nuisance = n_nuisance)
+    
+    
+    init_object <-  BayesMVP:::initialise_model( Model_type = "Stan",
+                                                    stream = 123,
+                                                    sample_nuisance = TRUE,
+                                                    n_nuisance_override = NULL,
+                                                    model_args_list = NULL,
+                                                    compile = TRUE,
+                                                    force_recompile = FALSE,
+                                                    cmdstanr_model_fit_obj = NULL,
+                                                    ##
+                                                    Stan_model_file_path = Stan_model_file_path,
+                                                    Stan_data_list = Stan_data_list,
+                                                    Stan_cpp_user_header = NULL,
+                                                    Stan_cpp_flags = NULL,
+                                                    stanc_args = NULL)
  
     
     

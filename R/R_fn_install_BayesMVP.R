@@ -7,8 +7,8 @@ setup_env_pre_install <- function() {
 
 
         ## Set brigestan and cmdstanr environment variables / directories
-        #### bs_dir <- BayesMVP:::bridgestan_path()
-        cmdstan_dir <- BayesMVP:::cmdstanr_path()
+        #### bs_dir <- bridgestan_path()
+        cmdstan_dir <- cmdstanr_path()
 
         if (.Platform$OS.type == "windows") {
 

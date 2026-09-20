@@ -361,7 +361,7 @@ MVP_plot_and_diagnose <- R6Class("MVP_plot_and_diagnose",
                                                       
                                                     } else {   # plot specific params using custom "plot_multiple_params_batched" fn - mimics Stan's method but uses bayesplot 
                                                     
-                                                           BayesMVP:::plot_multiple_params_batched( draws_array = draws_array, 
+                                                           plot_multiple_params_batched( draws_array = draws_array, 
                                                                                                     param_prefixes = params, 
                                                                                                     plot_type = "trace", 
                                                                                                     batch_size = batch_size)
@@ -401,7 +401,7 @@ MVP_plot_and_diagnose <- R6Class("MVP_plot_and_diagnose",
                                                         
                                                       } else {   # plot specific params using custom "plot_multiple_params_batched" fn - mimics Stan's method but uses bayesplot
                                                             
-                                                            BayesMVP:::plot_multiple_params_batched(    draws_array = draws_array, 
+                                                            plot_multiple_params_batched(    draws_array = draws_array, 
                                                                                                         param_prefixes = params, 
                                                                                                         plot_type = "density", 
                                                                                                         batch_size = batch_size)

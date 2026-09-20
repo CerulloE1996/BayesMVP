@@ -1,3 +1,4 @@
+
 #pragma once
 
 #ifndef STAN_MATH_PRIM_META_MVP_DOUBLE_FNS_HPP
@@ -53,6 +54,199 @@ using namespace Eigen;
  
 #define EIGEN_DONT_PARALLELIZE
  
+ 
+
+
+ 
+ 
+ 
+
+template <typename T, int N>
+inline std::array<Eigen::Matrix<T, -1, -1>, N> array_of_mats( int rows, 
+                                                              int cols) {
+  
+       std::array<Eigen::Matrix<T, -1, -1>, N> arr;
+       for (int c = 0; c < N; ++c) {
+         arr[c] = Eigen::Matrix<T, -1, -1>::Zero(rows, cols);
+       }
+       
+       return arr;
+ 
+}
+
+
+// ---------------------------------------------------------------------------------------------
+//  Relative-accurate normal tail kernels for the GHK log-scale branches.
+//  Include AFTER the fast_and_approx_*_fns.hpp headers (uses fast_exp_1_*, fast_log_1_*, fast_Phi_*,
+//  fast_inv_Phi_wo_checks_case_{1,2a,2b}_* and _mm256_abs_pd / _mm512_abs_pd).
+//
+//  Everything is built on ONE function, the Mills ratio
+//        R(x) = (1 - Phi(x)) / phi(x)  =  sqrt(pi/2) * erfcx(x / sqrt(2)),      x >= 0,
+//  which is smooth, O(1/x) and has no cancellation. Then:
+//        Phi(x)          = phi(x) * R(-x)                               (x < 0)
+//        log Phi(x)      = -x^2/2 - 0.5*log(2*pi) + log R(-x)           (x < 0)
+//        log(1 - Phi(x)) = log Phi(-x)
+//        d/dx log Phi(x) = phi(x)/Phi(x) = 1 / R(-x)                     (x < 0)
+//        inv_Phi from log p : AS241 tail case needs only r = sqrt(-log(min(p, 1-p)))
+//        dZ/dlog_p    =  Phi(Z)/phi(Z)     = exp(log_p    + Z^2/2 + 0.5 log 2pi)  (=  R(-Z) for Z<0, stable side)
+//        dZ/dlog_1m_p = -(1-Phi(Z))/phi(Z) = -exp(log_1m_p + Z^2/2 + 0.5 log 2pi)  (= -R( Z) for Z>0, stable side)
+//
+//  R(x) is evaluated with the Laplace continued fraction  R(x) = 1/(x + 1/(x + 2/(x + 3/(x + ...))))
+//  by backward recurrence of depth MILLS_CF_DEPTH. Depth 40 is full double precision for x >= 2.5
+//  (run normal_tail_self_test() once; lower the depth after benchmarking if you like — the tail
+//  path is only taken for |x| > NORMAL_TAIL_THRESH, and a rational minimax in 1/x can replace the
+//  fraction later; the self-test validates any replacement).
+//
+//  Body (|x| <= NORMAL_TAIL_THRESH) keeps your existing fast_Phi (Abramowitz-Stegun). Its absolute
+//  error 7.5e-8 is a relative error of 1.2e-5 at the threshold and smaller inside; the tail side is
+//  exact, so the join is continuous to ~1e-5 in log Phi. The remaining tail error is your fast_log's
+//  (~1e-8); swap in the double-precision log constant if you want machine precision.
+// ---------------------------------------------------------------------------------------------
+
+static constexpr double NORMAL_TAIL_THRESH  = 2.5;
+static constexpr int    MILLS_CF_DEPTH      = 40;
+static constexpr double NEG_HALF_LOG_2PI    = -0.91893853320467274178;   // -0.5*log(2*pi)
+static constexpr double INV_SQRT_2PI        =  0.39894228040143267794;   //  1/sqrt(2*pi)
+
+// =============================================================================================
+//  SCALAR
+// =============================================================================================
+inline double fast_mills_ratio_tail(const double x) {                 // x >= NORMAL_TAIL_THRESH
+  
+      double f = x;
+      for (int k = MILLS_CF_DEPTH; k >= 1; --k) f = x + static_cast<double>(k) / f;
+      return 1.0 / f;
+      
+}
+
+
+
+
+inline double fast_log_Phi_tail_only(const double x) {                // x < -NORMAL_TAIL_THRESH
+      return -0.5 * x * x + NEG_HALF_LOG_2PI + std::log(fast_mills_ratio_tail(-x));
+}
+
+
+
+
+// scalar body uses std::erfc directly (already relative-accurate); vector bodies use fast_Phi
+inline double fast_log_Phi(const double x) {
+  
+      if (x < -NORMAL_TAIL_THRESH) return fast_log_Phi_tail_only(x);
+      return std::log(0.5 * std::erfc(-x * M_SQRT1_2));
+      
+}
+
+
+
+
+inline double fast_log_1m_Phi(const double x) { return fast_log_Phi(-x); }
+
+
+
+
+inline double fast_dlog_Phi_dx(const double x) {                      // phi(x)/Phi(x)
+  
+      if (x < -NORMAL_TAIL_THRESH) return 1.0 / fast_mills_ratio_tail(-x);
+      return INV_SQRT_2PI * std::exp(-0.5 * x * x) / (0.5 * std::erfc(-x * M_SQRT1_2));
+      
+}
+// d/dx log(1 - Phi(x)) = -fast_dlog_Phi_dx(-x)
+
+
+
+
+// AS241 rationals (identical constants to your AVX code)
+inline double fast_inv_Phi_case_1(const double q) {                   // |q| <= 0.425
+  
+      const double r = 0.180625 - q * q;
+      double num = 2509.0809287301226727 * r + 33430.575583588128105;
+      num = num * r + 67265.770927008700853;  num = num * r + 45921.953931549871457;
+      num = num * r + 13731.693765509461125;  num = num * r + 1971.5909503065514427;
+      num = num * r + 133.14166789178437745;  num = num * r + 3.387132872796366608;
+      double den = 5226.495278852854561 * r + 28729.085735721942674;
+      den = den * r + 39307.89580009271061;   den = den * r + 21213.794301586595867;
+      den = den * r + 5394.1960214247511077;  den = den * r + 687.1870074920579083;
+      den = den * r + 42.313330701600911252;  den = den * r + 1.0;
+      return q * num / den;
+      
+}
+
+
+
+
+inline double fast_inv_Phi_case_2a(double r) {                        // r <= 5
+  
+      r -= 1.60;
+      double num = 0.00077454501427834140764;
+      num = r * num + 0.0227238449892691845833; num = r * num + 0.24178072517745061177;
+      num = r * num + 1.27045825245236838258;   num = r * num + 3.64784832476320460504;
+      num = r * num + 5.7694972214606914055;    num = r * num + 4.6303378461565452959;
+      num = r * num + 1.42343711074968357734;
+      double den = 0.00000000105075007164441684324;
+      den = r * den + 0.0005475938084995344946; den = r * den + 0.0151986665636164571966;
+      den = r * den + 0.14810397642748007459;   den = r * den + 0.68976733498510000455;
+      den = r * den + 1.6763848301838038494;    den = r * den + 2.05319162663775882187;
+      den = r * den + 1.0;
+      return num / den;
+      
+}
+
+
+
+
+inline double fast_inv_Phi_case_2b(double r) {                        // r > 5
+  
+      r -= 5.0;
+      double num = 0.000000201033439929228813265;
+      num = r * num + 0.0000271155556874348757815; num = r * num + 0.0012426609473880784386;
+      num = r * num + 0.026532189526576123093;     num = r * num + 0.29656057182850489123;
+      num = r * num + 1.7848265399172913358;       num = r * num + 5.4637849111641143699;
+      num = r * num + 6.6579046435011037772;
+      double den = 0.00000000000000204426310338993978564;
+      den = r * den + 0.00000014215117583164458887; den = r * den + 0.000018463183175100546818;
+      den = r * den + 0.0007868691311456132591;     den = r * den + 0.0148753612908506148525;
+      den = r * den + 0.13692988092273580531;       den = r * den + 0.59983220655588793769;
+      den = r * den + 1.0;
+      return num / den;
+      
+}
+
+
+
+
+// inv_Phi given log(p) and log(1-p). No exp/log of an extreme probability anywhere.
+inline double fast_inv_Phi_from_log_p(const double log_p, 
+                                      const double log_1m_p) {
+  
+      const double p = std::exp(log_p);                                 // only consumed by the central case
+      const double q = p - 0.5;
+      if (std::fabs(q) <= 0.425) return fast_inv_Phi_case_1(q);
+      const double r = std::sqrt(-std::min(log_p, log_1m_p));           // sqrt(-log(min(p, 1-p)))
+      const double v = (r <= 5.0) ? fast_inv_Phi_case_2a(r) : fast_inv_Phi_case_2b(r);
+      return (log_p < log_1m_p) ? -v : v;                                // p < 0.5 -> Z < 0
+      
+}
+
+
+
+
+// Total derivative dZ/dv through the STABLE side: log_p when Z<0, log_1m_p when Z>=0.
+// Both are exact identities (p = exp(log_p) = 1 - exp(log_1m_p)); the blend only picks the
+// evaluation that cannot overflow.
+inline double fast_dZ_dv_from_log_p(const double Z, 
+                                    const double log_p, 
+                                    const double log_1m_p,
+                                    const double dlog_p_dv, 
+                                    const double dlog_1m_p_dv) {
+  
+      const double log_inv_phi = 0.5 * Z * Z - NEG_HALF_LOG_2PI;           // log(1/phi(Z))
+      if (Z < 0.0) return  std::exp(log_p    + log_inv_phi) * dlog_p_dv;       //  (Phi/phi)     * dlog_p/dv
+      else         return -std::exp(log_1m_p + log_inv_phi) * dlog_1m_p_dv;   // -((1-Phi)/phi) * dlog_1m_p/dv
+      
+}
+
+
  
  
 //// -------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -151,108 +345,243 @@ inline bool Eigen_any_NaNs(Eigen::Array<double, -1, -1> x) {
   
  
  
- 
- // function for use in the log-posterior function (i.e. the function to calculate gradients for)
- // [[Rcpp::export]]
- Eigen::Matrix<double, -1, -1>	  fn_calculate_cutpoints(
-     Eigen::Matrix<double, -1, 1> log_diffs, //this is a parameter (col vec)
-     double first_cutpoint, // this is constant
-     int K) {
-   
-   Eigen::Matrix<double, -1, -1> cutpoints_set_full(K+1, 1);
-   
-   cutpoints_set_full(0,0) = -1000;
-   cutpoints_set_full(1,0) = first_cutpoint;
-   cutpoints_set_full(K,0) = +1000;
-   
-   for (int k=2; k < K; ++k)
-     cutpoints_set_full(k,0) =     cutpoints_set_full(k-1,0)  + (exp(log_diffs(k-2))) ;
-   
-   return cutpoints_set_full; // output is a parameter to use in the log-posterior function to be differentiated
- }
- 
- 
- 
- 
- 
- 
- 
- 
+//// 
+//// Function to manually construct a cutpoint vector from raw unconstrained parameters - using exp() / log-differences.
+////
+inline Eigen::Matrix<double, -1, 1>	  construct_C( const Eigen::Matrix<double, -1, 1> &C_raw_vec, // parameter - log_diffs
+                                                   bool softplus) {
   
- inline std::array<Eigen::Matrix<double, -1, -1>, 1>      array_of_mats_1d( int n_rows,
-                                                                                 int n_cols) {
+       const int n_total_cutpoints = C_raw_vec.size();
+       Eigen::Matrix<double, -1, 1> C_vec(n_total_cutpoints);
+       C_vec(0) = C_raw_vec(0); // first cutpoint is same as first raw_C/log_diff
+      
+       if (softplus == true) { 
+           Eigen::Matrix<double, -1, 1> softplus_C_vec = stan::math::log1p_exp(C_raw_vec.segment(1, n_total_cutpoints - 1));
+           for (int k = 2; k <= n_total_cutpoints; ++k) {
+               C_vec(k - 1) = C_vec(k - 2) + softplus_C_vec(k - 2);
+           }
+       } else { 
+           Eigen::Matrix<double, -1, 1> exp_C_vec = stan::math::exp(C_raw_vec.segment(1, n_total_cutpoints - 1));
+           for (int k = 2; k <= n_total_cutpoints; ++k) {
+               C_vec(k - 1) = C_vec(k - 2) + exp_C_vec(k - 2);
+           }
+       }
+      
+       return C_vec;
    
-   
-   std::array<Eigen::Matrix<double, -1, -1 >, 1> my_1d_array;
-   Eigen::Matrix<double, -1, -1> my_mat = Eigen::Matrix<double, -1, -1>::Zero(n_rows, n_cols);
-   my_1d_array[0] = my_mat;
-   
-   return my_1d_array;
-   
- }
- 
- 
- 
- inline std::array<Eigen::Matrix<double, -1, -1>, 2> array_of_mats_2d(int n_rows, int n_cols) {
-   
-   std::array<Eigen::Matrix<double, -1, -1>, 2> my_2d_array = {
-                             Eigen::Matrix<double, -1, -1>::Zero(n_rows, n_cols),
-                             Eigen::Matrix<double, -1, -1>::Zero(n_rows, n_cols)
-                           };
-   
-   return  my_2d_array;
- }
- 
- 
+}
+
+
+inline double raw_C_to_C_log_det_J_lp( const Eigen::Matrix<double, -1, 1> &raw_C, // parameter - log_diffs
+                                       bool softplus) {
   
- 
- 
- 
- 
+       const int n_cutpoints = raw_C.size();
+       double log_det_J = 0.0;
+       if (softplus == true) log_det_J += (stan::math::log_inv_logit(raw_C.segment(1, n_cutpoints - 1))).sum();
+       else                  log_det_J += raw_C.segment(1, n_cutpoints - 1).sum();  
+       return log_det_J;
+       
+}
+
+//// ---------------------------------------------------------------------------------------
+//// Induced-Dirichlet ("ind_dir") log-density function:
+//// NOTE: You can use this for both ind_dir PRIORS and ind_dir MODELS:
+//// NOTE: adapted from: Betancourt et al (see: https://betanalpha.github.io/assets/case_studies/ordinal_regression.html),
+//// HOWEVER my version has a (much) more computationally efficient (lower-trianglar) Jacobian computation, which is 
+//// mathematically still valid. 
+////
+inline double induced_dirichlet_given_C_lpdf( const Eigen::Matrix<double, -1, 1> &p_ord,
+                                              const Eigen::Matrix<double, -1, 1> &C,
+                                              const Eigen::Matrix<double, -1, 1> &alpha,
+                                              bool use_probit_link) {
   
- // convert std vec to eigen vec - double
- // [[Rcpp::export]]
- Eigen::Matrix<double, -1, 1> std_vec_to_Eigen_vec(std::vector<double> &std_vec) {
-   
-   Eigen::Matrix<double, -1, 1>  Eigen_vec(std_vec.size());
-   
-   for (int i = 0; i < std_vec.size(); ++i) {
-     Eigen_vec(i) = std_vec[i];
-   }
-   
-   return(Eigen_vec);
- }
+       const int n_cat = p_ord.size();
+       const int n_thr = n_cat - 1;
+        
+       double log_prob = 0.0;
+        
+       for (int k = 1; k <= n_thr; ++k) {
+          if (use_probit_link == true)  log_prob += stan::math::normal_lpdf(C(k - 1), 0.0, 1.0);
+          else                          log_prob += stan::math::log_inv_logit(C(k - 1)) + stan::math::log1m_inv_logit(C(k - 1));
+       }
+       log_prob += stan::math::dirichlet_lpdf(p_ord, alpha);
+        
+       return log_prob;
+  
+}
+
+
+////
+//// Convert from cumul_probs -> ord_probs:
+////
+inline Eigen::Matrix<double, -1, 1> cumul_probs_to_ord_probs( const Eigen::Matrix<double, -1, 1> &cumul_probs) {
+  
+       const int n_thr = cumul_probs.size();
+       const int n_cat = n_thr + 1;
+       Eigen::Matrix<double, -1, 1> ord_probs(n_cat);
+        
+       ord_probs(0) = cumul_probs(0) - 0.0;
+       for (int k = 2; k <= n_thr; ++k) {
+          ord_probs(k - 1) = cumul_probs(k - 1) - cumul_probs(k - 2); // since probs are INCREASING with k
+       }
+       ord_probs(n_cat - 1) =  1.0 - cumul_probs(n_cat - 2);
+        
+       return ord_probs;
+  
+}
+
+
+
+
+
+
+
+////
+//// Convert from ord_probs -> cumul_probs:
+////
+inline Eigen::Matrix<double, -1, 1> ord_probs_to_cumul_probs( const Eigen::Matrix<double, -1, 1> &ord_probs) {
+  
+       const int n_cat = ord_probs.size();
+       const int n_thr = n_cat - 1;
+       Eigen::Matrix<double, -1, 1> cumul_probs(n_thr);
+      
+       cumul_probs(0) = ord_probs(0);
+       for (int k = 2; k <= n_thr; ++k) {
+         cumul_probs(k - 1) = cumul_probs(k - 2) + ord_probs(k - 1); // since probs are INCREASING with k
+       }
+      
+       return cumul_probs;
+  
+}
+
+
+////
+//// Convert from cumul_probs -> C (w/ induced dirichlet):
+////
+// vector ID_cumul_probs_to_C( const Eigen::Matrix<double, -1, 1> &cumul_probs, 
+//                             int use_probit_link) {
+// 
+//       int n_thr = stan::math::num_elements(cumul_probs);
+//       int n_cat = n_thr + 1;
+//       Eigen::Matrix<double, -1, 1> C(n_thr);
+//       
+//       for (k in 1:n_thr) {
+//         if (cumul_probs[k] < 1e-300) {
+//           C[k] = -37.5; ////  prob = 1e-38;
+//         } else if (cumul_probs[k] > 0.99999999999999999) {
+//           C[k] = +8.20; ////  prob = 0.9999999999999;
+//         } else {
+//           if (use_probit_link == true) C[k] = stan::math::inv_Phi(cumul_probs[k]); 
+//           else                         C[k] = stan::math::logit(cumul_probs[k]); 
+//         }
+//       }
+//       
+//       return C;
+//     
+// }
+
+inline Eigen::Matrix<double, -1, 1> ID_cumul_probs_to_C( const Eigen::Matrix<double, -1, 1> &cumul_probs, 
+                                                         bool use_probit_link) {
+  
+       const int n_thr = cumul_probs.size();
+       const int n_cat = n_thr + 1;
+       Eigen::Matrix<double, -1, 1> C(n_thr);
+      
+      for (int k = 0; k < n_thr; ++k) {
+         if (cumul_probs(k) < 1e-300) {
+           C(k) = -37.5; ////  prob = 1e-38;
+         } else if (cumul_probs(k) > 0.99999999999999999) {
+           C(k) = +8.20; ////  prob = 0.9999999999999;
+         } else {
+           if (use_probit_link == true) C(k) = stan::math::inv_Phi(cumul_probs(k)); 
+           else                         C(k) = stan::math::logit(cumul_probs(k)); 
+         }
+       }
+      
+       return C;
+  
+}
  
- // [[Rcpp::export]]
- std::vector<double> Eigen_vec_to_std_vec(Eigen::Matrix<double, -1, 1> &Eigen_vec) {
-   
-   std::vector<double>  std_vec(Eigen_vec.rows());
-   
-   for (int i = 0; i < Eigen_vec.rows(); ++i) {
-     std_vec[i] = Eigen_vec(i);
-   }
-   
-   return(std_vec);
- }
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
  
  
  
 
+inline std::array<Eigen::Matrix<double, -1, -1>, 1>      array_of_mats_1d(  int n_rows,
+                                                                            int n_cols) {
+   
+   
+       std::array<Eigen::Matrix<double, -1, -1 >, 1> my_1d_array;
+       Eigen::Matrix<double, -1, -1> my_mat = Eigen::Matrix<double, -1, -1>::Zero(n_rows, n_cols);
+       my_1d_array[0] = my_mat;
+     
+       return my_1d_array;
+   
+}
  
+ 
+inline std::array<Eigen::Matrix<double, -1, -1>, 2> array_of_mats_2d( int n_rows,
+                                                                      int n_cols) {
+   
+       std::array<Eigen::Matrix<double, -1, -1>, 2> my_2d_array = {
+                                 Eigen::Matrix<double, -1, -1>::Zero(n_rows, n_cols),
+                                 Eigen::Matrix<double, -1, -1>::Zero(n_rows, n_cols)
+                               };
+     
+       return  my_2d_array;
+   
+}
  
   
- 
- 
- 
- 
- 
- inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos(      Eigen::Matrix<double, 1, -1>  &row_vec    ) {
+// convert std vec to eigen vec - double
+inline Eigen::Matrix<double, -1, 1> std_vec_to_Eigen_vec( const std::vector<double> &std_vec) {
    
-   row_vec(0) = - row_vec(0);
+       Eigen::Matrix<double, -1, 1>  Eigen_vec(std_vec.size());
+       
+       for (int i = 0; i < std_vec.size(); ++i) {
+         Eigen_vec(i) = std_vec[i];
+       }
+       
+       return(Eigen_vec);
    
-   return(row_vec);
+}
+ 
+ 
+ inline std::vector<double> Eigen_vec_to_std_vec( const Eigen::Matrix<double, -1, 1> &Eigen_vec) {
    
- }
+       std::vector<double>  std_vec(Eigen_vec.rows());
+       
+       for (int i = 0; i < Eigen_vec.rows(); ++i) {
+         std_vec[i] = Eigen_vec(i);
+       }
+       
+       return(std_vec);
+   
+}
+ 
+ 
+inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Matrix<double, 1, -1>  &row_vec) {
+   
+       row_vec(0) = - row_vec(0);
+       
+       return(row_vec);
+       
+}
  
  
  

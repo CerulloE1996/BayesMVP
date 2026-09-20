@@ -27,7 +27,7 @@ typedef double (*FuncDouble)(const double);
 #endif
 
 
-//// Define global inlining macro    
+//// Define global inlining macro
 #ifdef _WIN32
         #define MAYBE_INLINE inline // Don't force inlining on Windows as very slow compilation (+ questionable benefits)
 #else //// If Linux or Mac OS (in which case we do some more aggressive inlining)
@@ -36,11 +36,11 @@ typedef double (*FuncDouble)(const double);
         #else
             #define MAYBE_INLINE inline
         #endif
-#endif 
+#endif
 
  
- 
-
+// #define ALWAYS_INLINE inline
+// #define MAYBE_INLINE inline
 
 
 #endif

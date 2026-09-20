@@ -4,7 +4,7 @@
 \alias{cmdstanr_path}
 \title{cmdstanr_path}
 \usage{
-cmdstanr_path()
+cmdstanr_path(preferred_version = "2.36.0")
 }
 \description{
 cmdstanr_path
