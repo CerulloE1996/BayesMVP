@@ -39,6 +39,10 @@ static constexpr double HALF_LOG_TWO_PI   =  0.91893853320467274178;  // 0.5*log
 //// paths everywhere else use the APPROX pair (log_Phi_approx + inv_Phi_approx_from_
 //// logit_prob), so this file must too, or it disagrees with the standard-scale pass
 //// that produced its inputs.
+//// 2026-09-22 (assistant): the note above now applies to the Phi_approx setting only. For
+//// Phi_type = "Phi" / inv_Phi_type = "inv_Phi" the log-scale tail paths use the exact pair
+//// fast_log_Phi / fast_inv_Phi_from_log_p (double_fns.hpp); see
+//// fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal and MVP_log_scale_grad_calc_fns_T.hpp.
 //// -----------------------------------------------------------------------------
 ALWAYS_INLINE double sl_exp(const double x, const bool S)   { return S ? stan::math::exp(x)   : fast_exp_1(x); }
 ALWAYS_INLINE double sl_log(const double x, const bool S)   { return S ? stan::math::log(x)   : fast_log_1(x); }
@@ -206,10 +210,29 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
                                                                     const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Bound_Z,        //// lower bounds (may be -Inf)
                                                                     const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Upper_Bound_Z,  //// upper bounds (may be +Inf)
                                                                     const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
-                                                                    const bool S
+                                                                    const bool S,
+                                                                    const KernelChoice &kernel_choice
 ) {
   
       const int index_size = index.size();
+      ////
+      //// ---- 2026-09-22 (assistant, approved change "native exact tails"):
+      ////
+      //// Previously these rows ALWAYS used the Phi_approx tail pair (sl_log_Phi = cubic-logistic log Phi,
+      //// sl_inv_Phi_from_logit = cubic inverse), whatever Phi_type was, while fn_MVOP_row_grads_log_scale
+      //// below differentiates them with the EXACT Gaussian densities (log_phi_std_norm, lphZr = Z^2/2 + 0.5 log 2pi).
+      //// For Phi_type = "Phi" / inv_Phi_type = "inv_Phi" that was both a splice in the target (exact interior,
+      //// Phi_approx tails) and a value/gradient mismatch on these rows. Now:
+      ////   use_exact_log_Phi (Phi_type = "Phi"):        log Phi(x) = fast_log_Phi(x)     (erfc body, Mills-ratio tail; exact)
+      ////   use_exact_inv_Phi (inv_Phi_type = "inv_Phi"): Z = fast_inv_Phi_from_log_p(log Phi_Z, log(1 - Phi_Z))  (AS241; exact)
+      //// The row gradients need no change: they are already the exact derivatives
+      ////   d/dx Phi(x) = phi(x),  dZ/dPhi_Z = 1/phi(Z),
+      //// i.e. dprob/dmu = (phi(lb) - phi(ub)) / L_tt and -dZ/dmu = [(1-u) phi(lb) + u phi(ub)] / (phi(Z) L_tt).
+      //// The Phi_approx setting keeps the old tail functions (and hence its pre-existing mismatch with the exact
+      //// row gradients - reported separately, not changed here).
+      ////
+      const bool use_exact_log_Phi = !kernel_choice.Phi_approx;
+      const bool use_exact_inv_Phi = !kernel_choice.inv_Phi_approx;
       
       // for (int ii = 0; ii < index_size; ++ii) {
       //   
@@ -295,8 +318,8 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
             if (lb <= 0.0) {
               
                   //// ---------------- LOWER-TAIL (or straddling) case ----------------
-                  log_Phi_lb              = std::isinf(lb) ? SL_NEG_INF : sl_log_Phi(lb, S);
-                  const double log_Phi_ub = std::isinf(ub) ? 0.0        : sl_log_Phi(ub, S);
+                  log_Phi_lb              = std::isinf(lb) ? SL_NEG_INF : (use_exact_log_Phi ? fast_log_Phi(lb) : sl_log_Phi(lb, S));
+                  const double log_Phi_ub = std::isinf(ub) ? 0.0        : (use_exact_log_Phi ? fast_log_Phi(ub) : sl_log_Phi(ub, S));
                   
                   if (!(log_Phi_lb > SL_NEG_INF)) {
                     log_prob = log_Phi_ub;
@@ -310,8 +333,13 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
                   //// logit(Phi_Z) = log Phi_Z - log(1 - Phi_Z). Phi_Z is TINY here, so
                   //// log1m_exp is stable and the logit is large-negative:
                   ////
-                  const double logit_Phi_Z = log_Phi_Z - sl_log1m_exp(log_Phi_Z, S);
-                  Z = sl_inv_Phi_from_logit(logit_Phi_Z, S);
+                  const double log_1m_Phi_Z = sl_log1m_exp(log_Phi_Z, S);
+                  if (use_exact_inv_Phi) {
+                    Z = fast_inv_Phi_from_log_p(log_Phi_Z, log_1m_Phi_Z);        //// exact; lower tail driven by log Phi_Z
+                  } else {
+                    const double logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
+                    Z = sl_inv_Phi_from_logit(logit_Phi_Z, S);
+                  }
                   ////
                   Phi_Z(i, t) = sl_exp(log_Phi_Z, S);
               
@@ -319,8 +347,8 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
               
                   //// ---------------- UPPER-TAIL case (lb > 0, so ub > 0 too) ----------------
                   //// survival fns:  Phi_bar(x) = Phi(-x)
-                  const double log_Sb_lb = sl_log_Phi(-lb, S);
-                  const double log_Sb_ub = std::isinf(ub) ? SL_NEG_INF : sl_log_Phi(-ub, S);
+                  const double log_Sb_lb = use_exact_log_Phi ? fast_log_Phi(-lb) : sl_log_Phi(-lb, S);
+                  const double log_Sb_ub = std::isinf(ub) ? SL_NEG_INF : (use_exact_log_Phi ? fast_log_Phi(-ub) : sl_log_Phi(-ub, S));
                   
                   if (!(log_Sb_ub > SL_NEG_INF)) {
                     log_prob = log_Sb_lb;
@@ -334,8 +362,13 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
                   //// logit(Phi_Z) = log Phi_Z - log(1 - Phi_Z) = log(1 - q) - log(q).
                   //// q is TINY, so log1m_exp(log_q) is stable and the logit is large-POSITIVE:
                   ////
-                  const double logit_Phi_Z = sl_log1m_exp(log_q, S) - log_q;
-                  Z = sl_inv_Phi_from_logit(logit_Phi_Z, S);
+                  const double log_Phi_Z_upper = sl_log1m_exp(log_q, S);
+                  if (use_exact_inv_Phi) {
+                    Z = fast_inv_Phi_from_log_p(log_Phi_Z_upper, log_q);         //// exact; upper tail driven by log(1 - Phi_Z) = log q
+                  } else {
+                    const double logit_Phi_Z = log_Phi_Z_upper - log_q;
+                    Z = sl_inv_Phi_from_logit(logit_Phi_Z, S);
+                  }
                   ////
                   log_Phi_lb  = sl_log1m_exp(log_Sb_lb, S);   //// log(1 - Phi_bar(lb)); fine since Phi_bar(lb) tiny (lb > 0)
                   Phi_Z(i, t) = 1.0 - sl_exp(log_q, S);

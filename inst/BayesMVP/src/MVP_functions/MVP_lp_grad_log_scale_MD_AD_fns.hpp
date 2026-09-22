@@ -88,6 +88,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
         M log_abs_prod_comp = M::Constant(chunk_size, n_tests, -700.0), sign_prod_comp = M::Ones(chunk_size, n_tests);
         M log_abs_dcc = M::Constant(chunk_size, n_tests, -700.0), sign_dcc = M::Ones(chunk_size, n_tests);
         V log_abs_prod = V::Constant(chunk_size, -700.0), sign_prod = V::Ones(chunk_size);
+        V prod_container = V::Zero(chunk_size), derivs_chain_container_vec = V::Zero(chunk_size);
         V log_prob_rowwise_prod_temp_all = V::Constant(chunk_size, -700.0);
         V log_abs_a = V::Constant(chunk_size, -700.0), sign_a = V::Ones(chunk_size), log_abs_b = V::Constant(chunk_size, -700.0), sign_b = V::Ones(chunk_size);
         V sign_sum_result = V::Ones(chunk_size);
@@ -173,13 +174,15 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
             if (n_OK < chunk_size) {
               if (n_underflows > 0) {
                 fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T<vec>(t, under_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c],
-                                                                      prob[c], y1_log_prob[c], log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array);
+                                                                      prob[c], y1_log_prob[c], log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
+                                                                      kchoice);   //// 2026-09-22: exact tails when Phi_type = "Phi"
                 V tmp = log_phi_Bound_Z[c](under_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Bound_Z[c](under_index, t) = tmp;
                 tmp   = log_phi_Z_recip[c](under_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Z_recip[c](under_index, t) = tmp;
               }
               if (n_overflows > 0) {
                 fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T<vec>(t, n_overflows, over_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c],
-                                                                     prob[c], y1_log_prob[c], log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array);
+                                                                     prob[c], y1_log_prob[c], log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
+                                                                     kchoice);   //// 2026-09-22: exact tails when Phi_type = "Phi"
                 V tmp = log_phi_Bound_Z[c](over_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Bound_Z[c](over_index, t) = tmp;
                 tmp   = log_phi_Z_recip[c](over_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Z_recip[c](over_index, t) = tmp;
               }
@@ -228,9 +231,25 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
           const M sign_Z_std_norm   = Z_std_norm[c].array().sign();
           const M prob_recip        = stan::math::inv(prob[c]);
           M common_grad_term_1 = M::Zero(chunk_size, n_tests), prob_rowwise_prod_temp = M::Zero(chunk_size, n_tests);
+          M prob_recip_rowwise_prod_temp = M::Zero(chunk_size, n_tests);
+          M z_grad_term = M::Zero(chunk_size, n_tests), grad_prob = M::Zero(chunk_size, n_tests);
+          V prob_rowwise_prod_temp_all = V::Zero(chunk_size);
           M ys = M::Zero(chunk_size, n_tests), ym = M::Zero(chunk_size, n_tests);   //// y_sign_chunk_times_... / y_m_ysign_x_u_array_times_...
 
-          if (grad_option != "none") {
+          if (grad_option != "none" && n_class == 1) {
+            // Standard MVP has no latent-class mixture denominator. Its
+            // coefficient and nuisance derivatives use the ordinary-scale
+            // preparation directly; the log-scale preparation intentionally
+            // leaves log_common_grad_term_1 at its sentinel value for this
+            // branch.
+            fn_MVP_grad_prep(prob[c], y_sign_chunk, y_m_y_sign_x_u,
+                             L_Omega_recip_double[c], prev_per_obs_given_c,
+                             prob_n_recip, phi_Z_recip[c], phi_Bound_Z[c], prob_recip,
+                             prob_rowwise_prod_temp, prob_recip_rowwise_prod_temp,
+                             prob_rowwise_prod_temp_all, common_grad_term_1,
+                             ys, ym,
+                             Model_args_as_cpp_struct);
+          } else if (grad_option != "none") {
             M log_abs_L_Omega_recip_double = M::Zero(n_tests, n_tests);
             M sign_L_Omega_recip_double = L_Omega_recip_double[c].array().sign();
             for (int t = 0; t < n_tests; t++) log_abs_L_Omega_recip_double(t, t) = std::log(std::abs(L_Omega_recip_double[c](t, t)));
@@ -283,12 +302,23 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
           //// ---- coefficients ----
           if ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "coeff_only")) {
             Eigen::Matrix<int, -1, 1> n_cov_vec_c = n_covariates_per_outcome_vec.row(c).transpose();
-            if (n_covariates_max > 1) {
+            if (n_class == 1) {
+              fn_MVP_compute_coefficients_grad_v3(c, beta_grad_array[c], X[c], n_cov_vec_c, row_start,
+                                                  n_covariates_max, common_grad_term_1, L_Omega_double[c],
+                                                  prob[c], prob_recip, prob_rowwise_prod_temp,
+                                                  ys, ym,
+                                                  z_grad_term, grad_prob, prod_container, derivs_chain_container_vec,
+                                                  true, Model_args_as_cpp_struct);
+            } else if (n_covariates_max > 1) {
               fn_MVP_compute_coefficients_grad_v2(c, beta_grad_array[c], X[c], n_cov_vec_c, beta_grad_array_for_each_n, chunk_counter, n_covariates_max,
                                                   common_grad_term_1, L_Omega_double[c], prob[c], prob_recip, prob_rowwise_prod_temp, ys, ym,
                                                   log_abs_grad_prob, sign_grad_prob, log_abs_prod, sign_prod, true, Model_args_as_cpp_struct);
             } else {
               log_abs_grad_prob.setZero(); sign_grad_prob.setZero(); log_abs_prod.setZero(); sign_prod.setZero();
+              //// compute_final_scalar_grad = FALSE here: this call only fills the per-row gradients (beta_grad_array_for_each_n); the
+              //// problem rows are then replaced on the log scale and ALL rows are summed into beta_grad_array[c] below. Passing TRUE
+              //// (as the post-26-Aug-2026 migrated code did) added the row sums a second time, double-counting the intercept gradient
+              //// on every PartialLog / fallback evaluation. FALSE restores the 26-Aug-2026 original (its line 746).
               fn_MVP_compute_coefficients_grad_v2(c, beta_grad_array[c], X[c], n_cov_vec_c, beta_grad_array_for_each_n, chunk_counter, n_covariates_max,
                                                   common_grad_term_1, L_Omega_double[c], prob[c], prob_recip, prob_rowwise_prod_temp, ys, ym,
                                                   log_abs_grad_prob, sign_grad_prob, log_abs_prod, sign_prod, false, Model_args_as_cpp_struct);
@@ -784,14 +814,6 @@ inline Eigen::Matrix<double, -1, 1>    fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_a
       return out_mat;
   
 }
-
-
-
-
-
-
-
-
 
 
 

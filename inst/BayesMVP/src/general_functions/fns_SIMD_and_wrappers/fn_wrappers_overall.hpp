@@ -39,27 +39,38 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
       
                 fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);
        
-          } else if (vect_type == "AVX2") { // use AVX-512 or AVX2 or loop (i.e., rely on automatic vectorisation)
+          } else if ( (vect_type == "AVX2") || (vect_type == "AVX512") ) { 
       
-              #if defined(__AVX2__) && ( !(defined(__AVX512VL__) && defined(__AVX512F__)  && defined(__AVX512DQ__)) ) // use AVX2
-                         fn_process_Ref_double_AVX(x_Ref, fn, skip_checks); // using the updated general fn (works for both AVX-512 or AVX2)
-              #else 
-                         std::cout << "Error: AVX2 is not available" << std::endl;
-                         return;
-              #endif
-      
-          } else if (vect_type == "AVX512") { // use AVX-512 or AVX2 or loop (i.e., rely on automatic vectorisation)
-      
-              #if defined(__AVX512VL__) && defined(__AVX512F__)  && defined(__AVX512DQ__)
-                         fn_process_Ref_double_AVX(x_Ref, fn, skip_checks); // using the updated general fn (works for both AVX-512 or AVX2)
+              //// ---- SIMD request (2026-09-22 fix for audit item D3):
+              ////      This build compiles exactly ONE SIMD level of fn_process_Ref_double_AVX (AVX-512 if the compiler
+              ////      flags provide it, otherwise AVX2 - see SIMD_config.hpp / fn_wrappers_SIMD_AVX_general.hpp).
+              ////      The R front end (fn_check_native_model_vect_types_and_Phi_types in R_fns_init_hard_coded_models.R)
+              ////      stops before sampling if the requested level is not the compiled one. As a second line of defence
+              ////      this branch NEVER leaves x unchanged: previously a request for the level that was not compiled
+              ////      printed "Error: AVX2 is not available" (or "AVX-512") on every call and returned x UNCHANGED, so
+              ////      every result computed that way was silently wrong. Now:
+              ////        - requested level is compiled                -> use it;
+              ////        - AVX2 requested on an AVX-512 build          -> use the compiled AVX-512 kernels (AVX-512 is a superset);
+              ////        - AVX512 requested on an AVX2 build           -> use the compiled AVX2 kernels (same functions, narrower);
+              ////        - neither AVX2 nor AVX-512 compiled           -> use the exact Stan-math path.
+              ////      No per-call printing (this is called inside the likelihood hot loop).
+              ////
+              #if (defined(__AVX512VL__) && defined(__AVX512F__) && defined(__AVX512DQ__)) || defined(__AVX2__)
+                         fn_process_Ref_double_AVX(x_Ref, fn, skip_checks); // the one compiled SIMD level (AVX-512 or AVX2)
               #else
-                         std::cout << "Error: AVX-512 is not available" << std::endl;
-                         return;
+                         fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);
               #endif
       
           } else if (vect_type == "Loop") {
             
                 fn_return_Loop(x_Ref, fn, skip_checks);
+      
+          } else { 
+            
+                //// ---- Unrecognised vect_type string (2026-09-22): previously fell through and left x UNCHANGED.
+                ////      The R front end rejects unknown strings before sampling; here we compute the exact
+                ////      Stan-math value rather than silently returning the input.
+                fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);
       
           }
       

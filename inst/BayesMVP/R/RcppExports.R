@@ -39,6 +39,10 @@ fn_reset_stan_load_timer <- function() {
     invisible(.Call(`_BayesMVP_fn_reset_stan_load_timer`))
 }
 
+Rcpp_fn_check_joint_trajectory <- function(EHMC_args_as_Rcpp_List) {
+    .Call(`_BayesMVP_Rcpp_fn_check_joint_trajectory`, EHMC_args_as_Rcpp_List)
+}
+
 Rcpp_wrapper_EIGEN_double_mat <- function(x, fn, vect_type, skip_checks) {
     .Call(`_BayesMVP_Rcpp_wrapper_EIGEN_double_mat`, x, fn, vect_type, skip_checks)
 }

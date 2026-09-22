@@ -285,7 +285,7 @@ override BASE_FLAGS =   $(CPU_FLAGS) \
 ## BASE_FLAGS += -DEIGEN_VECTORIZE
 ## BASE_FLAGS += -fopenmp
 ####### ----- CmdStan path(s) ----------------------------------------------------------------------------------------------------
-override CMDSTAN_PATH = $(shell "${R_HOME}/bin/Rscript" R_script_find_cmdstan_path.R)
+override CMDSTAN_PATH := $(shell "${R_HOME}/bin/Rscript" R_script_find_cmdstan_path.R)
 ##
 ## Define base directories
 override STAN_ROOT = $(CMDSTAN_PATH)/stan
@@ -308,7 +308,7 @@ $(info STAN_MATH_LIB is: $(STAN_MATH_LIB))
 ##
 ####### ----- BridgeStan path(s) -------------------------------------------------------------------------------------------------
 ## Find BridgeStan path:
-override BRIDGESTAN_PATH = $(shell "${R_HOME}/bin/Rscript" R_script_find_bridgestan_path.R)
+override BRIDGESTAN_PATH := $(shell "${R_HOME}/bin/Rscript" R_script_find_bridgestan_path.R)
 ## Set other BridgeStan paths:
 override BRIDGESTAN_SRC = $(BRIDGESTAN_PATH)/src
 ##
@@ -433,6 +433,9 @@ $(info DUMMY_MODEL_SO is: $(DUMMY_MODEL_SO))
 ##
 ##  ---------------------  SHLIB / linking ----------------------------------------------------------------------------
 ## First, create .BayesMVP directory and copy model file in users' home directory:
+## Keep the copied dummy model in a stable user-local package directory.  The
+## previous migration-specific path made the compiled extension depend on the
+## developer's temporary source tree name.
 override COPY_DIR_PATH=$(HOME)/BayesMVP
 $(info COPY_DIR_PATH is: $(COPY_DIR_PATH))
 $(shell mkdir -p $(COPY_DIR_PATH))
@@ -446,7 +449,7 @@ override PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO)
 #### PKG_LIBS+=-fsanitize=address,undefined ##
 ##
 ## Link to permanent location:
-PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO) -Wl,-rpath,$(COPY_DIR_PATH) -Wl,-rpath,$(TBB_PATH),--no-as-needed
+override PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO) -Wl,-rpath,$(COPY_DIR_PATH) -Wl,-rpath,$(TBB_PATH),--no-as-needed
 ##
 ##
 
@@ -458,5 +461,8 @@ PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO) -Wl,-rpath,$(COPY_DIR_PATH) -Wl,-rpath,$(T
 ## RcppParallel's DLL already being loaded in the session (which makes R CMD INSTALL's
 ## test-load phase, and any vanilla session, fail with "undefined symbol"). Link it
 ## explicitly so the package loads cleanly everywhere:
-override RCPP_PARALLEL_LIB_DIR=$(shell "$(R_HOME)/bin/Rscript" --vanilla -e 'cat(system.file("libs", package = "RcppParallel"))')
-PKG_LIBS += $(RCPP_PARALLEL_LIB_DIR)/RcppParallel.so -Wl,-rpath,$(RCPP_PARALLEL_LIB_DIR)
+override RCPP_PARALLEL_LIB_DIR:=$(shell "$(R_HOME)/bin/Rscript" --vanilla -e 'cat(system.file("libs", package = "RcppParallel"))')
+override PKG_LIBS += $(RCPP_PARALLEL_LIB_DIR)/RcppParallel.so -Wl,-rpath,$(RCPP_PARALLEL_LIB_DIR)
+
+# Package-local provider headers and the canonical installed NicoStan runtime.
+override PKG_CPPFLAGS += -I. -I../inst/include

@@ -1,13 +1,13 @@
 Package: BayesMVP
 Type: Package
-Title: BayesMVP: This is a "frozen" version of BayesMVP (https://github.com/CerulloE1996/BayesMVP) used for a simulation study.
-Version: 0.1
-Date: 2024-05-18
+Title: BayesMVP: Specialised Multivariate Probit Models Using NicoStan
+Version: 0.1.9000
+Date: 2026-09-21
 Author: Enzo Cerullo
 Maintainer: Enzo Cerullo <enzo.cerullo@bath.edu>
-Description: This is a "frozen" version of BayesMVP (https://github.com/CerulloE1996/BayesMVP) used for a simulation study comparing the latent class multivariate probit model (LC-MVP) to the latent class latent trait model (LC-LT) for the analysis of test accuracy data without a perfect gold standard/reference test.
+Description: Native manually differentiated multivariate probit and ordinal probit models, latent class models and reusable vectorised special functions using the shared NicoStan sampler.
 License: GPL-3
-Imports: Rcpp (>= 1.0.10), RcppEigen, RcppParallel, dqrng, cmdstanr, bridgestan, bayesplot, posterior, dplyr, ggplot2, tibble, tictoc, psych
+Imports: Rcpp (>= 1.0.10), RcppEigen, RcppParallel, dqrng, cmdstanr, bridgestan, bayesplot, posterior, dplyr, ggplot2, tibble, tictoc, psych, R6, digest, jsonlite, stringr, NicoStan (>= 0.1.9000)
 LinkingTo:
 Suggests: roxygen2
 Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd"))

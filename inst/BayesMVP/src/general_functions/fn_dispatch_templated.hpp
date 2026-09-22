@@ -192,10 +192,10 @@ template <> ALWAYS_INLINE double kernel_scalar<Fn::Phi_approx>(double x)    { re
 template <> ALWAYS_INLINE double kernel_scalar<Fn::log_Phi_approx>(double x){ return stan::math::log_inv_logit(x * (0.07056 * x * x + 1.5976)); }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::inv_Phi>(double x)       { return stan::math::inv_Phi(x); }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::inv_Phi_approx>(double p) {
-  return 2.74699999999999988631 * std::sinh(std::asinh(-0.3418 * std::log(1.0 / p - 1.0)) / 3.0);
+  return 5.494448514153059 * std::sinh(std::asinh(-0.34176618822627863 * std::log(1.0 / p - 1.0)) / 3.0);
 }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::inv_Phi_approx_from_logit_prob>(double lp) {
-  return 2.74699999999999988631 * std::sinh(std::asinh(0.3418 * lp) / 3.0);
+  return 5.494448514153059 * std::sinh(std::asinh(0.34176618822627863 * lp) / 3.0);
 }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::tanh>(double x)          { return std::tanh(x); }
 

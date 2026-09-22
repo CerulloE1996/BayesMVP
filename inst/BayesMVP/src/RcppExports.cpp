@@ -93,6 +93,17 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// Rcpp_fn_check_joint_trajectory
+Rcpp::List Rcpp_fn_check_joint_trajectory(const Rcpp::List EHMC_args_as_Rcpp_List);
+RcppExport SEXP _BayesMVP_Rcpp_fn_check_joint_trajectory(SEXP EHMC_args_as_Rcpp_ListSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_fn_check_joint_trajectory(EHMC_args_as_Rcpp_List));
+    return rcpp_result_gen;
+END_RCPP
+}
 // Rcpp_wrapper_EIGEN_double_mat
 Eigen::Matrix<double, -1, -1> Rcpp_wrapper_EIGEN_double_mat(const Eigen::Matrix<double, -1, -1> x, const std::string fn, const std::string vect_type, const bool skip_checks);
 RcppExport SEXP _BayesMVP_Rcpp_wrapper_EIGEN_double_mat(SEXP xSEXP, SEXP fnSEXP, SEXP vect_typeSEXP, SEXP skip_checksSEXP) {
@@ -725,6 +736,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BayesMVP_fn_get_stan_load_time_sec", (DL_FUNC) &_BayesMVP_fn_get_stan_load_time_sec, 0},
     {"_BayesMVP_fn_get_stan_load_count", (DL_FUNC) &_BayesMVP_fn_get_stan_load_count, 0},
     {"_BayesMVP_fn_reset_stan_load_timer", (DL_FUNC) &_BayesMVP_fn_reset_stan_load_timer, 0},
+    {"_BayesMVP_Rcpp_fn_check_joint_trajectory", (DL_FUNC) &_BayesMVP_Rcpp_fn_check_joint_trajectory, 1},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_mat", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_mat, 4},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec, 4},
     {"_BayesMVP_Rcpp_wrapper_fn_lp_grad", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_fn_lp_grad, 9},

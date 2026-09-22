@@ -226,6 +226,60 @@ static std::atomic<long long> g_n_tail_obs{0};
 
 
 
+////
+//// ---- 2026-09-22 (assistant, approved change "native exact tails"): forward declarations of the templated tail fix-ups
+////      (defined in MVP_log_scale_grad_calc_fns_T.hpp, which main.cpp includes right after this file), so the string-dispatch
+////      versions below can delegate to them for every setting other than the fully approximate one. Only the latent-trait
+////      PartialLog path (LC_LT_lp_grad_log_scale_MD_AD_fns.hpp) still calls these string-dispatch versions.
+////
+template <Vec vec>
+inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
+                                                               const std::vector<int> &index,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> Phi_Z,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> Z_std_norm,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_Z_std_norm,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> prob,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> y1_log_prob,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Bound_Z,
+                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Z_recip,
+                                                               const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Bound_Z,
+                                                               const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
+                                                               const KernelChoice &kernel_choice);
+
+template <Vec vec>
+inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
+                                                              const int num_overflows,
+                                                              const std::vector<int> &index,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> Phi_Z,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> Z_std_norm,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_Z_std_norm,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> prob,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> y1_log_prob,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Bound_Z,
+                                                              Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Z_recip,
+                                                              const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Bound_Z,
+                                                              const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
+                                                              const KernelChoice &kernel_choice);
+
+////
+//// ---- KernelChoice for the tails from the Model_args strings (Phi_type = strings(1), inv_Phi_type = strings(2)); the nuisance field is unused here:
+////
+inline KernelChoice fn_kernel_choice_for_tails_from_args(const Model_fn_args_struct &Model_args_as_cpp_struct) {
+  
+      KernelChoice kernel_choice_for_tails;
+      const std::string &Phi_type_for_tails     = Model_args_as_cpp_struct.Model_args_strings(1);
+      const std::string &inv_Phi_type_for_tails = Model_args_as_cpp_struct.Model_args_strings(2);
+      kernel_choice_for_tails.Phi_approx     = (Phi_type_for_tails == "Phi_approx") || (Phi_type_for_tails == "Phi_approx_2");
+      kernel_choice_for_tails.inv_Phi_approx = (inv_Phi_type_for_tails == "inv_Phi_approx");
+      kernel_choice_for_tails.nuisance       = NuisTf::Phi;
+      return kernel_choice_for_tails;
+      
+}
+
+
+
 ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_underflow(        const int t,
                                                                           const std::vector<int> &index,
                                                                           Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
@@ -240,6 +294,20 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_underflow(        const 
                                                                           const Eigen::Ref<const Eigen::Matrix<double, -1, -1>>  u_array,
                                                                           const Model_fn_args_struct &Model_args_as_cpp_struct
 ) {
+
+            ////
+            //// ---- 2026-09-22: any setting other than the fully approximate one uses the templated exact-capable version:
+            ////
+            {
+              const KernelChoice kernel_choice_for_tails = fn_kernel_choice_for_tails_from_args(Model_args_as_cpp_struct);
+              if (!(kernel_choice_for_tails.Phi_approx && kernel_choice_for_tails.inv_Phi_approx)) {
+                const Vec vec_for_tails = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
+                DISPATCH_VEC(vec_for_tails, fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T,
+                             t, index, Bound_U_Phi_Bound_Z, Phi_Z, Z_std_norm, log_Z_std_norm, prob, y1_log_prob,
+                             log_phi_Bound_Z, log_phi_Z_recip, Bound_Z, u_array, kernel_choice_for_tails);
+                return;
+              }
+            }
 
             const double sqrt_2_pi_recip = 1.0 / std::sqrt(2.0 * M_PI);
             const double a = 0.07056;
@@ -328,6 +396,20 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_overflow(     const int 
                                                                       const Eigen::Ref<const Eigen::Matrix<double, -1, -1>>  u_array,
                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct
 ) {
+
+         ////
+         //// ---- 2026-09-22: any setting other than the fully approximate one uses the templated exact-capable version:
+         ////
+         {
+           const KernelChoice kernel_choice_for_tails = fn_kernel_choice_for_tails_from_args(Model_args_as_cpp_struct);
+           if (!(kernel_choice_for_tails.Phi_approx && kernel_choice_for_tails.inv_Phi_approx)) {
+             const Vec vec_for_tails = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
+             DISPATCH_VEC(vec_for_tails, fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T,
+                          t, num_overflows, index, Bound_U_Phi_Bound_Z, Phi_Z, Z_std_norm, log_Z_std_norm, prob, y1_log_prob,
+                          log_phi_Bound_Z, log_phi_Z_recip, Bound_Z, u_array, kernel_choice_for_tails);
+             return;
+           }
+         }
 
          const double sqrt_2_pi_recip = 1.0 / std::sqrt(2.0 * M_PI);
          const double a = 0.07056;

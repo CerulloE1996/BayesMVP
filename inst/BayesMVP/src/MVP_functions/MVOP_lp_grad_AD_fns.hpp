@@ -355,7 +355,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         
         if (nuisance_transformation == "Phi") {
           u_vec.array() =   Phi(u_unconstrained_vec_var).array();
-          log_jac_u +=    - 0.5 * log(2 * M_PI) -  0.5 * sum(square(u_unconstrained_vec_var)) ;
+          log_jac_u +=    - 0.5 * u_unconstrained_vec_var.size() * log(2 * M_PI) -  0.5 * sum(square(u_unconstrained_vec_var)) ;
         } else if (nuisance_transformation == "Phi_approx") {
           u_vec.array() =   Phi_approx(u_unconstrained_vec_var).array();
           log_jac_u   +=    (a_times_3 * u_unconstrained_vec_var.array().square() +  b).array().log().sum();
@@ -363,13 +363,13 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
           log_jac_u   +=    sum(log1m(u_vec));
         } else if (nuisance_transformation == "Phi_approx_rough") {
           u_vec.array() =   inv_logit(1.702 * u_unconstrained_vec_var).array();
-          log_jac_u   +=    log(1.702) ;
+          log_jac_u   +=    u_unconstrained_vec_var.size() * log(1.702) ;
           log_jac_u   +=    sum(log(u_vec));
           log_jac_u   +=    sum(log1m(u_vec));
         } else if (nuisance_transformation == "tanh") {
           Eigen::Matrix<stan::math::var, -1, 1> tanh_u_unc = tanh(u_unconstrained_vec_var);
           u_vec.array() =     0.5 * (  tanh_u_unc.array() + 1.0).array() ;
-          log_jac_u  +=   - log(2.0) ;
+          log_jac_u  +=   u_unconstrained_vec_var.size() * log(2.0) ;   //// du/dx = 2 u (1 - u), so +log(2) per coordinate (was -log(2) once before 2026-09-22)
           log_jac_u   +=    sum(log(u_vec));
           log_jac_u   +=    sum(log1m(u_vec));
         }
@@ -530,10 +530,15 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                       if (Bound_Z_hi < underflow_threshold) {
                         
                             //// ================= LEFT TAIL (log scale) =================
-                            //// log Phi(x) ~=~ log_inv_logit(0.07056*x^3 + 1.5976*x)
+                            //// Phi_type = "Phi" (2026-09-22, assistant, approved change): EXACT log Phi (log_Phi_exact_var, double_fns.hpp;
+                            ////   derivative phi(x)/Phi(x)) and EXACT inverse below (was the Phi_approx tail for every Phi_type).
+                            //// Otherwise: log Phi(x) ~=~ log_inv_logit(0.07056*x^3 + 1.5976*x), unchanged.
                             ////
-                            const stan::math::var log_Phi_lo = stan::math::log_inv_logit( 0.07056 * stan::math::square(Bound_Z_lo) * Bound_Z_lo + 1.5976 * Bound_Z_lo );
-                            const stan::math::var log_Phi_hi = stan::math::log_inv_logit( 0.07056 * stan::math::square(Bound_Z_hi) * Bound_Z_hi + 1.5976 * Bound_Z_hi );
+                            const bool use_exact_normal_tails = (Phi_type == "Phi");
+                            const stan::math::var log_Phi_lo = use_exact_normal_tails ? log_Phi_exact_var(Bound_Z_lo)
+                                                                                      : stan::math::log_inv_logit( 0.07056 * stan::math::square(Bound_Z_lo) * Bound_Z_lo + 1.5976 * Bound_Z_lo );
+                            const stan::math::var log_Phi_hi = use_exact_normal_tails ? log_Phi_exact_var(Bound_Z_hi)
+                                                                                      : stan::math::log_inv_logit( 0.07056 * stan::math::square(Bound_Z_hi) * Bound_Z_hi + 1.5976 * Bound_Z_hi );
                             ////
                             //// y1 = log(Phi_hi - Phi_lo) = log_diff_exp(log_Phi_hi, log_Phi_lo).
                             //// Bottom category: log_Phi_lo ~ -7e7 -> exp() underflows to exact 0
@@ -546,17 +551,25 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                             const stan::math::var log_Phi_Z    = stan::math::log_sum_exp( log_Phi_lo + stan::math::log1m(u_array(n, t)),
                                                                                           log_Phi_hi + stan::math::log(u_array(n, t)) );
                             const stan::math::var log_1m_Phi_Z = stan::math::log1m_exp(log_Phi_Z);
-                            const stan::math::var logit_Phi_Z  = log_Phi_Z - log_1m_Phi_Z;
                             ////
-                            Z_std_norm(t) = inv_Phi_approx_from_logit_prob_var(logit_Phi_Z);
+                            if (use_exact_normal_tails) {
+                              Z_std_norm(t) = inv_Phi_from_log_p_exact_var(log_Phi_Z, log_1m_Phi_Z);    //// exact; dZ/dlog Phi_Z = Phi_Z/phi(Z)
+                            } else {
+                              const stan::math::var logit_Phi_Z  = log_Phi_Z - log_1m_Phi_Z;
+                              Z_std_norm(t) = inv_Phi_approx_from_logit_prob_var(logit_Phi_Z);
+                            }
                         
                       } else if (Bound_Z_lo > overflow_threshold) {
                         
                             //// ================= RIGHT TAIL (log scale) =================
-                            //// log(1 - Phi(x)) ~=~ log_inv_logit( -(0.07056*x^3 + 1.5976*x) )
+                            //// Phi_type = "Phi" (2026-09-22, assistant, approved change): EXACT log(1 - Phi(x)) = log Phi(-x) and EXACT inverse below.
+                            //// Otherwise: log(1 - Phi(x)) ~=~ log_inv_logit( -(0.07056*x^3 + 1.5976*x) ), unchanged.
                             ////
-                            const stan::math::var log_1m_Phi_lo = stan::math::log_inv_logit( - 0.07056 * stan::math::square(Bound_Z_lo) * Bound_Z_lo - 1.5976 * Bound_Z_lo );
-                            const stan::math::var log_1m_Phi_hi = stan::math::log_inv_logit( - 0.07056 * stan::math::square(Bound_Z_hi) * Bound_Z_hi - 1.5976 * Bound_Z_hi );
+                            const bool use_exact_normal_tails = (Phi_type == "Phi");
+                            const stan::math::var log_1m_Phi_lo = use_exact_normal_tails ? log_Phi_exact_var(-Bound_Z_lo)
+                                                                                         : stan::math::log_inv_logit( - 0.07056 * stan::math::square(Bound_Z_lo) * Bound_Z_lo - 1.5976 * Bound_Z_lo );
+                            const stan::math::var log_1m_Phi_hi = use_exact_normal_tails ? log_Phi_exact_var(-Bound_Z_hi)
+                                                                                         : stan::math::log_inv_logit( - 0.07056 * stan::math::square(Bound_Z_hi) * Bound_Z_hi - 1.5976 * Bound_Z_hi );
                             ////
                             //// y1 = log((1 - Phi_lo) - (1 - Phi_hi)) = log_diff_exp(log_1m_Phi_lo, log_1m_Phi_hi).
                             //// Top category: log_1m_Phi_hi ~ -7e7 -> y1 = log_1m_Phi_lo, identical to
@@ -569,9 +582,13 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                             const stan::math::var log_1m_Phi_Z = stan::math::log_sum_exp( log_1m_Phi_lo + stan::math::log1m(u_array(n, t)),
                                                                                           log_1m_Phi_hi + stan::math::log(u_array(n, t)) );
                             const stan::math::var log_Phi_Z    = stan::math::log1m_exp(log_1m_Phi_Z);
-                            const stan::math::var logit_Phi_Z  = log_Phi_Z - log_1m_Phi_Z;
                             ////
-                            Z_std_norm(t) = inv_Phi_approx_from_logit_prob_var(logit_Phi_Z);
+                            if (use_exact_normal_tails) {
+                              Z_std_norm(t) = inv_Phi_from_log_p_exact_var(log_Phi_Z, log_1m_Phi_Z);    //// exact; dZ/dlog(1 - Phi_Z) = -(1 - Phi_Z)/phi(Z)
+                            } else {
+                              const stan::math::var logit_Phi_Z  = log_Phi_Z - log_1m_Phi_Z;
+                              Z_std_norm(t) = inv_Phi_approx_from_logit_prob_var(logit_Phi_Z);
+                            }
                         
                       } else {
                         
@@ -579,14 +596,32 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                             //// Guaranteed here: Bound_Z_hi >= UF and Bound_Z_lo <= OF, so
                             //// prob_t >= ~Phi(UF) > 0 -- no log(0), bounded cancellation.
                             ////
-                            const stan::math::var Phi_lo = stan::math::Phi(Bound_Z_lo);
-                            const stan::math::var Phi_hi = stan::math::Phi(Bound_Z_hi);
-                            const stan::math::var prob_t = Phi_hi - Phi_lo;
-                            ////
-                            y1(t) = stan::math::log(prob_t);
-                            ////
-                            const stan::math::var Phi_Z = Phi_lo + prob_t * u_array(n, t);
-                            Z_std_norm(t) = stan::math::inv_Phi(Phi_Z);
+                            if ((Phi_type == "Phi") && (Bound_Z_lo > 0.0)) {
+                              
+                                  //// 2026-09-22 (assistant, approved change): right-side seam fixed by reflection. Both bounds are positive,
+                                  //// so Phi(hi) - Phi(lo) would cancel near lo = +7.5. With Phi(x) = 1 - Phi(-x):
+                                  ////   prob = Phi(-lo) - Phi(-hi),   1 - Phi_Z = (1 - u) Phi(-lo) + u Phi(-hi),   Z = -Phi^{-1}(1 - Phi_Z).
+                                  const stan::math::var Phi_minus_lo = stan::math::Phi(-Bound_Z_lo);
+                                  const stan::math::var Phi_minus_hi = stan::math::Phi(-Bound_Z_hi);
+                                  const stan::math::var prob_t = Phi_minus_lo - Phi_minus_hi;
+                                  ////
+                                  y1(t) = stan::math::log(prob_t);
+                                  ////
+                                  const stan::math::var one_m_Phi_Z = Phi_minus_hi + prob_t * (1.0 - u_array(n, t));
+                                  Z_std_norm(t) = - stan::math::inv_Phi(one_m_Phi_Z);
+                              
+                            } else {
+                              
+                                  const stan::math::var Phi_lo = stan::math::Phi(Bound_Z_lo);
+                                  const stan::math::var Phi_hi = stan::math::Phi(Bound_Z_hi);
+                                  const stan::math::var prob_t = Phi_hi - Phi_lo;
+                                  ////
+                                  y1(t) = stan::math::log(prob_t);
+                                  ////
+                                  const stan::math::var Phi_Z = Phi_lo + prob_t * u_array(n, t);
+                                  Z_std_norm(t) = stan::math::inv_Phi(Phi_Z);
+                              
+                            }
                         
                       }
                       

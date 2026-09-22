@@ -1497,26 +1497,26 @@ inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> fn_convert_Eigen_vec_
  
 inline stan::math::var  inv_Phi_approx_var( stan::math::var x )  {
    stan::math::var m_logit_p =   stan::math::log( 1.0/x  - 1.0)  ;
-   stan::math::var x_i = -0.3418*m_logit_p;
+   stan::math::var x_i = -0.34176618822627863*m_logit_p;
    stan::math::var asinh_stuff_div_3 =  0.33333333333333331483 *  stan::math::log( x_i  +   stan::math::sqrt(  stan::math::fma(x_i, x_i, 1.0) ) )  ;          // now do arc_sinh part
    stan::math::var exp_x_i =   stan::math::exp(asinh_stuff_div_3);
-   return  2.74699999999999988631 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
+   return  2.7472242570765295 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
 }
 
 
 inline Eigen::Matrix<stan::math::var, -1, 1  >  inv_Phi_approx_var( Eigen::Matrix<stan::math::var, -1, 1  > x )  {
-   Eigen::Matrix<stan::math::var, -1, 1  > x_i = -0.3418*stan::math::log( ( 1.0/x.array()  - 1.0).matrix() );
+   Eigen::Matrix<stan::math::var, -1, 1  > x_i = -0.34176618822627863*stan::math::log( ( 1.0/x.array()  - 1.0).matrix() );
    Eigen::Matrix<stan::math::var, -1, 1  > asinh_stuff_div_3 =  0.33333333333333331483 *  stan::math::log( x_i  +   stan::math::sqrt(  stan::math::fma(x_i, x_i, 1.0) ) )  ;          // now do arc_sinh part
    Eigen::Matrix<stan::math::var, -1, 1  > exp_x_i =   stan::math::exp(asinh_stuff_div_3);
-   return  2.74699999999999988631 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0).array() / exp_x_i.array() ) ;  //   now do sinh parth part
+   return  2.7472242570765295 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0).array() / exp_x_i.array() ) ;  //   now do sinh parth part
 }
 
 
 inline stan::math::var  inv_Phi_approx_from_logit_prob_var( stan::math::var logit_p )  {
-   stan::math::var x_i = 0.3418*logit_p;
+   stan::math::var x_i = 0.34176618822627863*logit_p;
    stan::math::var asinh_stuff_div_3 =  0.33333333333333331483 *  stan::math::log( x_i  +   stan::math::sqrt(  stan::math::fma(x_i, x_i, 1.0) ) )  ;          // now do arc_sinh part
    stan::math::var exp_x_i =   stan::math::exp(asinh_stuff_div_3);
-   return  2.74699999999999988631 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
+   return  2.7472242570765295 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
 }
 
 

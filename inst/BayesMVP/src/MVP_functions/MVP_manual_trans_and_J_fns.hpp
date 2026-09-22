@@ -88,7 +88,8 @@ ALWAYS_INLINE double fn_MVP_compute_nuisance_log_jac_u(       const Eigen::Ref<c
           
           if (nuisance_transformation == "Phi") {
         
-              log_jac_u  =  - 0.5 * stan::math::log(2 * M_PI)  - 0.5 * u_unc_vec.array().square().sum() ;
+              log_jac_u  =  - 0.5 * u_unc_vec.size() * stan::math::log(2 * M_PI)
+                            - 0.5 * u_unc_vec.array().square().sum() ;
         
           } else if (nuisance_transformation == "Phi_approx") {
         
@@ -98,12 +99,16 @@ ALWAYS_INLINE double fn_MVP_compute_nuisance_log_jac_u(       const Eigen::Ref<c
         
           } else if (nuisance_transformation == "Phi_approx_rough") {
         
-              log_jac_u  = stan::math::log(1.702) + fn_EIGEN_double( u_vec, "log", vect_type_log).sum() + fn_EIGEN_double( u_vec, "log1m", vect_type_log).sum()  ;
+              log_jac_u  = u_unc_vec.size() * stan::math::log(1.702)
+                            + fn_EIGEN_double( u_vec, "log", vect_type_log).sum()
+                            + fn_EIGEN_double( u_vec, "log1m", vect_type_log).sum()  ;
         
         
           } else if (nuisance_transformation == "tanh") {
         
-              log_jac_u  = - stan::math::log(2.0) + fn_EIGEN_double( u_vec, "log", vect_type_log ).sum() + fn_EIGEN_double( u_vec , "log1m", vect_type_log ).sum();
+              log_jac_u  = u_unc_vec.size() * stan::math::log(2.0)
+                            + fn_EIGEN_double( u_vec, "log", vect_type_log ).sum()
+                            + fn_EIGEN_double( u_vec , "log1m", vect_type_log ).sum();
         
           }
           
@@ -195,7 +200,10 @@ ALWAYS_INLINE void  fn_MVP_nuisance_deriv_of_log_det_J(   Eigen::Matrix<double, 
             
           } else if (nuisance_transformation == "Phi_approx") {   
              
-                d_J_wrt_duu.array() += (  ( du_wrt_duu.array() * (  (1.0 - 2.0 * u_vec.array()  ) / ( u_vec.array() * (1.0 - u_vec.array() ) )  )   ).array()  + (  (  1.0 - 2.0 * u_vec.array() )  / (a_times_3*u_unc_vec.array().square() + b).array() ) ).array() ;    
+                //// d/dx [ log(g'(x)) + log(u) + log(1 - u) ], with g(x) = a x^3 + b x, u = inv_logit(g(x)), g' = 3 a x^2 + b:
+                ////   = g' (1 - 2u) + g''/g',   g'' = 6 a x   (matches fn_MVP_nuisance_deriv_of_log_det_J_T in MVP_helpers_migrated.hpp).
+                //// The second term was (1 - 2u)/g' before 2026-09-22, which is wrong everywhere except x = 0.
+                d_J_wrt_duu.array() += (  ( du_wrt_duu.array() * (  (1.0 - 2.0 * u_vec.array()  ) / ( u_vec.array() * (1.0 - u_vec.array() ) )  )   ).array()  + (  ( 6.0 * a * u_unc_vec.array() )  / (a_times_3*u_unc_vec.array().square() + b).array() ) ).array() ;
             
           } else if (nuisance_transformation == "Phi_approx_rough") {   ;    
             

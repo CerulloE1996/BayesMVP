@@ -94,8 +94,127 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 
 
 //// =====================================================================================
+//// 1a. Exact normal-tail kernels over a gathered vector (tail rows only).
+////
+//// Added 2026-09-22 (assistant, approved change "native exact tails"). The tail fix-ups below
+//// previously used the Phi_approx pair (log_Phi_approx + inv_Phi_approx_from_logit_prob) for
+//// EVERY Phi_type, which spliced the exact interior (Phi_type = "Phi") onto cubic-logistic tails
+//// at overflow_threshold / underflow_threshold (a jump of ~10.7 nats in log Phi at -7.5).
+//// For the exact setting these two helpers supply the exact log-space functions instead:
+////
+////   fn_apply_log_Phi_exact_inplace_T:      x -> log Phi(x)       (fast_log_Phi_AVX512 / _AVX2 / scalar fast_log_Phi;
+////                                                                 Mills-ratio continued fraction for x < -2.5, so
+////                                                                 relative-accurate at every tail argument)
+////   fn_inv_Phi_from_log_p_exact_T:         (log p, log(1-p)) -> Phi^{-1}(p)
+////                                                                (AS241 / Wichura 1988, fed r = sqrt(-log min(p, 1-p))
+////                                                                 directly, so no exp/log of an extreme probability)
+////
+//// The kernels are the existing ones in inst/include/BayesMVP/math/fast_and_approx_AVX*_fns.hpp and
+//// general_functions/double_fns.hpp. The level falls back AVX512 -> AVX2 -> scalar exactly as apply_raw
+//// does; the scalar remainder (and Vec::Scalar) uses the double versions.
+//// =====================================================================================
+template <Vec vec>
+inline void fn_apply_log_Phi_exact_inplace_T(Eigen::Matrix<double, -1, 1> &values_in_log_Phi_out) {
+  
+        double *data_pointer = values_in_log_Phi_out.data();
+        const int n_values = static_cast<int>(values_in_log_Phi_out.size());
+        int index_value = 0;
+        if constexpr (vec == Vec::AVX512) {
+          #if BMVP_HAS_AVX512
+            for (; index_value + 8 <= n_values; index_value += 8) {
+              _mm512_storeu_pd(data_pointer + index_value, fast_log_Phi_AVX512(_mm512_loadu_pd(data_pointer + index_value)));
+            }
+          #elif BMVP_HAS_AVX2
+            for (; index_value + 4 <= n_values; index_value += 4) {
+              _mm256_storeu_pd(data_pointer + index_value, fast_log_Phi_AVX2(_mm256_loadu_pd(data_pointer + index_value)));
+            }
+          #endif
+        } else if constexpr (vec == Vec::AVX2) {
+          #if BMVP_HAS_AVX2
+            for (; index_value + 4 <= n_values; index_value += 4) {
+              _mm256_storeu_pd(data_pointer + index_value, fast_log_Phi_AVX2(_mm256_loadu_pd(data_pointer + index_value)));
+            }
+          #endif
+        }
+        for (; index_value < n_values; ++index_value) {
+          data_pointer[index_value] = fast_log_Phi(data_pointer[index_value]);
+        }
+  
+}
+
+
+
+
+template <Vec vec>
+inline void fn_inv_Phi_from_log_p_exact_T(  const Eigen::Matrix<double, -1, 1> &log_p_vec,
+                                            const Eigen::Matrix<double, -1, 1> &log_1m_p_vec,
+                                            Eigen::Matrix<double, -1, 1> &Z_out_vec
+) {
+  
+        const int n_values = static_cast<int>(log_p_vec.size());
+        Z_out_vec.resize(n_values);
+        const double *log_p_pointer = log_p_vec.data();
+        const double *log_1m_p_pointer = log_1m_p_vec.data();
+        double *Z_out_pointer = Z_out_vec.data();
+        int index_value = 0;
+        if constexpr (vec == Vec::AVX512) {
+          #if BMVP_HAS_AVX512
+            for (; index_value + 8 <= n_values; index_value += 8) {
+              _mm512_storeu_pd(Z_out_pointer + index_value,
+                               fast_inv_Phi_from_log_p_wo_checks_AVX512(_mm512_loadu_pd(log_p_pointer + index_value),
+                                                                        _mm512_loadu_pd(log_1m_p_pointer + index_value)));
+            }
+          #elif BMVP_HAS_AVX2
+            for (; index_value + 4 <= n_values; index_value += 4) {
+              _mm256_storeu_pd(Z_out_pointer + index_value,
+                               fast_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p_pointer + index_value),
+                                                                      _mm256_loadu_pd(log_1m_p_pointer + index_value)));
+            }
+          #endif
+        } else if constexpr (vec == Vec::AVX2) {
+          #if BMVP_HAS_AVX2
+            for (; index_value + 4 <= n_values; index_value += 4) {
+              _mm256_storeu_pd(Z_out_pointer + index_value,
+                               fast_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p_pointer + index_value),
+                                                                      _mm256_loadu_pd(log_1m_p_pointer + index_value)));
+            }
+          #endif
+        }
+        for (; index_value < n_values; ++index_value) {
+          Z_out_pointer[index_value] = fast_inv_Phi_from_log_p(log_p_pointer[index_value], log_1m_p_pointer[index_value]);
+        }
+  
+}
+
+
+
+
+//// =====================================================================================
 //// 1. GHK log-scale fix-ups for the problem rows (index). Eigen indexed views need a
 ////    temporary per expression; those allocations are unavoidable and small (|index| rows).
+////
+////    2026-09-22 (assistant, approved change): both functions now take the KernelChoice.
+////     - Phi_approx AND inv_Phi_approx (the fully approximate setting): the original code,
+////       unchanged, runs first and returns.
+////     - otherwise the tail CDF follows kernel_choice.Phi_approx and the tail inverse follows
+////       kernel_choice.inv_Phi_approx, each with its OWN matching derivative, so the value and
+////       the manual gradient stay consistent in every combination:
+////
+////       exact CDF (Phi_type = "Phi"):
+////         underflow (y = 0, Bound_Z < underflow_threshold):  y1 = log Phi(Bound_Z)
+////         overflow  (y = 1, Bound_Z > overflow_threshold):   y1 = log(1 - Phi(Bound_Z)) = log Phi(-Bound_Z)
+////         |d prob / d Bound_Z| = phi(Bound_Z)   =>  log_phi_Bound_Z = -Bound_Z^2/2 - 0.5 log(2 pi)
+////       exact inverse (inv_Phi_type = "inv_Phi"):
+////         Z = Phi^{-1}(Phi_Z) from (log Phi_Z, log(1 - Phi_Z))
+////         dZ / d Phi_Z = 1 / phi(Z)             =>  log_phi_Z_recip = +Z^2/2 + 0.5 log(2 pi)
+////
+////       These are the same derivative quantities the standard-scale pass uses for the exact
+////       setting (fn_MVP_compute_phi_Bound_Z_cols_T / fn_MVP_compute_phi_Z_recip_cols_T), and the
+////       downstream GHK chain rule consumes only y1_log_prob, log_phi_Bound_Z, log_phi_Z_recip,
+////       Z_std_norm and u, so no other gradient code needs to change:
+////         d y1 / d Bound_Z   = (1 - 2y) phi(Bound_Z) / prob                [underflow: +phi(B)/Phi(B); overflow: -phi(B)/(1-Phi(B))]
+////         d Z / d Bound_Z    = (y - (2y - 1) u) phi(Bound_Z) / phi(Z)      [underflow: u phi(B)/phi(Z); overflow: (1-u) phi(B)/phi(Z)]
+////         d Z / d u          = prob / phi(Z)                               [underflow: Phi(B)/phi(Z); overflow: (1-Phi(B))/phi(Z)]
 //// =====================================================================================
 template <Vec vec>
 inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
@@ -109,48 +228,134 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                                                                Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Bound_Z,
                                                                Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Z_recip,
                                                                const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Bound_Z,
-                                                               const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array
+                                                               const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
+                                                               const KernelChoice &kernel_choice
 ) {
   
         const double a_times_3 = 3.0 * 0.07056, b = 1.5976;
         typedef Eigen::Matrix<double, -1, 1> V;
-      
-        V log_Bound_U_Phi_Bound_Z = Bound_Z(index, t);
-        apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z);
-        V tmp = log_Bound_U_Phi_Bound_Z;  apply_inplace<vec, Fn::exp>(tmp);
-        Bound_U_Phi_Bound_Z(index, t) = tmp;
-      
-        V u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
-        V log_Phi_Z = u_log + log_Bound_U_Phi_Bound_Z;
-        tmp = log_Phi_Z;  apply_inplace<vec, Fn::exp>(tmp);
-        Phi_Z(index, t) = tmp;
-      
-        V log_1m_Phi_Z = Bound_U_Phi_Bound_Z(index, t).array() * u_array(index, t).array();
-        apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z);
-        V logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
-        apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(logit_Phi_Z);
-        Z_std_norm(index, t) = logit_Phi_Z;
-      
-        tmp = logit_Phi_Z.cwiseAbs();  apply_inplace<vec, Fn::log>(tmp);
-        log_Z_std_norm(index, t) = tmp;
-      
-        y1_log_prob(index, t) = log_Bound_U_Phi_Bound_Z;
-        prob(index, t)        = Bound_U_Phi_Bound_Z(index, t);
-      
-        V log_Bound_U_Phi_Bound_Z_1m = Bound_U_Phi_Bound_Z(index, t);
-        apply_inplace<vec, Fn::log1m>(log_Bound_U_Phi_Bound_Z_1m);
-      
-        tmp = Bound_Z(index, t);
-        tmp.array() = a_times_3 * tmp.array().square() + b;
-        apply_inplace<vec, Fn::log>(tmp);
-        tmp.array() += log_Bound_U_Phi_Bound_Z.array() + log_Bound_U_Phi_Bound_Z_1m.array();
-        log_phi_Bound_Z(index, t) = tmp;
-      
-        tmp = Z_std_norm(index, t);
-        tmp.array() = a_times_3 * tmp.array().square() + b;
-        apply_inplace<vec, Fn::log>(tmp);
-        tmp.array() += log_Phi_Z.array() + log_1m_Phi_Z.array();
-        log_phi_Z_recip(index, t) = -tmp;
+        
+        if (kernel_choice.Phi_approx && kernel_choice.inv_Phi_approx) {
+          
+                //// ---- fully approximate setting: original code, unchanged ----
+                V log_Bound_U_Phi_Bound_Z = Bound_Z(index, t);
+                apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z);
+                V tmp = log_Bound_U_Phi_Bound_Z;  apply_inplace<vec, Fn::exp>(tmp);
+                Bound_U_Phi_Bound_Z(index, t) = tmp;
+              
+                V u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
+                V log_Phi_Z = u_log + log_Bound_U_Phi_Bound_Z;
+                tmp = log_Phi_Z;  apply_inplace<vec, Fn::exp>(tmp);
+                Phi_Z(index, t) = tmp;
+              
+                V log_1m_Phi_Z = Bound_U_Phi_Bound_Z(index, t).array() * u_array(index, t).array();
+                apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z);
+                V logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
+                apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(logit_Phi_Z);
+                Z_std_norm(index, t) = logit_Phi_Z;
+              
+                tmp = logit_Phi_Z.cwiseAbs();  apply_inplace<vec, Fn::log>(tmp);
+                log_Z_std_norm(index, t) = tmp;
+              
+                y1_log_prob(index, t) = log_Bound_U_Phi_Bound_Z;
+                prob(index, t)        = Bound_U_Phi_Bound_Z(index, t);
+              
+                V log_Bound_U_Phi_Bound_Z_1m = Bound_U_Phi_Bound_Z(index, t);
+                apply_inplace<vec, Fn::log1m>(log_Bound_U_Phi_Bound_Z_1m);
+              
+                tmp = Bound_Z(index, t);
+                tmp.array() = a_times_3 * tmp.array().square() + b;
+                apply_inplace<vec, Fn::log>(tmp);
+                tmp.array() += log_Bound_U_Phi_Bound_Z.array() + log_Bound_U_Phi_Bound_Z_1m.array();
+                log_phi_Bound_Z(index, t) = tmp;
+              
+                tmp = Z_std_norm(index, t);
+                tmp.array() = a_times_3 * tmp.array().square() + b;
+                apply_inplace<vec, Fn::log>(tmp);
+                tmp.array() += log_Phi_Z.array() + log_1m_Phi_Z.array();
+                log_phi_Z_recip(index, t) = -tmp;
+                
+                return;
+          
+        }
+        
+        ////
+        //// ---- exact CDF and/or exact inverse (Phi_type = "Phi" and/or inv_Phi_type = "inv_Phi"):
+        ////
+        const double half_log_two_pi = 0.91893853320467274178;   //// 0.5 * log(2 pi)
+        
+        {
+          
+                ////
+                //// ---- log Phi(Bound_Z): exact log-space normal CDF, or the Phi_approx tail:
+                ////
+                V log_Phi_Bound_Z_vec = Bound_Z(index, t);
+                if (!kernel_choice.Phi_approx) fn_apply_log_Phi_exact_inplace_T<vec>(log_Phi_Bound_Z_vec);
+                else                           apply_inplace<vec, Fn::log_Phi_approx>(log_Phi_Bound_Z_vec);
+                V Phi_Bound_Z_vec = log_Phi_Bound_Z_vec;
+                apply_inplace<vec, Fn::exp>(Phi_Bound_Z_vec);
+                Bound_U_Phi_Bound_Z(index, t) = Phi_Bound_Z_vec;
+                
+                ////
+                //// ---- Phi_Z = u * Phi(Bound_Z), held on the log scale:
+                ////
+                V log_u_vec = u_array(index, t);
+                apply_inplace<vec, Fn::log>(log_u_vec);
+                V log_Phi_Z_vec = log_u_vec + log_Phi_Bound_Z_vec;
+                V Phi_Z_vec = log_Phi_Z_vec;
+                apply_inplace<vec, Fn::exp>(Phi_Z_vec);
+                Phi_Z(index, t) = Phi_Z_vec;
+                V log_1m_Phi_Z_vec = Phi_Bound_Z_vec.array() * u_array(index, t).array();    //// tiny argument, so log1m is accurate
+                apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z_vec);
+                
+                ////
+                //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)), or the Phi_approx inverse:
+                ////
+                V Z_vec;
+                if (!kernel_choice.inv_Phi_approx) {
+                  fn_inv_Phi_from_log_p_exact_T<vec>(log_Phi_Z_vec, log_1m_Phi_Z_vec, Z_vec);
+                } else {
+                  Z_vec = log_Phi_Z_vec - log_1m_Phi_Z_vec;
+                  apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(Z_vec);
+                }
+                Z_std_norm(index, t) = Z_vec;
+                V log_abs_Z_vec = Z_vec.cwiseAbs();
+                apply_inplace<vec, Fn::log>(log_abs_Z_vec);
+                log_Z_std_norm(index, t) = log_abs_Z_vec;
+                
+                y1_log_prob(index, t) = log_Phi_Bound_Z_vec;
+                prob(index, t)        = Phi_Bound_Z_vec;
+                
+                ////
+                //// ---- log |d prob / d Bound_Z|: exact log phi(Bound_Z), or the Phi_approx derivative:
+                ////
+                V log_phi_Bound_Z_vec = Bound_Z(index, t);
+                if (!kernel_choice.Phi_approx) {
+                  log_phi_Bound_Z_vec.array() = -0.5 * log_phi_Bound_Z_vec.array().square() - half_log_two_pi;
+                } else {
+                  V log_1m_Phi_Bound_Z_vec = Phi_Bound_Z_vec;
+                  apply_inplace<vec, Fn::log1m>(log_1m_Phi_Bound_Z_vec);
+                  log_phi_Bound_Z_vec.array() = a_times_3 * log_phi_Bound_Z_vec.array().square() + b;
+                  apply_inplace<vec, Fn::log>(log_phi_Bound_Z_vec);
+                  log_phi_Bound_Z_vec.array() += log_Phi_Bound_Z_vec.array() + log_1m_Phi_Bound_Z_vec.array();
+                }
+                log_phi_Bound_Z(index, t) = log_phi_Bound_Z_vec;
+                
+                ////
+                //// ---- log(dZ / d Phi_Z): exact -log phi(Z), or the Phi_approx inverse derivative:
+                ////
+                V log_phi_Z_recip_vec = Z_vec;
+                if (!kernel_choice.inv_Phi_approx) {
+                  log_phi_Z_recip_vec.array() = 0.5 * log_phi_Z_recip_vec.array().square() + half_log_two_pi;
+                } else {
+                  log_phi_Z_recip_vec.array() = a_times_3 * log_phi_Z_recip_vec.array().square() + b;
+                  apply_inplace<vec, Fn::log>(log_phi_Z_recip_vec);
+                  log_phi_Z_recip_vec.array() += log_Phi_Z_vec.array() + log_1m_Phi_Z_vec.array();
+                  log_phi_Z_recip_vec = -log_phi_Z_recip_vec;
+                }
+                log_phi_Z_recip(index, t) = log_phi_Z_recip_vec;
+          
+        }
   
 }
 
@@ -170,51 +375,143 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Bound_Z,
                                                               Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_phi_Z_recip,
                                                               const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Bound_Z,
-                                                              const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array
+                                                              const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
+                                                              const KernelChoice &kernel_choice
 ) {
   
         const double a_times_3 = 3.0 * 0.07056, b = 1.5976;
         typedef Eigen::Matrix<double, -1, 1> V;
-      
-        V log_Bound_U_Phi_Bound_Z_1m = -Bound_Z(index, t);
-        apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z_1m);
-        V Bound_U_Phi_Bound_Z_1m = log_Bound_U_Phi_Bound_Z_1m;  apply_inplace<vec, Fn::exp>(Bound_U_Phi_Bound_Z_1m);
-        V log_Bound_U_Phi_Bound_Z = Bound_U_Phi_Bound_Z_1m;     apply_inplace<vec, Fn::log1m>(log_Bound_U_Phi_Bound_Z);
-      
-        Bound_U_Phi_Bound_Z(index, t).array() = 1.0 - Bound_U_Phi_Bound_Z_1m.array();
-      
-        Eigen::Matrix<double, -1, -1> lse2(num_overflows, 2);
-        V u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
-        lse2.col(0) = log_Bound_U_Phi_Bound_Z_1m + u_log;
-        lse2.col(1) = log_Bound_U_Phi_Bound_Z;
-        V log_Phi_Z = fn_log_sum_exp_2d_T<vec>(lse2);
-      
-        V tmp = log_Phi_Z;  apply_inplace<vec, Fn::exp>(tmp);
-        Phi_Z(index, t) = tmp;
-      
-        V log_1m_Phi_Z = u_array(index, t);  apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z);
-        log_1m_Phi_Z.array() += log_Bound_U_Phi_Bound_Z_1m.array();
-      
-        V logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
-        apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(logit_Phi_Z);
-        Z_std_norm(index, t) = logit_Phi_Z;
-        tmp = logit_Phi_Z.cwiseAbs();  apply_inplace<vec, Fn::log>(tmp);
-        log_Z_std_norm(index, t) = tmp;
-      
-        y1_log_prob(index, t) = log_Bound_U_Phi_Bound_Z_1m;
-        prob(index, t)        = Bound_U_Phi_Bound_Z_1m;
-      
-        tmp = Bound_Z(index, t);
-        tmp.array() = a_times_3 * tmp.array().square() + b;
-        apply_inplace<vec, Fn::log>(tmp);
-        tmp.array() += log_Bound_U_Phi_Bound_Z.array() + log_Bound_U_Phi_Bound_Z_1m.array();
-        log_phi_Bound_Z(index, t) = tmp;
-      
-        tmp = Z_std_norm(index, t);
-        tmp.array() = a_times_3 * tmp.array().square() + b;
-        apply_inplace<vec, Fn::log>(tmp);
-        tmp.array() += log_Phi_Z.array() + log_1m_Phi_Z.array();
-        log_phi_Z_recip(index, t) = -tmp;
+        
+        if (kernel_choice.Phi_approx && kernel_choice.inv_Phi_approx) {
+          
+                //// ---- fully approximate setting: original code, unchanged ----
+                V log_Bound_U_Phi_Bound_Z_1m = -Bound_Z(index, t);
+                apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z_1m);
+                V Bound_U_Phi_Bound_Z_1m = log_Bound_U_Phi_Bound_Z_1m;  apply_inplace<vec, Fn::exp>(Bound_U_Phi_Bound_Z_1m);
+                V log_Bound_U_Phi_Bound_Z = Bound_U_Phi_Bound_Z_1m;     apply_inplace<vec, Fn::log1m>(log_Bound_U_Phi_Bound_Z);
+              
+                Bound_U_Phi_Bound_Z(index, t).array() = 1.0 - Bound_U_Phi_Bound_Z_1m.array();
+              
+                Eigen::Matrix<double, -1, -1> lse2(num_overflows, 2);
+                V u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
+                lse2.col(0) = log_Bound_U_Phi_Bound_Z_1m + u_log;
+                lse2.col(1) = log_Bound_U_Phi_Bound_Z;
+                V log_Phi_Z = fn_log_sum_exp_2d_T<vec>(lse2);
+              
+                V tmp = log_Phi_Z;  apply_inplace<vec, Fn::exp>(tmp);
+                Phi_Z(index, t) = tmp;
+              
+                V log_1m_Phi_Z = u_array(index, t);  apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z);
+                log_1m_Phi_Z.array() += log_Bound_U_Phi_Bound_Z_1m.array();
+              
+                V logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
+                apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(logit_Phi_Z);
+                Z_std_norm(index, t) = logit_Phi_Z;
+                tmp = logit_Phi_Z.cwiseAbs();  apply_inplace<vec, Fn::log>(tmp);
+                log_Z_std_norm(index, t) = tmp;
+              
+                y1_log_prob(index, t) = log_Bound_U_Phi_Bound_Z_1m;
+                prob(index, t)        = Bound_U_Phi_Bound_Z_1m;
+              
+                tmp = Bound_Z(index, t);
+                tmp.array() = a_times_3 * tmp.array().square() + b;
+                apply_inplace<vec, Fn::log>(tmp);
+                tmp.array() += log_Bound_U_Phi_Bound_Z.array() + log_Bound_U_Phi_Bound_Z_1m.array();
+                log_phi_Bound_Z(index, t) = tmp;
+              
+                tmp = Z_std_norm(index, t);
+                tmp.array() = a_times_3 * tmp.array().square() + b;
+                apply_inplace<vec, Fn::log>(tmp);
+                tmp.array() += log_Phi_Z.array() + log_1m_Phi_Z.array();
+                log_phi_Z_recip(index, t) = -tmp;
+                
+                return;
+          
+        }
+        
+        ////
+        //// ---- exact CDF and/or exact inverse (Phi_type = "Phi" and/or inv_Phi_type = "inv_Phi"):
+        ////
+        const double half_log_two_pi = 0.91893853320467274178;   //// 0.5 * log(2 pi)
+        
+        {
+          
+                ////
+                //// ---- log(1 - Phi(Bound_Z)) = log Phi(-Bound_Z) (reflection, so no 1 - Phi cancellation): exact, or the Phi_approx tail:
+                ////
+                V log_1m_Phi_Bound_Z_vec = -Bound_Z(index, t);
+                if (!kernel_choice.Phi_approx) fn_apply_log_Phi_exact_inplace_T<vec>(log_1m_Phi_Bound_Z_vec);
+                else                           apply_inplace<vec, Fn::log_Phi_approx>(log_1m_Phi_Bound_Z_vec);
+                V one_m_Phi_Bound_Z_vec = log_1m_Phi_Bound_Z_vec;
+                apply_inplace<vec, Fn::exp>(one_m_Phi_Bound_Z_vec);
+                V log_Phi_Bound_Z_vec = one_m_Phi_Bound_Z_vec;      //// log(1 - tiny): accurate
+                apply_inplace<vec, Fn::log1m>(log_Phi_Bound_Z_vec);
+                Bound_U_Phi_Bound_Z(index, t).array() = 1.0 - one_m_Phi_Bound_Z_vec.array();
+                
+                ////
+                //// ---- Phi_Z = Phi(Bound_Z) + u (1 - Phi(Bound_Z)):  log Phi_Z = LSE(log(1 - Phi(B)) + log u, log Phi(B)),
+                ////      log(1 - Phi_Z) = log(1 - u) + log(1 - Phi(B))   (no cancellation):
+                ////
+                Eigen::Matrix<double, -1, -1> log_sum_exp_input_mat(num_overflows, 2);
+                V log_u_vec = u_array(index, t);
+                apply_inplace<vec, Fn::log>(log_u_vec);
+                log_sum_exp_input_mat.col(0) = log_1m_Phi_Bound_Z_vec + log_u_vec;
+                log_sum_exp_input_mat.col(1) = log_Phi_Bound_Z_vec;
+                V log_Phi_Z_vec = fn_log_sum_exp_2d_T<vec>(log_sum_exp_input_mat);
+                V Phi_Z_vec = log_Phi_Z_vec;
+                apply_inplace<vec, Fn::exp>(Phi_Z_vec);
+                Phi_Z(index, t) = Phi_Z_vec;
+                V log_1m_Phi_Z_vec = u_array(index, t);
+                apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z_vec);
+                log_1m_Phi_Z_vec.array() += log_1m_Phi_Bound_Z_vec.array();
+                
+                ////
+                //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)) (upper-tail case driven by log(1 - Phi_Z)),
+                ////      or the Phi_approx inverse:
+                ////
+                V Z_vec;
+                if (!kernel_choice.inv_Phi_approx) {
+                  fn_inv_Phi_from_log_p_exact_T<vec>(log_Phi_Z_vec, log_1m_Phi_Z_vec, Z_vec);
+                } else {
+                  Z_vec = log_Phi_Z_vec - log_1m_Phi_Z_vec;
+                  apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(Z_vec);
+                }
+                Z_std_norm(index, t) = Z_vec;
+                V log_abs_Z_vec = Z_vec.cwiseAbs();
+                apply_inplace<vec, Fn::log>(log_abs_Z_vec);
+                log_Z_std_norm(index, t) = log_abs_Z_vec;
+                
+                y1_log_prob(index, t) = log_1m_Phi_Bound_Z_vec;
+                prob(index, t)        = one_m_Phi_Bound_Z_vec;
+                
+                ////
+                //// ---- log |d prob / d Bound_Z| = log phi(Bound_Z) (exact), or the Phi_approx derivative:
+                ////
+                V log_phi_Bound_Z_vec = Bound_Z(index, t);
+                if (!kernel_choice.Phi_approx) {
+                  log_phi_Bound_Z_vec.array() = -0.5 * log_phi_Bound_Z_vec.array().square() - half_log_two_pi;
+                } else {
+                  log_phi_Bound_Z_vec.array() = a_times_3 * log_phi_Bound_Z_vec.array().square() + b;
+                  apply_inplace<vec, Fn::log>(log_phi_Bound_Z_vec);
+                  log_phi_Bound_Z_vec.array() += log_Phi_Bound_Z_vec.array() + log_1m_Phi_Bound_Z_vec.array();
+                }
+                log_phi_Bound_Z(index, t) = log_phi_Bound_Z_vec;
+                
+                ////
+                //// ---- log(dZ / d Phi_Z) = -log phi(Z) (exact), or the Phi_approx inverse derivative:
+                ////
+                V log_phi_Z_recip_vec = Z_vec;
+                if (!kernel_choice.inv_Phi_approx) {
+                  log_phi_Z_recip_vec.array() = 0.5 * log_phi_Z_recip_vec.array().square() + half_log_two_pi;
+                } else {
+                  log_phi_Z_recip_vec.array() = a_times_3 * log_phi_Z_recip_vec.array().square() + b;
+                  apply_inplace<vec, Fn::log>(log_phi_Z_recip_vec);
+                  log_phi_Z_recip_vec.array() += log_Phi_Z_vec.array() + log_1m_Phi_Z_vec.array();
+                  log_phi_Z_recip_vec = -log_phi_Z_recip_vec;
+                }
+                log_phi_Z_recip(index, t) = log_phi_Z_recip_vec;
+          
+        }
   
 }
 

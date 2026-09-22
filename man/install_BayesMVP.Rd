@@ -4,7 +4,8 @@
 \alias{install_BayesMVP}
 \title{install_BayesMVP}
 \usage{
-install_BayesMVP(CUSTOM_FLAGS = NULL)
+install_BayesMVP(CUSTOM_FLAGS = NULL, lib = .libPaths()[1L],
+                 nicostan_lib = .libPaths()[1L], force = TRUE)
 }
 \arguments{
 \item{CUSTOM_FLAGS}{An (optional) R list containing user-supplied C++ flags. The possible allowed flags one can supply to this function are the following:
@@ -35,7 +36,13 @@ Also note that BayesMVP will search for OpenMP paths during package installation
 \item \code{CXXFLAGS}: A standard C++/C flag
 \item \code{PKG_LIBS}: A standard C++/C flag
 }}
+\item{lib}{Target BayesMVP R package library. Defaults to the first current library.}
+\item{nicostan_lib}{R package library containing the compiled NicoStan dependency and exported headers. NicoStan must be installed there first.}
+\item{force}{Must remain \code{TRUE} for the outer-to-inner package replacement. The installer stages the inner source and compiles it in a fresh R process.}
 }
 \description{
-install_BayesMVP
+Installs the compiled BayesMVP extension from its bundled inner source after
+checking for NicoStan version 0.1.9000 or newer and its exported headers. The
+outer package is an installer shell; the inner package is installed in a fresh
+R process so a development namespace cannot be reused accidentally.
 }

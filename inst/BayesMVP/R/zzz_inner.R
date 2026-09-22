@@ -18,9 +18,9 @@ setup_env_post_install <- function() {
           library(RcppParallel)
           
           if (.Platform$OS.type == "windows") {
-            mvp_user_dir <- file.path(Sys.getenv("USERPROFILE"), "BayesMVP")
+            mvp_user_dir <- file.path(Sys.getenv("USERPROFILE"), "BayesMVP_development_2026_09_21")
           } else { 
-            mvp_user_dir <- file.path(Sys.getenv("HOME"), "BayesMVP")
+            mvp_user_dir <- file.path(Sys.getenv("HOME"), "BayesMVP_development_2026_09_21")
           }
           
           

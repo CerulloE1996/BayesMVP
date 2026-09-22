@@ -127,7 +127,7 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
         const double C_raw_range = C_raw_upper - C_raw_lower, log_half_range = std::log(0.5 * C_raw_range);
         P.C_raw = vec_of_mats(n_cutpoints_max, n_ordinal_tests, n_class); P.C = P.C_raw; P.dC_raw_dunc = P.C_raw;
         double log_det_J_unc_to_C_raw_double = 0.0;
-        { int i = n_corrs + n_covariates_total + n_pops;
+        { int i = n_corrs + n_covariates_total + (n_class > 1 ? n_pops : 0);
           for (int c = 0; c < n_class; ++c) for (int t_ord = 0; t_ord < n_ordinal_tests; ++t_ord) for (int k = 0; k < n_thr_per_ord_test(t_ord); ++k) {
             const double x = theta_main_vec_ref(i++), th = std::tanh(x);
             P.C_raw[c](k, t_ord) = C_raw_lower + C_raw_range * 0.5 * (1.0 + th);
@@ -183,7 +183,7 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
           stan::math::var target_AD = 0.0;
           std::vector<Eigen::Matrix<stan::math::var, -1, -1>> C_raw_var = vec_of_mats_var(n_cutpoints_max, n_ordinal_tests, n_class), C_var = C_raw_var;
           Eigen::Matrix<stan::math::var, -1, 1> C_unc_vec_var(n_cutpoints_total);
-          { int i = n_corrs + n_covariates_total + n_pops, j = 0;
+          { int i = n_corrs + n_covariates_total + (n_class > 1 ? n_pops : 0), j = 0;
             for (int c = 0; c < n_class; ++c) for (int t_ord = 0; t_ord < n_ordinal_tests; ++t_ord) for (int k = 0; k < n_thr_per_ord_test(t_ord); ++k) {
               C_unc_vec_var(j) = stan::math::to_var(theta_main_vec_ref(i));
               stan::math::var th = stan::math::tanh(C_unc_vec_var(j));
@@ -210,7 +210,7 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
             target_AD += ldJ + pdD;
           }
           target_AD.grad();
-          out_mat.segment(1 + n_us + n_corrs + n_covariates_total + n_pops, n_cutpoints_total) = C_unc_vec_var.adj();
+          out_mat.segment(1 + n_us + n_corrs + n_covariates_total + (n_class > 1 ? n_pops : 0), n_cutpoints_total) = C_unc_vec_var.adj();
           stan::math::set_zero_all_adjoints_nested();
 
           Eigen::Matrix<stan::math::var, -1, 1> Omega_raw_vec_var = stan::math::to_var(Omega_raw_vec_double);
@@ -306,7 +306,7 @@ inline void fn_MVOP_assemble(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat,
         const Eigen::Matrix<int, -1, 1> &n_thr_per_ord_test = *P.n_thr_per_ord_test;
 
         //// cutpoint grads: C -> C_raw -> theta
-        int out_idx = 1 + n_us + n_corrs + n_covariates_total + n_pops;
+        int out_idx = 1 + n_us + n_corrs + n_covariates_total + (n_class > 1 ? n_pops : 0);
         for (int c = 0; c < n_class; ++c) for (int t_ord = 0; t_ord < P.n_ordinal_tests; ++t_ord) {
           const int n_thr_t = n_thr_per_ord_test(t_ord);
           Eigen::Matrix<double, -1, 1> g_C = cutpoint_grad_array[c].col(t_ord).head(n_thr_t);

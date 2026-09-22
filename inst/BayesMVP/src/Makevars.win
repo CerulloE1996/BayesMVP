@@ -391,3 +391,5 @@ $(SHLIB): $(OBJECTS)
 	$(SHLIB_LD) $(SHLIB_LDFLAGS) $(DLLFLAGS) -o $@ $(OBJECTS) $(ALL_LIBS)
 ##
 ##
+# Package-local provider headers and the canonical installed NicoStan runtime.
+override PKG_CPPFLAGS += -I. -I../inst/include

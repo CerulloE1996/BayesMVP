@@ -487,6 +487,13 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
         stan::math::set_zero_all_adjoints_nested();
         //////////////////////////////////////////////////////////// end of AD part
 
+        // Keep the returned log density consistent with the autodiff gradients
+        // above. The AD target contains the latent-trait b and transformed-mean
+        // priors together with the raw-b transformation Jacobian. The prevalence
+        // helper returns its beta-prior value separately; its transformation
+        // Jacobian is added explicitly after the likelihood.
+        prior_densities = target_AD.val() + prior_densities_prev_double;
+
         // ///////////////////////
         // target_AD.grad() ;   // differentiating this (i.e. NOT wrt this!! - this is the subject)
         // grad_prev_AD  =  u_prev_var_vec_var[1].adj() - u_prev_var_vec_var[0].adj();     // differentiating WRT this - Note: theta_var_std is the parameter vector - a std::vector of stan::math::var's
@@ -641,11 +648,11 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
   
    {  // start of big local block
 
-    for (int nc = 0; nc < n_chunks; nc++) {
+    for (int nc = 0; nc < n_total_chunks; nc++) {
 
       int chunk_counter = nc;
       
-      if ((chunk_counter == n_full_chunks) && (n_chunks > 1) && (last_chunk_size > 0)) { // Last chunk (remainder - don't use AVX / SIMD for this)
+      if ((chunk_counter == n_full_chunks) && (n_total_chunks > 1) && (last_chunk_size > 0)) { // Last chunk (remainder - don't use AVX / SIMD for this)
         
                           chunk_size = last_chunk_size;  //// update chunk_size
                           
@@ -726,6 +733,7 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
                           log_lik_chunk.resize(last_chunk_size);
                           //#endif
                           /////////////////////////////////////////////// 
+                          log_prev_per_obs_given_c.resize(last_chunk_size);
                           prev_per_obs_given_c.resize(last_chunk_size);
                           rowwise_sum.resize(last_chunk_size);
                           /////////////////////////////////////////////// 
@@ -749,6 +757,9 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
 
       // START of c loop
       for (int c = 0; c < n_class; c++) {
+        for (int n = 0; n < chunk_size; ++n) {
+          log_prev_per_obs_given_c(n) = log_prev_mat_small(pop_ind(chunk_counter * chunk_size_orig + n), c);
+        }
 
         inc_array.setZero(); //// reset to 0
         
@@ -809,6 +820,9 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
 
       /////////////////  ------------------------- compute grad  ---------------------------------------------------------------------------------
       for (int c = 0; c < n_class; c++) {
+        for (int n = 0; n < chunk_size; ++n) {
+          prev_per_obs_given_c(n) = prev_mat(pop_ind(chunk_counter * chunk_size_orig + n), c);
+        }
         
            ////-----------------------------------------------
            prob_recip[c] = stan::math::inv(prob[c]);  
@@ -934,7 +948,7 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
                                                       beta_grad_array[c],
                                                       X[c],
                                                       n_cov_vec_c,
-                                                      chunk_counter,
+                                                      chunk_size_orig * chunk_counter,
                                                       n_covariates_max,
                                                       common_grad_term_1,
                                                       L_Omega_double[c],
@@ -1004,6 +1018,7 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
     double log_prob_out = out_mat.segment(1 + n_params, N).sum();
     if (exclude_priors == false)  log_prob_out += prior_densities;
     log_prob_out +=  log_jac_u;
+    log_prob_out += log_det_J_prev_double_total;
     // log_prob_out +=  log_jac_p_double;
 
     // for (int c = 0; c < n_class; c++) {
@@ -1261,9 +1276,6 @@ Eigen::Matrix<double, -1, 1>    fn_lp_grad_LT_LC_NoLog_MD_and_AD(    const Eigen
 
 
  
-
-
-
 
 
 

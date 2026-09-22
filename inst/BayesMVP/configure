@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+"${R_HOME}/bin/Rscript" --vanilla -e 'generator <- system.file("native_tools", "generate_sources.R", package = "NicoStan"); if (!nzchar(generator)) stop("Install the full NicoStan package first."); source(generator); fn_generate_native_sources(getwd()); Rcpp::compileAttributes(".")'

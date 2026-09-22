@@ -176,14 +176,15 @@ outcome \eqn{t}. The default is an array of zeros.
 This is the same as  \code{prior_coeffs_mean}, except that each element in thr array corresponds to the prior SD. In other words, each element in the array corresponds to:  \eqn{ \sigma_{c, t, k} },
 where: \eqn{\beta_{c, t, k} \sim \text{N}\left(\mu_{c, t, k}, \sigma_{c, t, k} \right)}. The default is an array of ones.
 \item \code{vect_type}:
-The SIMD (single-instruction, multiple-data) vectorisation type to use for math functions (such as log, exp, Phi, etc). The default is AVX-512 if available, then AVX2 if not, and if neither AVX-512
-nor AVX2 are available (e.g., on ARM-based CPU's such as Apple systems), then BayesMVP will use the Stan C++ math library functions, and they will decide what vectorisation type to use. More
-vectorisation types will be supported in the future.
+The SIMD (single-instruction, multiple-data) vectorisation type to use for math functions (such as log, exp, Phi, etc). The default is the SIMD level compiled into the installed
+BayesMVP ("AVX512" or "AVX2"; "Stan", i.e. the Stan C++ math library functions, if neither), and a value the build cannot honour stops with an error. This is the ONLY place
+to set it: the \code{vect_type} argument of \code{$sample()} cannot change it. Not used for \code{Model_type = "Stan"}.
 \item \code{num_chunks}:
 The number of chunks to use in the log-probability and gradient function. By default, the number selected will depend on your CPU.
 \item \code{Phi_type}:
-Type of \eqn{\Phi()} function implementation to use, where \eqn{\Phi()} is the standard normal CDF. Can be either "Phi" (the default) or "Phi_approx". The default is "Phi". Note that \eqn{\Phi()}
-will use a fast, highly accurate polynomial approximation of \eqn{\Phi()} if \code{vect_type} is either AVX-512 or AVX2. Otherwise, it will use the Phi function from the Stan math C++ library.
+Type of \eqn{\Phi()} function implementation to use, where \eqn{\Phi()} is the standard normal CDF. The default is "Phi" (and, with \code{inv_Phi_type = "inv_Phi"}, currently the only
+setting BayesMVP accepts for the built-in models; anything else stops with an error). Note that \eqn{\Phi()} will use a fast, highly accurate polynomial approximation of \eqn{\Phi()} if
+\code{vect_type} is either AVX-512 or AVX2. Otherwise, it will use the Phi function from the Stan math C++ library. Set it here, not in \code{$sample()}. Not used for \code{Model_type = "Stan"}.
 }
 
 Arguments which are only relevant to the MVP and LC_MVP include:
@@ -377,8 +378,8 @@ Sample from the model
   force_PartialLog_for_metric = FALSE,
   force_multi_attempts_for_metric = FALSE,
   vect_type = NULL,
-  Phi_type = "Phi",
-  inv_Phi_type = "inv_Phi",
+  Phi_type = NULL,
+  inv_Phi_type = NULL,
   metric_type_main = NULL,
   metric_shape_main = NULL,
   ratio_M_main = NULL,
@@ -413,7 +414,6 @@ Sample from the model
   stream = NULL,
   nuisance_jitter_scale = 0.25,
   tau_if_manual_in_L_units = NULL,
-  tau_objective = NULL,
   tau_weight_by_p_jump = NULL,
   tau_ramp = NULL,
   eps_reinit_at_ChEES_handover = NULL,
@@ -424,6 +424,8 @@ Sample from the model
   pre_burnin_n_iter = NULL,
   pre_burnin_L = NULL,
   share_tau_ii_across_chains_in_burnin = NULL,
+  randomize_tau_burnin = FALSE,
+  randomize_tau_sampling = TRUE,
   burnin_TBB_pool_equals_n_chains = NULL,
   store_log_lik_trace = NULL,
   use_disk_path = "/tmp/hmc_traces",
@@ -511,12 +513,19 @@ automatically be set to \code{TRUE}, since autodiff is only available for partia
 
 \item{\code{multi_attempts}}{Whether}
 
-\item{\code{vect_type}}{The SIMD (single-nstruction, multiple-data) vectorisation type to use for math functions (such as log, exp, Phi, etc).
-The default is AVX-512 if available, then AVX2 if not, and if neither AVX-512 nor AVX2 are available
-(e.g., on ARM-based CPU's such as Apple systems), then BayesMVP will use the Stan C++ math library functions, and they will decide what
-vectorisation type to use. More vectorisation types will be supported in the future.}
+\item{\code{vect_type}}{Leave NULL (the default). The SIMD vectorisation type is NOT chosen in \code{$sample()}: for the built-in
+models it is set at model initialisation through \code{model_args_list$vect_type} (see the class documentation; BayesMVP
+validates it and defaults it to the SIMD level compiled into the installed BayesMVP), and for \code{Model_type = "Stan"} it is
+not used at all (the .stan file defines its own maths). A non-NULL value stops with an error for Stan models; for built-in
+models it must equal the initialised \code{model_args_list$vect_type}, otherwise it stops and points to \code{model_args_list}.
+(Before 2026-09-22 this argument was silently ignored.)}
 
-\item{\code{Phi_type}}{Type of Phi() function implementation to use, where Phi() is the standard normal CDF. Can be either "Phi" (the default) or "Phi_approx()".}
+\item{\code{Phi_type}}{Leave NULL (the default). Same rules as \code{vect_type}: set it through \code{model_args_list$Phi_type} at
+initialisation for the built-in models (only the exact setting "Phi" is currently accepted by BayesMVP); not used for Stan models,
+where a non-NULL value stops.}
+
+\item{\code{inv_Phi_type}}{Leave NULL (the default). Same rules as \code{Phi_type}, via \code{model_args_list$inv_Phi_type} (only
+"inv_Phi" is currently accepted by BayesMVP for the built-in models).}
 
 \item{\code{metric_type_main}}{The type of metric to use for the main parameters, which is adapted during the burnin period. Can be either \code{"Hessian"} or
 \code{"Empirical"}, where the former uses second derivative information and the latter uses the SD of the posterior computed whilst sampling. The default
@@ -670,3 +679,7 @@ The objects of this class are cloneable with this method.
 }
 }
 }
+
+\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{KE}, \code{ChEES}, \code{CHESSR}, \code{CHESSR_log}, or \code{SNAPER}. Historical \code{ChEESR}/\code{ChESSR} spellings select \code{CHESSR}. Both rate variants score the main parameters in mandatory mass-matrix coordinates. \code{CHESSR} uses the direct per-trajectory rate gradient; \code{CHESSR_log} uses the established smoothed log ratio of the expected numerator to mean trajectory length. These jitter-averaging conventions differ. \code{SNAPER} learns its direction in the same metric coordinates. Joint nuisance diffusion is supported. The existing warm-up schedule is retained; this is not a reproduction of every SGA-HMC adaptation rule in the 2022 paper. The frozen BayesMVPlegacy package retains the previous API and defaults.}
+
+\details{Burn-in uses fixed trajectory lengths by default while sampling randomises them. Set \code{randomize_tau_burnin} and \code{randomize_tau_sampling} explicitly to override these phase-specific defaults.}

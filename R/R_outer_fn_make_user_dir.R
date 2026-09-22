@@ -20,7 +20,7 @@
               
               cat("user_root_dir =", user_root_dir, "\n")
               ##
-              user_BayesMVP_dir <- file.path(user_root_dir, "BayesMVP")
+              user_BayesMVP_dir <- file.path(user_root_dir, "BayesMVP_development_2026_09_21")
               ##
               if (!dir.exists(user_BayesMVP_dir)) {
                 dir.create(user_BayesMVP_dir)
