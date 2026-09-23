@@ -10,6 +10,7 @@ R_fn_compute_gradients_for_tau_using_ChEES_position(
   theta_main_prop,
   velocity_main_prop,
   snaper_m_vec_main,
+  snaper_m_vec_prop = NULL,
   metric_shape_main,
   M_main_for_ChEES,
   ii,
@@ -18,7 +19,9 @@ R_fn_compute_gradients_for_tau_using_ChEES_position(
 )
 }
 \description{
-The ChEES criterion of Hoffman, Radul and Sountsov (2021), on the MAIN block only.
+The ChEES criterion of Hoffman, Radul and Sountsov (2021), on a supplied
+joint state vector. The migration runner supplies the complete joint state;
+the helper name retains the historical MAIN-block API.
 }
 \details{
 ---- Why this exists, alongside the kinetic-energy objective above ----
@@ -51,18 +54,16 @@ d/dt ||x(t) - m||^2 = 2 (x(t) - m) . xdot(t) gives the gradient estimated here:
 
 ---- Coordinates ----
 
-Everything is evaluated in the METRIC-STANDARDISED coordinates x = M^(1/2) theta, in which the
-target is roughly isotropic and the velocity is standard normal (the sampler draws
-v ~ N(0, M_inv), so xdot = M^(1/2) v ~ N(0, I)). Without that standardisation the criterion is
-dominated by whichever main coordinate happens to have the largest raw scale. Concretely:
+This implementation always uses metric coordinates x = B theta, where t(B) B = M.
+The sampler supplies velocity v = d(theta)/dt, so xdot = B v. There is no metric toggle.
+Both diagonal and dense mass matrices use the same contractions:
 
 \if{html}{\out{<div class="sourceCode">}}\preformatted{||x - m_x||^2      = (theta - m)' M (theta - m)
 (x - m_x) . xdot   = (theta - m)' M v
 }\if{html}{\out{</div>}}
 
 so the caller passes M itself (M_main_vec for a diagonal metric, M_dense_main for a dense one),
-NOT M_inv. Note that the kinetic-energy objectives above weight by M_inv where the C++ Metropolis
-step weights by M; that inconsistency is not reproduced here.
+NOT M_inv. The supplied velocity already contains the inverse-mass action from the native dynamics.
 
 ---- Jitter and the log-tau chain rule ----
 

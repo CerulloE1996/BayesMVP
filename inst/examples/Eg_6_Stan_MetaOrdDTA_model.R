@@ -115,7 +115,6 @@ source(file.path(pkg_example_path, "load_R_packages.R"))
       ### Stan model file (put path to your Stan model)
       file <- (file.path(user_BayesMVP_dir, "stan_models/basic_logistic.stan"))
       
-      file <-  "/home/enzocerullo/Documents/Work/PhD_work/R_packages/MetaOrdDTA/inst/stan_models/stan_models_MA/DTA_MA_Xu_RANDthr_kappa.stan"
       mod <- cmdstan_model(file)
       
       # # OR using the version w/ fast math C++ functions:
@@ -252,7 +251,6 @@ source(file.path(pkg_example_path, "load_R_packages.R"))
       
     ## set Stan model file path for your Stan model (replace with your path)
     # Stan_model_file_path <- system.file("stan_models/basic_logistic.stan", package = "BayesMVP")
-    Stan_model_file_path <- "/home/enzocerullo/Documents/Work/PhD_work/R_packages/MetaOrdDTA/inst/stan_models/stan_models_MA/DTA_MA_Xu_RANDthr_kappa.stan"
     
     ## make y a matrix first (matrix w/ 1 col)
     y <- matrix(data = c(y), ncol = 1)

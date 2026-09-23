@@ -280,9 +280,7 @@ Model_type <- "Stan"
     
     ## Stan_model_file_path <- file.path(getwd(), "stan_models/LC_MVP_bin_PartialLog_v5.stan")
     
-    #### cmdstanr::cmdstan_model("/home/enzo/Documents/Work/PhD_work/R_packages/BayesMVP/inst/BayesMVP/inst/stan_models/PO_LC_MVP_bin.stan")
     
-   ## mod <- cmdstanr::cmdstan_model("/home/enzo/Documents/Work/PhD_work/R_packages/BayesMVP/inst/BayesMVP/inst/stan_models/PO_LC_MVP_bin.stan")
     
    ## mod
     

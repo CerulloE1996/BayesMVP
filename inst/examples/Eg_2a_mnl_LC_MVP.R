@@ -339,7 +339,7 @@ Model_type <- "LC_MVP"
     # model_samples$init_object$bs_model
     # model_samples$init_object$Stan_data_list$pop
     # 
-    # model_samples$init_object$model_so_file <-  "/home/enzo/R/x86_64-pc-linux-gnu-library/4.4/BayesMVP/stan_models/PO_LC_MVP_bin_model.so"
+    # model_samples$init_object$model_so_file <- file.path(user_BayesMVP_dir, "stan_models/PO_LC_MVP_bin_model.so")
     # 
     # cmdstanr::write_stan_json(data =   model_samples$init_object$Stan_data_list, 
     #                           file = model_samples$init_object$json_file_path)

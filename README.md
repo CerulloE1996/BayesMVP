@@ -1,131 +1,120 @@
-# BayesMVP [v0.1 - Under Active Development]
+# BayesMVP
 
-**🚧 Early release - Breaking changes expected until v1.0**
+BayesMVP is the specialised model extension for [NicoStan](https://github.com/CerulloE1996/NicoStan). NicoStan supplies the general Stan-compatible sampler, warm-up, trajectory-length adaptation and diagnostics. BayesMVP adds native manually implemented gradients and model-specific C++ code for multivariate probit models.
 
-### Current Status: Alpha
-- Core functionality should be mostly working.
-- Successfully used in research (10,000+ model fits for LC-MVP and latent_trait models).
-- ChESSR-HMC burnin algorithm working & stable on tested built-in models & selected Stan models.
-- SNAPER-HMC burnin algorithm is not consistent/stable yet.
-- API still evolving.
-- Limited error handling.
-- Actively improving.
+The extension contains:
 
-BayesMVP uses a highly-efficient, recently proposed state-of-the-art HMC algorithm called SNAPER Hamiltonian Monte Carlo (SNAPER-HMC; Sountsov & Hoffman et al, 2022) to sample the posterior distribution. 
-Furthermore, depending on the model (and if the user enables this experimenal option), it also makes use of diffusion-pathspace HMC (Beskos et al, 2013) for models which have high-dimensional guassian latent variables. 
+- **MVP:** the multivariate probit model for correlated binary outcomes.
+- **2LC-MVP:** the two-class latent-class multivariate probit model, selected with `Model_type = "LC_MVP"`.
+- **MVOP:** the multivariate ordinal probit model.
+- **2LC-MVOP:** the two-class latent-class multivariate ordinal probit model.
+- **Two-class latent trait:** the two-class latent-trait model, selected with `Model_type = "latent_trait"`.
 
-BayesMVP was designed specifcially to efficiently sample the following models:
-- The multivariate probit model (MVP)
-- The latent class MVP model (LC-MVP), (currently) with 2 latent classes. 
-- THe latent trait latent class model, (currently) with 2 latent classes.
+These models are used for correlated binary and ordinal outcomes, including diagnostic and screening test-accuracy models without a perfect reference standard. The ordinal latent-class model is described in [Cerullo et al. (2022)](https://doi.org/10.1002/jrsm.1567), and the latent-class MVP versus latent-trait simulation study is reported in [Cerullo et al. (2025)](https://arxiv.org/abs/2509.18489v1).
 
-The MVP model is used generally to model correlated binary data across various fields, whereas the latter two more complex latent class models tend to be used more specifically in medical
-applications to model diagnostic and screening test accuracy data without the presence of a perfect reference (or "gold standard") test. 
+## What BayesMVP adds
 
-In addition to these "built-in" models, BayesMVP can also **sample any user-supplied Stan model**. However, BayesMVP will perform best for models which 
-have high-dimensional guassian latent variables (or "nuisance parameters"), particularly when the diffusion-pathspace
-HMC option is enabled. That being said, even for models without such guassian latent variables, BayesMVP can sometimes 
-still outperform Stan substantially thanks to the burn-in algorithm it uses = which is based on SNAPER-HMC - an algorithm 
-which is generally much more efficient than the NUTS-based algorithm Stan uses during adaptation. However, this will be highly
-model-dependent, and as it currently standard BayesMVP has mostly only been formally tested on models based on the 3 "built-in" 
-models (i.e. the MVP, LC-MVP and the latent trait model), hence the performance and efficiency outcomes for other models 
-(especially for models without high-dimensional nuisance parameters) still needs to be evaluated. 
+- Manually implemented likelihood gradients for the specialised MVP, latent-class MVP, MVOP and latent-trait implementations.
+- Native C++ implementations built on Eigen, Stan Math, RcppParallel and the NicoStan sampler core.
+- Reusable AVX2 and AVX-512 mathematical functions for vectorised exponentials, logarithms, normal distribution functions and related kernels.
+- The general Stan external-function header at:
 
-BayesMVP makes use of two state-of-the-art HMC algorithms:
+  ```text
+  inst/BayesMVP/inst/include/BayesMVP/stan_external_functions.hpp
+  ```
 
-- For the burnin phase, it uses an algorithm which is based on the recently proposed **SNAPER-HMC** (Sountsov et al, 2022). BayesMVP will use this algorithm for all models, including user-supplied Stan models. 
-- For the sampling (i.e., post-burnin) phase, it uses standard HMC _(with randomized path length)_ to sample the main model parameters, and then, it samples the nuisance parameters using the **diffusion-pathspace HMC** algorithm (Beskos et al, 2013), which is an algorithm that is specifically designed to sample models which have a high-dimensional guassian latent variables, such as multivariate probit models. Note that the latter feature of BayesMVP is **optional** and is considered an "experimental" feature of the R package. 
+- Stan model files and examples for using the specialised functions through CmdStanR or NicoStan.
 
-Furthermore, specifically for the three built-in models (i.e. the MVP, LC_MVP, and latent_trait), 
-it achieves particularly rapid sampling (despite using full MCMC - not approximate Bayes methods) by using a veriety of techniques, including:
-- (i) Manually-derived gradients (all implemented in C++ using the Eigen and stan::math libraries),
-- (ii) "Chunking" - a technique where large objects (e.g. Eigen::Matrix objects in C++) are partitioned into smaller blocks to prevent so-called "cache misses", and:
-- (iii) Fast approximate, vectorised (or "SIMD") math functions (on systems with AVX-512 and/or AVX2 CPU instruction sets - on systems without either of these instruction sets, BayesMVP will use a combination of the Eigen and stan::math C++ libraries for vectorisation).  
+The AVX functions are general external kernels. They are also used by the native BayesMVP implementations where the selected processor supports the required instruction set. The compiled implementation reports the detected SIMD lane count.
 
---------------------------------------------------------------------------------------------------------------------------------------
-Before installing BayesMVP, first you must first install **cmdstanr** as well as the **bridgestan** R packages. 
+## Installation order
 
-**To install cmdstanr:**
+BayesMVP depends on NicoStan. Install NicoStan first, then BayesMVP.
 
-To install the cmdstanr R package, the following worked on both my Linux and Windows systems:
+For installation from GitHub, start with a fresh R session and a writable package library:
 
-```
-        #### Install the cmdstanr "outer" R package:
-        remotes::install_github("stan-dev/cmdstanr", force = TRUE)
-        #### Load cmdstanr R outer package:
-        require(cmdstanr) 
-        #### Then, install the latest version of CmdStan:
-        install_cmdstan(cores = parallel::detectcores(),
-                        overwrite = TRUE,
-                        cpp_options = list("STAN_MODEL_LDFLAGS" = "-shared",   "CXXFLAGS" = "-fPIC"))
-```
-               
-   
-
-**To install bridgestan:**
-
-Please also see the guide here: https://roualdes.github.io/bridgestan/latest/languages/r.html
-
-To install the bridgestan R package, the following worked on both my Linux and Windows systems:
-
-```
-remotes::install_github("https://github.com/roualdes/bridgestan", subdir="R")
-#### Load bridgestan:
-require(bridgestan)
-```
-
-
-Then, you should be able to install BayesMVP by doing the following:
-
-```
-## First remove any possible package fragments:
-## Find user_pkg_install_dir:
-user_pkg_install_dir <- Sys.getenv("R_LIBS_USER")
-print(paste("user_pkg_install_dir = ", user_pkg_install_dir))
-##
-## Find pkg_install_path + pkg_temp_install_path:
-pkg_install_path <- file.path(user_pkg_install_dir, "BayesMVP")
-pkg_temp_install_path <- file.path(user_pkg_install_dir, "00LOCK-BayesMVP")
-##
-## Remove any (possible) BayesMVP package fragments:
-remove.packages("BayesMVP")
-unlink(pkg_install_path, recursive = TRUE, force = TRUE)
-unlink(pkg_temp_install_path, recursive = TRUE, force = TRUE)
-##
-## First install OUTER package:
-remotes::install_github("https://github.com/CerulloE1996/BayesMVP", force = TRUE, upgrade = "never")
-## Then restart R session:
-rstudioapi::restartSession()
-## Then install INNTER (i.e. the "real") package:
-require(BayesMVP)
+```r
+install.packages(c("remotes", "devtools"))
+remotes::install_github(repo = "CerulloE1996/NicoStan", upgrade = "never")
+NicoStan::install_NicoStan()
+## Restart R, then install BayesMVP from the main branch:
+remotes::install_github(repo = "CerulloE1996/BayesMVP", ref = "main", upgrade = "never")
 BayesMVP::install_BayesMVP()
-require(BayesMVP)
+## Restart R, then load library(BayesMVP).
 ```
 
+For a local source checkout, the local installer checks NicoStan and installs or repairs it automatically when needed, then compiles BayesMVP against it.
 
---------------------------------------------------------------------------------------------------------------------------------------
+The source tree includes one local administrator installer at:
 
+```text
+inst/examples/BayesMVP_admin_install.R
+```
 
-Users can also use the optimised manual-gradient lp_grad functions for the 3 built-in models with Stan directly 
-(via the cmdstanr R package) by downloading/installing the R package, and  then, when you compile your Stan model 
-with cmdstanr using cmdstan_model(), use the user_header argument as follows: 
+Run this directly in the RStudio console after placing the NicoStan and BayesMVP source directories next to one another in `R_packages`:
 
-      ## path to Stan model
-      file <- file.path(pkg_dir, "inst/stan_models/LC_MVP_bin_w_mnl_cpp_grad_v1.stan") 
-      ## path to the C++ .hpp header file
-      path_to_cpp_user_header <- file.path(pkg_dir, "src/lp_grad_fn_for_Stan.hpp") 
-      ## compile model together with the C++ functions
-      mod <- cmdstan_model(file,  force_recompile = TRUE, user_header = path_to_cpp_user_header) 
+```r
+source("path/to/R_packages/BayesMVP/inst/examples/BayesMVP_admin_install.R")
+```
 
+The same command installs or reinstalls the package. It launches a clean R process automatically and leaves the calling session's namespaces alone. You can also rerun `run_BayesMVP_admin_install()` after sourcing. There is no need to open a terminal or disable workspace restoration to start the installation.
 
+The installer:
 
+- locates the local BayesMVP source tree without hard-coded workstation or laptop paths;
+- checks NicoStan's version, native library, exported headers and required R exports, repairing a missing, outdated or incomplete installation from the adjacent source tree;
+- loads the outer installer only in a temporary build directory, which is removed afterwards;
+- compiles the inner BayesMVP package into your selected R library, retaining R's normal installation rollback if compilation fails;
+- preserves your library paths and optional compiler flags in the clean build process;
+- verifies the required BayesMVP exports before returning.
 
---------------------------------------------------------------------------------------------------------------------------------------
+For explicit library paths, set `BAYESMVP_INSTALL_LIB` and `NICOSTAN_INSTALL_LIB` before sourcing the installer. Alternatively, disable automatic execution before sourcing, then call the function with your arguments:
 
+```r
+options(BayesMVP.admin.autorun = FALSE)
+source("path/to/R_packages/BayesMVP/inst/examples/BayesMVP_admin_install.R")
+run_BayesMVP_admin_install(
+    source_root = "path/to/R_packages/BayesMVP",
+    lib = "/path/to/bayesmvp-library",
+    nicostan_lib = "/path/to/nicostan-library"
+)
+```
 
+Both packages use `lib` by default; `nicostan_lib` or `NICOSTAN_INSTALL_LIB` can select a separate dependency library when explicitly needed. The build uses the ordinary compiler and CPU detection by default. Pass optional named `CUSTOM_FLAGS` to `run_BayesMVP_admin_install()`. If a previous build was already loaded, restart R after installation to use the new build. On Windows, a DLL locked by an open R session may require that session to be restarted before replacement.
 
-**References:**
+## Using the external AVX functions
 
-SNAPER-HMC:  https://arxiv.org/abs/2110.11576v1
+When compiling a compatible Stan model with CmdStanR, use the exported header supplied by the installed extension:
 
-Diffusion-pathspace HMC: https://www.sciencedirect.com/science/article/pii/S0304414912002621
+```r
+header <- system.file(
+    "include", "BayesMVP", "stan_external_functions.hpp",
+    package = "BayesMVP"
+)
+
+model <- cmdstanr::cmdstan_model(
+    stan_file = "path/to/model.stan",
+    user_header = header,
+    force_recompile = TRUE
+)
+```
+
+The Stan model must declare the external functions that it calls. The general NicoStan model examples use the same header through their `math_backend = "AVX2"` or `math_backend = "AVX512"` choices.
+
+## Relationship with NicoStan
+
+BayesMVP is the specialised extension. NicoStan remains the general package and can fit any Stan model. The dependency direction is:
+
+```text
+NicoStan sampler and diagnostics
+            ↓
+BayesMVP manual-gradient and AVX model extension
+```
+
+The two-class latent-class MVP and latent-trait implementations were used in the simulation study by Cerullo et al. (2025). The mixed binary and ordinal test-accuracy models are described by Cerullo et al. (2022).
+
+## License
+
+BayesMVP is licensed under GPL-3. See [LICENSE](LICENSE) for the complete licence text.
+
+Approximate-CDF model paths using `Phi_approx` / `inv_Phi_approx` are experimental and are not supported for production native fits. Finite-difference checks found gradient failures when these settings were forced into the native MVOP and LC-MVOP `NoLog` paths. The native defaults remain `Phi` / `inv_Phi`, and the R interface rejects approximate-CDF model settings. This limitation concerns the model CDF/inverse-CDF choice; `nuisance_transformation = "Phi_approx"` is a separate setting.

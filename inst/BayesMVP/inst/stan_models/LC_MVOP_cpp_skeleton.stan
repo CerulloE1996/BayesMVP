@@ -387,22 +387,22 @@ functions {
  
       // need to add citation to this (slight modification from a HP. calculators forum post)
       real inv_Phi_approx_from_prob(real p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit(p)  )) ;
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit(p)  )) ;
       }
       
       // need to add citation to this (slight modification from a HP. calculators forum post)
       vector inv_Phi_approx_from_prob(vector p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit(p)  )) ;  
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit(p)  )) ;  
       }
       
       // need to add citation to this  (slight modification from a HP. calculators forum post)
       real inv_Phi_approx_from_logit_prob(real logit_p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit_p  )) ; 
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit_p  )) ; 
       }
       
       // need to add citation to this (slight modification from a HP. calculators forum post)
       vector inv_Phi_approx_from_logit_prob(vector logit_p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 *logit_p  )) ; 
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 *logit_p  )) ; 
       }
  
       vector rowwise_sum(matrix M) {      // M is (N x T) matrix

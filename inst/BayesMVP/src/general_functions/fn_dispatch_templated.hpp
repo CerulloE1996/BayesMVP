@@ -14,9 +14,15 @@
 //// vec_from_string() and threaded down as a template parameter. Use DISPATCH_VEC(...) in the
 //// non-template wrappers so all three instantiations are covered in one line.
 ////
-//// A level that is not compiled in (e.g. AVX512 on an AVX2-only laptop) silently falls back:
-//// AVX512 -> AVX2 -> Scalar. vec_from_string() also does this, so an R-side vect_type="AVX512"
-//// on an AVX2 machine just runs AVX2.
+//// vec_from_string() resolves the string with fn_BayesMVP_SIMD_lane_width_for_vect_type()
+//// (fns_SIMD_and_wrappers/fn_SIMD_level_resolver.hpp), the same function the string dispatch
+//// (fn_EIGEN_Ref_double) uses: "AVX512" -> Vec::AVX512, "AVX2" -> Vec::AVX2 (the genuine 4-lane
+//// kernels, also on AVX-512 builds), "Stan"/"Loop" -> Vec::Scalar.
+//// 2026-09-22: a level that is not compiled in (e.g. AVX512 on an AVX2-only laptop) now THROWS.
+//// It used to fall back silently (AVX512 -> AVX2 -> Scalar), so an R-side vect_type = "AVX512" on
+//// an AVX2 machine ran AVX2 without saying so (the R front end now stops before sampling in that
+//// case). apply_raw<>'s compile-time fallback below is kept only so that DISPATCH_VEC can
+//// instantiate all three levels; vec_from_string never selects a level that is not compiled.
 ////
 //// REQUIRES: fast_and_approx_AVX512_fns.hpp and fast_and_approx_AVX2_fns.hpp (the fast_*_AVX512
 ////           / fast_*_AVX2 kernels) included first, and stan/math for the scalar path.
@@ -30,16 +36,12 @@
 #include <stdexcept>
 #include <iostream>
 
-#if defined(__AVX512VL__) && defined(__AVX512F__) && defined(__AVX512DQ__)
-  #define BMVP_HAS_AVX512 1
-#else
-  #define BMVP_HAS_AVX512 0
-#endif
-#if defined(__AVX2__) && defined(__FMA__)
-  #define BMVP_HAS_AVX2 1
-#else
-  #define BMVP_HAS_AVX2 0
-#endif
+#include "fns_SIMD_and_wrappers/fn_SIMD_level_resolver.hpp"
+
+//// 2026-09-22: one definition of "compiled", shared with the string dispatch (same conditions as before:
+//// AVX512F+VL+DQ for the 8-lane kernels, AVX2+FMA for the 4-lane kernels).
+#define BMVP_HAS_AVX512 BAYESMVP_COMPILED_AVX512_KERNELS
+#define BMVP_HAS_AVX2   BAYESMVP_COMPILED_AVX2_KERNELS
 
 //// =====================================================================================
 //// 1. Enums
@@ -65,17 +67,15 @@ inline Vec best_compiled_vec() {
 #endif
 }
 
-//// Translate the Model_args string to the enum ONCE per driver call, clamped to what is compiled in.
+//// Translate the Model_args string to the enum ONCE per driver call.
+//// 2026-09-22: resolved by fn_BayesMVP_SIMD_lane_width_for_vect_type(), which THROWS for a level that is not compiled and for
+//// unknown strings (including "AVX", which used to map silently to Scalar; the R front end already rejects it). Previously a
+//// request for a level that was not compiled was clamped silently to the best compiled level.
 inline Vec vec_from_string(const std::string &vect_type) {
-  Vec want;
-  if      (vect_type == "AVX512") want = Vec::AVX512;
-  else if (vect_type == "AVX2")   want = Vec::AVX2;
-  else if (vect_type == "Stan" || vect_type == "Loop" || vect_type == "AVX") want = Vec::Scalar;
-  else throw std::runtime_error("vec_from_string: unknown vect_type '" + vect_type + "'");
-  const Vec best = best_compiled_vec();
-  if (want == Vec::AVX512 && best != Vec::AVX512) want = best;   //// AVX512 asked for but not compiled: AVX2 or Scalar
-  if (want == Vec::AVX2   && best == Vec::Scalar) want = Vec::Scalar;
-  return want;
+  const int SIMD_lane_width = fn_BayesMVP_SIMD_lane_width_for_vect_type(vect_type);
+  if (SIMD_lane_width == 8) return Vec::AVX512;
+  if (SIMD_lane_width == 4) return Vec::AVX2;
+  return Vec::Scalar;
 }
 
 inline int vec_width(Vec v) { return v == Vec::AVX512 ? 8 : (v == Vec::AVX2 ? 4 : 1); }
@@ -192,10 +192,10 @@ template <> ALWAYS_INLINE double kernel_scalar<Fn::Phi_approx>(double x)    { re
 template <> ALWAYS_INLINE double kernel_scalar<Fn::log_Phi_approx>(double x){ return stan::math::log_inv_logit(x * (0.07056 * x * x + 1.5976)); }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::inv_Phi>(double x)       { return stan::math::inv_Phi(x); }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::inv_Phi_approx>(double p) {
-  return 2.74699999999999988631 * std::sinh(std::asinh(-0.3418 * std::log(1.0 / p - 1.0)) / 3.0);
+  return 5.494448514153059 * std::sinh(std::asinh(-0.34176618822627863 * std::log(1.0 / p - 1.0)) / 3.0);
 }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::inv_Phi_approx_from_logit_prob>(double lp) {
-  return 2.74699999999999988631 * std::sinh(std::asinh(0.3418 * lp) / 3.0);
+  return 5.494448514153059 * std::sinh(std::asinh(0.34176618822627863 * lp) / 3.0);
 }
 template <> ALWAYS_INLINE double kernel_scalar<Fn::tanh>(double x)          { return std::tanh(x); }
 

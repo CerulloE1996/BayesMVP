@@ -1,14 +1,14 @@
 Package: BayesMVP
 Type: Package
-Title: BayesMVP: A high-performance implementation of adaptive diffusion-space HMC for multivariate probit models and other models with high-dimensional latent variables.
-Version: 0.1
-Date: 2024-05-18
+Title: BayesMVP: Specialised Multivariate Probit Models Using NicoStan
+Version: 0.1.9000
+Date: 2026-09-21
 Author: Enzo Cerullo
 Maintainer: Enzo Cerullo <enzo.cerullo@bath.edu>
-Description: BayesMVP uses diffusion-space Hamiltonian Monte Carlo (HMC) to efficiently sample the multivariate probit model (MVP) to model correlated binary data, as well as the latent class MVP model for the evaluation of test accuracy data without a gold standard. It achieves rapid sampling through manually-derived gradients and chunking. Users can also input any Stan model for efficient sampling of high dimensional latent variable vectors.
+Description: Native manually differentiated multivariate probit and ordinal probit models, latent class models and reusable vectorised special functions using the shared NicoStan sampler.
 License: GPL-3
-Imports: Rcpp (>= 1.0.10), RcppEigen, RcppParallel, dqrng, cmdstanr, bridgestan, bayesplot, posterior, dplyr, ggplot2, tibble, tictoc
-LinkingTo: Rcpp, RcppEigen, RcppParallel, dqrng
+Imports: Rcpp (>= 1.0.10), RcppEigen, RcppParallel, dqrng, cmdstanr, bridgestan, bayesplot, posterior, dplyr, ggplot2, tibble, tictoc, R6, digest, jsonlite, stringr, NicoStan (>= 0.1.9000)
+LinkingTo: Rcpp, RcppEigen, RcppParallel, dqrng, NicoStan
 Suggests: roxygen2
 Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd"))
 SystemRequirements: GNU make, C++17

@@ -1,27 +1,32 @@
-# Local R sessions, generated builds, and test output.
-.Rhistory
-.RData
-.Ruserdata
-.Rproj.user/
 *.o
-*.RDS
+*.so
+*.dll
+*.lib
 *.rds
-**/test_output/
-**/stan_data/
-/inst/BayesMVP/src/BayesMVP.so
-/inst/BayesMVP/inst/BayesMVP.dll
-/inst/BayesMVP/inst/BayesMVPtest.dll
-**/stan_models/*
-!**/stan_models/*.stan
-!**/stan_models/*/
-
-# Keep private assistant configuration and exported conversations local.
-.agents/
-.claude/
-.codex/
-.mcp.json
+*.RDS
+*.RData
+*.Rhistory
+*.log
+.Rproj.user/
+00LOCK*/
+validation/
+tests/test_output/
+inst/stan_data/data_*.json
+inst/BayesMVP/inst/stan_data/data_*.json
+# Private local analysis and inherited development material
 AGENTS.md
-CLAUDE.md
-/apms-*.html
-/read-prior-*.html
-/extract_cpp_from_chat.py
+APMS_bridge/
+BayesMVP_1.0.pdf
+Eg_2a_mnl_LC_MVP_debug.R
+inst/BayesMVP/src/LC_LT_functions/old_or_backup/
+inst/BayesMVP/src/MVP_functions/backups_or_temp_or_future/
+inst/BayesMVP/src/general_functions/backup/
+inst/BayesMVP/src/general_functions/fns_SIMD_and_wrappers/debug_old_backup/
+# Required existing BridgeStan/TBB bootstrap libraries
+!inst/BayesMVP/inst/dummy_stan_model_model.so
+!inst/BayesMVP/inst/dummy_stan_model_win_model.so
+!inst/BayesMVP/inst/dummy_stan_model_win_model.dll
+!inst/BayesMVP/inst/dummy_stan_model_win_model.lib
+!inst/BayesMVP/inst/tbb_stan/tbb.dll
+!inst/BayesMVP/inst/tbb_bs/tbb.dll
+!inst/BayesMVP/inst/tbb_bs/tbb.lib

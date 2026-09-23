@@ -105,22 +105,34 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
         
         Eigen::Matrix<double, -1, 1> out_mat_orig = out_mat; // store initial input 
         
+        //// 2026-09-22 (assistant): audit item D5. Attempts 1 and 2 are now inside try/catch, mirroring attempt 3: before this date a
+        //// Stan-math exception in attempt 1 or 2 (e.g. "Phi: x is nan" at |bound| ~ 39 on vect_type "Stan") escaped this function
+        //// instead of moving on to the next attempt. Because the catch blocks catch std::exception, the settings strings are checked
+        //// first, outside any try, so that a mistyped setting still stops with a clear message instead of being turned into a NaN.
+        fn_check_settings_strings_before_multi_attempts(  Model_args_as_cpp_struct,
+                                                          false,
+                                                          "fn_lp_grad_MVP_multi_attempts_InPlace_process");
+        
         ///// 1st attempt
         { //// if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {   // NOT log-scale and NOT autodiff (least numerically stable but fastest)
               
               NaN_or_Inf_indicator = 0;  // Reset NaN_or_Inf indicator
-          
-              fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process( out_mat,
-                                                                         theta_main_vec_ref,
-                                                                         theta_us_vec_ref,
-                                                                         y_ref,
-                                                                         grad_option,
-                                                                         Model_args_as_cpp_struct,
-                                                                         LC_MVP_ws_structs,
-                                                                         n_threads_WCP);
               
-              if (is_NaN_or_Inf_Eigen(out_mat)) { 
-                NaN_or_Inf_indicator = 1;
+              try {
+                    fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process( out_mat,
+                                                                               theta_main_vec_ref,
+                                                                               theta_us_vec_ref,
+                                                                               y_ref,
+                                                                               grad_option,
+                                                                               Model_args_as_cpp_struct,
+                                                                               LC_MVP_ws_structs,
+                                                                               n_threads_WCP);
+                    
+                    if (is_NaN_or_Inf_Eigen(out_mat)) { 
+                      NaN_or_Inf_indicator = 1;
+                    }
+              } catch (const std::exception &) {
+                    NaN_or_Inf_indicator = 1;
               }
           
         }
@@ -131,17 +143,21 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
               NaN_or_Inf_indicator = 0;  // Reset main_div indicator
               out_mat = out_mat_orig;
 
-              fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(  out_mat,
-                                                                               theta_main_vec_ref,
-                                                                               theta_us_vec_ref,
-                                                                               y_ref,
-                                                                               grad_option,
-                                                                               Model_args_as_cpp_struct,
-                                                                               LC_MVP_ws_structs,
-                                                                               n_threads_WCP);
+              try {   //// 2026-09-22 (assistant): D5, see above
+                    fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(  out_mat,
+                                                                                     theta_main_vec_ref,
+                                                                                     theta_us_vec_ref,
+                                                                                     y_ref,
+                                                                                     grad_option,
+                                                                                     Model_args_as_cpp_struct,
+                                                                                     LC_MVP_ws_structs,
+                                                                                     n_threads_WCP);
 
-              if (is_NaN_or_Inf_Eigen(out_mat)) {
-                NaN_or_Inf_indicator = 1;
+                    if (is_NaN_or_Inf_Eigen(out_mat)) {
+                      NaN_or_Inf_indicator = 1;
+                    }
+              } catch (const std::exception &) {
+                    NaN_or_Inf_indicator = 1;
               }
 
         }
@@ -227,22 +243,32 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
         
         Eigen::Matrix<double, -1, 1> out_mat_orig = out_mat; // store initial input 
         
+        //// 2026-09-22 (assistant): audit item D5, as in fn_lp_grad_MVP_multi_attempts_InPlace_process above: settings checked first,
+        //// then attempts 1 and 2 inside try/catch, mirroring the autodiff attempt.
+        fn_check_settings_strings_before_multi_attempts(  Model_args_as_cpp_struct,
+                                                          false,
+                                                          "fn_lp_grad_MVOP_multi_attempts_InPlace_process");
+        
         ///// 1st attempt
         { //// if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {   // NOT log-scale and NOT autodiff (least numerically stable but fastest)
 
               NaN_or_Inf_indicator = 0;  // Reset NaN_or_Inf indicator
-          
-              fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process(  out_mat,
-                                                                           theta_main_vec_ref,
-                                                                           theta_us_vec_ref,
-                                                                           y_ref,
-                                                                           grad_option,
-                                                                           Model_args_as_cpp_struct,
-                                                                           LC_MVP_ws_structs,
-                                                                           n_threads_WCP);
+              
+              try {
+                    fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process(  out_mat,
+                                                                                 theta_main_vec_ref,
+                                                                                 theta_us_vec_ref,
+                                                                                 y_ref,
+                                                                                 grad_option,
+                                                                                 Model_args_as_cpp_struct,
+                                                                                 LC_MVP_ws_structs,
+                                                                                 n_threads_WCP);
 
-              if (is_NaN_or_Inf_Eigen(out_mat)) {
-                NaN_or_Inf_indicator = 1;
+                    if (is_NaN_or_Inf_Eigen(out_mat)) {
+                      NaN_or_Inf_indicator = 1;
+                    }
+              } catch (const std::exception &) {
+                    NaN_or_Inf_indicator = 1;
               }
 
         }
@@ -253,17 +279,21 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
               NaN_or_Inf_indicator = 0;  // Reset main_div indicator
               out_mat = out_mat_orig;
 
-              fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process(   out_mat,
-                                                                                 theta_main_vec_ref,
-                                                                                 theta_us_vec_ref,
-                                                                                 y_ref,
-                                                                                 grad_option,
-                                                                                 Model_args_as_cpp_struct,
-                                                                                 LC_MVP_ws_structs,
-                                                                                 n_threads_WCP);
+              try {   //// 2026-09-22 (assistant): D5, see above
+                    fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process(   out_mat,
+                                                                                       theta_main_vec_ref,
+                                                                                       theta_us_vec_ref,
+                                                                                       y_ref,
+                                                                                       grad_option,
+                                                                                       Model_args_as_cpp_struct,
+                                                                                       LC_MVP_ws_structs,
+                                                                                       n_threads_WCP);
 
-              if (is_NaN_or_Inf_Eigen(out_mat)) {
-                NaN_or_Inf_indicator = 1;
+                    if (is_NaN_or_Inf_Eigen(out_mat)) {
+                      NaN_or_Inf_indicator = 1;
+                    }
+              } catch (const std::exception &) {
+                    NaN_or_Inf_indicator = 1;
               }
 
         }

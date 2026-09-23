@@ -30,6 +30,23 @@ using namespace Eigen;
  
  
 
+////
+//// ---- 2026-09-22 (assistant, approved change): forward declaration of the templated version defined further down this file,
+////      so that the string-dispatch version (still used by the latent_trait NoLog / PartialLog paths) can delegate to it for
+////      exact Phi and pick up the right-side-seam reflection derived there.
+////
+template <Vec vec>
+inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
+                                          Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
+                                          Eigen::Ref<Eigen::Matrix<double, -1, -1>> Phi_Z,
+                                          Eigen::Ref<Eigen::Matrix<double, -1, -1>> Z_std_norm,
+                                          Eigen::Ref<Eigen::Matrix<double, -1, -1>> prob,
+                                          Eigen::Ref<Eigen::Matrix<double, -1, -1>> y1_log_prob,
+                                          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Bound_Z,
+                                          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> y_chunk,
+                                          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
+                                          const KernelChoice &k);
+
 //// fn that computes important quantities needed for the GHK parameterisation of the MVP / LC_MVP (and latent_trait) models
 ALWAYS_INLINE  void fn_MVP_compute_lp_GHK_cols(   const int t,
                                                   Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
@@ -48,6 +65,22 @@ ALWAYS_INLINE  void fn_MVP_compute_lp_GHK_cols(   const int t,
        const std::string vect_type_Phi = Model_args_as_cpp_struct.Model_args_strings(7);
        const std::string inv_Phi_type = Model_args_as_cpp_struct.Model_args_strings(2);
        const std::string vect_type_inv_Phi = Model_args_as_cpp_struct.Model_args_strings(9);
+       
+       ////
+       //// ---- 2026-09-22: exact Phi (Phi_type = "Phi") -> templated version with the right-side-seam reflection
+       ////      (prob = Phi((1 - 2y) Bound_Z), Z = (1 - 2y) Phi^{-1}((y - (2y - 1) u) prob); derivation in fn_MVP_compute_lp_GHK_cols_T).
+       ////      Same Phi / inv_Phi / log kernels as the string dispatch (stan::math for "Stan", fast_*_AVX2 / _AVX512 otherwise).
+       ////
+       if (Phi_type == "Phi") {
+             KernelChoice kernel_choice_for_GHK_cols;
+             kernel_choice_for_GHK_cols.Phi_approx     = false;
+             kernel_choice_for_GHK_cols.inv_Phi_approx = (inv_Phi_type == "inv_Phi_approx");
+             kernel_choice_for_GHK_cols.nuisance       = NuisTf::Phi;   //// unused by fn_MVP_compute_lp_GHK_cols_T
+             const Vec vec_for_GHK_cols = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
+             DISPATCH_VEC(vec_for_GHK_cols, fn_MVP_compute_lp_GHK_cols_T,
+                          t, Bound_U_Phi_Bound_Z, Phi_Z, Z_std_norm, prob, y1_log_prob, Bound_Z, y_chunk, u_array, kernel_choice_for_GHK_cols);
+             return;
+       }
 
        ////// Compute on NON-log-scale for all observations using ".col(t)".
        Bound_U_Phi_Bound_Z.col(t) =   fn_EIGEN_double( Bound_Z.col(t), Phi_type, vect_type_Phi );
@@ -116,20 +149,62 @@ inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
                                           const KernelChoice &k
 ) {
   
-        Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
-        Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
-      
-        Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array()
-                             + (y_chunk.col(t).array() - Bound_U_Phi_Bound_Z.col(t).array())
-                             * ((2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array());
-      
-        Z_std_norm.col(t) = Phi_Z.col(t);
-        inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
-      
-        prob.col(t).array() = y_chunk.col(t).array() * (1.0 - Bound_U_Phi_Bound_Z.col(t).array())
-                            + (y_chunk.col(t).array() - 1.0) * Bound_U_Phi_Bound_Z.col(t).array()
-                            * (2.0 * y_chunk.col(t).array() - 1.0);
-      
+        if (k.Phi_approx) {
+          
+                //// ---- Phi_approx setting: original code, unchanged ----
+                Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
+                Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
+              
+                Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array()
+                                     + (y_chunk.col(t).array() - Bound_U_Phi_Bound_Z.col(t).array())
+                                     * ((2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array());
+              
+                Z_std_norm.col(t) = Phi_Z.col(t);
+                inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
+              
+                prob.col(t).array() = y_chunk.col(t).array() * (1.0 - Bound_U_Phi_Bound_Z.col(t).array())
+                                    + (y_chunk.col(t).array() - 1.0) * Bound_U_Phi_Bound_Z.col(t).array()
+                                    * (2.0 * y_chunk.col(t).array() - 1.0);
+              
+                y1_log_prob.col(t) = prob.col(t);
+                apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+                
+                return;
+          
+        }
+        
+        ////
+        //// ---- Exact Phi (Phi_type = "Phi"): right-side seam fixed by reflection (2026-09-22, assistant, approved change).
+        ////
+        //// The old code formed prob = 1 - Phi(Bound_Z) for y = 1 and Phi_Z = Phi(B) + u (1 - Phi(B)), Z = Phi^{-1}(Phi_Z).
+        //// Near Bound_Z = +7.5 (just inside overflow_threshold), 1 - Phi(B) ~ 3e-14 is the difference of two numbers
+        //// near 1, so it kept only ~2-3 significant digits (up to ~1e-3 nats in log prob), and Phi_Z rounded to 1
+        //// (Z = +Inf) once u > ~0.996. Using the symmetry Phi(-x) = 1 - Phi(x) (exact for Phi and for the AS241
+        //// inverse, inv_Phi(1 - q) = -inv_Phi(q)), with sign_y = 1 - 2y (+1 for y = 0, -1 for y = 1):
+        ////
+        ////   prob          = Phi(sign_y * Bound_Z)                 [ = Phi(B) for y = 0,  Phi(-B) = 1 - Phi(B) for y = 1 ]
+        ////   q             = (y - (2y - 1) u) * prob               [ = u Phi(B) = Phi_Z for y = 0,  (1 - u)(1 - Phi(B)) = 1 - Phi_Z for y = 1 ]
+        ////   Z             = sign_y * Phi^{-1}(q)                  [ = Phi^{-1}(Phi_Z) in both cases ]
+        ////   Phi_Z         = y + sign_y * q
+        ////   Phi(Bound_Z)  = y + sign_y * prob                     (stored for completeness; only the Phi_approx derivative reads it)
+        ////
+        //// For y = 0 every quantity is mathematically identical to before and uses the same products (up to compiler FMA contraction). The derivatives the
+        //// gradient code uses are unchanged, because they are the analytic derivatives of the same functions:
+        ////   d prob / d Bound_Z = sign_y * phi(Bound_Z),   d Z / d q = sign_y / phi(Z)  (so dZ/dPhi_Z = 1/phi(Z) as before).
+        ////
+        prob.col(t).array() = (1.0 - 2.0 * y_chunk.col(t).array()) * Bound_Z.col(t).array();
+        Phi_col_inplace<vec>(prob, t, k);
+        
+        Bound_U_Phi_Bound_Z.col(t).array() = y_chunk.col(t).array()
+                                           + (1.0 - 2.0 * y_chunk.col(t).array()) * prob.col(t).array();
+        
+        Z_std_norm.col(t).array() = (y_chunk.col(t).array() - (2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array())
+                                  * prob.col(t).array();                                                             //// q
+        Phi_Z.col(t).array() = y_chunk.col(t).array()
+                             + (1.0 - 2.0 * y_chunk.col(t).array()) * Z_std_norm.col(t).array();                    //// y + sign_y * q
+        inv_Phi_col_inplace<vec>(Z_std_norm, t, k);                                                                    //// Phi^{-1}(q)
+        Z_std_norm.col(t).array() *= (1.0 - 2.0 * y_chunk.col(t).array());                                             //// sign_y * Phi^{-1}(q)
+        
         y1_log_prob.col(t) = prob.col(t);
         apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
   
@@ -789,7 +864,7 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v3(      const int c, // lat
    //     prop_rowwise_prod_temp.setOnes();
    // } 
    
-   if (n_covariates_max == 1) { /// only possible for latent class LC-MVP as standard-MVP always has covariates!!
+   if (n_covariates_max == 1 && n_class > 1) { // Intercept-only mixture shortcut; single-class models use the general derivative below.
      
              {
                int t = n_tests - 1;

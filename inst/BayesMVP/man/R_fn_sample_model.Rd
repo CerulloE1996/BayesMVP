@@ -30,7 +30,6 @@ R_fn_sample_model(
   manual_tau,
   tau_if_manual,
   tau_if_manual_in_L_units = NULL,
-  tau_objective = NULL,
   tau_weight_by_p_jump = NULL,
   tau_ramp = NULL,
   eps_reinit_at_ChEES_handover = NULL,
@@ -41,9 +40,11 @@ R_fn_sample_model(
   pre_burnin_n_iter = NULL,
   pre_burnin_L = NULL,
   share_tau_ii_across_chains_in_burnin = NULL,
+  randomize_tau_burnin = FALSE,
+  randomize_tau_sampling = TRUE,
   burnin_TBB_pool_equals_n_chains = NULL,
   store_log_lik_trace = NULL,
-  burnin_algorithm = "ChESSR",
+  burnin_algorithm = "CHESSR",
   diffusion_HMC,
   partitioned_HMC,
   clip_iter,
@@ -59,9 +60,9 @@ R_fn_sample_model(
   force_autodiff_for_metric = TRUE,
   force_PartialLog_for_metric = FALSE,
   force_multi_attempts_for_metric = FALSE,
-  vect_type,
-  Phi_type,
-  inv_Phi_type,
+  vect_type = NULL,
+  Phi_type = NULL,
+  inv_Phi_type = NULL,
   metric_type_main,
   metric_shape_main,
   ratio_M_main,
@@ -97,6 +98,15 @@ R_fn_sample_model(
 )
 }
 \arguments{
+\item{randomize_tau_burnin}{Whether to randomise burn-in trajectory lengths. Default FALSE. Adaptation may still change the length between iterations.}
+\item{randomize_tau_sampling}{Whether to randomise post-burn-in lengths uniformly from zero to twice the adapted scale, with at least one integration step. Default TRUE.}
+
+\item{vect_type, Phi_type, inv_Phi_type}{NULL (default) = not supplied, which changes nothing. These settings are NOT
+chosen here: for Model_type = "Stan" they are not used at all (the .stan file defines its own maths), so a non-NULL
+value stops; for the built-in models they are set at model initialisation via model_args_list$vect_type /
+$Phi_type / $inv_Phi_type (validated by BayesMVP), and a non-NULL value here must equal the initialised value,
+otherwise it stops and points to model_args_list.}
+
 \item{burnin_TBB_pool_equals_n_chains}{NULL selects TRUE for built-in models, whose within-chain work uses OpenMP.
 External Stan models always use FALSE, including when TRUE is supplied, so their nested TBB work can use
 n_chains_burnin * n_threads_WCP_burnin threads. An explicit FALSE remains available for built-in models.}
@@ -139,3 +149,5 @@ This does not retry trajectories or rescue finite energy-error divergences. The 
 is frozen for the fit and returned as autodiff_fallback. For separate R worker
 processes, set the option in the process which calls this function.
 }
+
+\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{KE}, \code{ChEES}, \code{CHESSR}, \code{CHESSR_log}, or \code{SNAPER}. Historical \code{ChEESR}/\code{ChESSR} spellings select \code{CHESSR}. Both rate variants score the main parameters in mandatory mass-matrix coordinates. \code{CHESSR} uses the direct per-trajectory rate gradient; \code{CHESSR_log} uses the established smoothed log ratio of the expected numerator to mean trajectory length. These jitter-averaging conventions differ. \code{SNAPER} learns its direction in the same metric coordinates. Joint nuisance diffusion is supported. The existing warm-up schedule is retained; this is not a reproduction of every SGA-HMC adaptation rule in the 2022 paper. The frozen BayesMVPlegacy package retains the previous API and defaults.}

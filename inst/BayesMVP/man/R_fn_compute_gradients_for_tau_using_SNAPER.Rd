@@ -2,30 +2,19 @@
 % Please edit documentation in R/R_fns_SNAPER_HMC.R
 \name{R_fn_compute_gradients_for_tau_using_SNAPER}
 \alias{R_fn_compute_gradients_for_tau_using_SNAPER}
-\title{R_fn_compute_noisy_grad_diag_M_ADAM}
+\title{Metric-standardised SNAPER trajectory gradient}
 \usage{
 R_fn_compute_gradients_for_tau_using_SNAPER(
-  debug = FALSE,
   eigen_vector,
-  eigen_max,
   theta_vec_initial,
   theta_vec_prop,
   snaper_m_vec,
   velocity_prop,
-  velocity_0,
-  LR,
-  ii,
-  n_burnin,
-  sqrt_M_vec,
-  M_inv_diag,
-  tau_m_adam,
-  tau_v_adam,
+  mass_matrix,
   tau_ii,
-  beta1_adam,
-  beta2_adam,
-  eps_adam
+  snaper_m_vec_prop = snaper_m_vec
 )
 }
 \description{
-R_fn_compute_noisy_grad_diag_M_ADAM
+Metric-standardised SNAPER trajectory gradient
 }

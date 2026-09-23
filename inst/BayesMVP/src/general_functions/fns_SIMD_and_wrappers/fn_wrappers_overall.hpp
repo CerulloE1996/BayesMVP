@@ -13,6 +13,10 @@
  
 #include <immintrin.h>
 
+#include <string>
+#include <stdexcept>
+
+#include "fn_SIMD_level_resolver.hpp"
  
 
  
@@ -39,27 +43,49 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
       
                 fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);
        
-          } else if (vect_type == "AVX2") { // use AVX-512 or AVX2 or loop (i.e., rely on automatic vectorisation)
+          } else if (vect_type == "AVX512") { 
       
-              #if defined(__AVX2__) && ( !(defined(__AVX512VL__) && defined(__AVX512F__)  && defined(__AVX512DQ__)) ) // use AVX2
-                         fn_process_Ref_double_AVX(x_Ref, fn, skip_checks); // using the updated general fn (works for both AVX-512 or AVX2)
-              #else 
-                         std::cout << "Error: AVX2 is not available" << std::endl;
-                         return;
+              //// ---- SIMD requests (2026-09-22: BOTH levels are compiled on an AVX-512 build; replaces the D3 fallback, see History):
+              ////        "AVX512" -> fn_process_Ref_double_AVX512 (8-lane fast_*_AVX512 kernels),
+              ////        "AVX2"   -> fn_process_Ref_double_AVX2   (genuine 256-bit fast_*_AVX2 kernels; compiled on AVX2-only AND on
+              ////                                                  AVX-512 builds).
+              ////      A level this build did not compile (e.g. "AVX512" on an AVX2-only laptop build) THROWS std::invalid_argument. The
+              ////      R front end (fn_check_native_model_vect_types_and_Phi_types in R_fns_init_hard_coded_models.R) stops before
+              ////      sampling in that case, so the throw is a second line of defence. fn_BayesMVP_SIMD_lane_width_for_vect_type()
+              ////      (fn_SIMD_level_resolver.hpp) encodes exactly these branches (same strings, same BAYESMVP_COMPILED_* macros); R's
+              ////      R_fn_BayesMVP_SIMD_lane_width_for_vect_type() reports it AND probes this function through
+              ////      Rcpp_wrapper_EIGEN_double_colvec to confirm the kernel width that really runs.
+              ////      Plain string branches, AVX512 first: string comparisons cost several ns each and this runs once per vector
+              ////      operation in the likelihood (a resolver call here added ~10 ns per call, 8-20% on 8-48-element vectors).
+              ////      The AVX512 request now needs 2 comparisons (3 before). No per-element branching, no per-call printing.
+              ////      History: until 2026-09-22 (audit item D3) a request for the level that was not compiled printed "Error: AVX2 is not
+              ////      available" on every call and returned x UNCHANGED; the D3 fix then ran the ONE compiled level instead, so "AVX2" on
+              ////      an AVX-512 build silently meant the 8-lane AVX-512 kernels (and "AVX512" on an AVX2 build the 4-lane ones).
+              ////
+              #if BAYESMVP_COMPILED_AVX512_KERNELS
+                         fn_process_Ref_double_AVX512(x_Ref, fn, skip_checks);
+              #else
+                         throw std::invalid_argument(fn_BayesMVP_SIMD_level_not_compiled_message(vect_type));
               #endif
       
-          } else if (vect_type == "AVX512") { // use AVX-512 or AVX2 or loop (i.e., rely on automatic vectorisation)
+          } else if (vect_type == "AVX2") { 
       
-              #if defined(__AVX512VL__) && defined(__AVX512F__)  && defined(__AVX512DQ__)
-                         fn_process_Ref_double_AVX(x_Ref, fn, skip_checks); // using the updated general fn (works for both AVX-512 or AVX2)
+              #if BAYESMVP_COMPILED_AVX2_KERNELS
+                         fn_process_Ref_double_AVX2(x_Ref, fn, skip_checks);   //// 4-lane kernels, also on AVX-512 builds (see above)
               #else
-                         std::cout << "Error: AVX-512 is not available" << std::endl;
-                         return;
+                         throw std::invalid_argument(fn_BayesMVP_SIMD_level_not_compiled_message(vect_type));
               #endif
       
           } else if (vect_type == "Loop") {
             
                 fn_return_Loop(x_Ref, fn, skip_checks);
+      
+          } else { 
+            
+                //// ---- Unrecognised vect_type string (2026-09-22): previously fell through and left x UNCHANGED.
+                ////      The R front end rejects unknown strings before sampling; here we compute the exact
+                ////      Stan-math value rather than silently returning the input.
+                fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);
       
           }
       

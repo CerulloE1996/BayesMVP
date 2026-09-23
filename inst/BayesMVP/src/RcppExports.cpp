@@ -11,6 +11,27 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
+// Rcpp_BayesMVP_SIMD_lane_width_for_vect_type
+int Rcpp_BayesMVP_SIMD_lane_width_for_vect_type(const std::string vect_type);
+RcppExport SEXP _BayesMVP_Rcpp_BayesMVP_SIMD_lane_width_for_vect_type(SEXP vect_typeSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string >::type vect_type(vect_typeSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_BayesMVP_SIMD_lane_width_for_vect_type(vect_type));
+    return rcpp_result_gen;
+END_RCPP
+}
+// Rcpp_BayesMVP_compiled_SIMD_levels
+Rcpp::CharacterVector Rcpp_BayesMVP_compiled_SIMD_levels();
+RcppExport SEXP _BayesMVP_Rcpp_BayesMVP_compiled_SIMD_levels() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(Rcpp_BayesMVP_compiled_SIMD_levels());
+    return rcpp_result_gen;
+END_RCPP
+}
 // Rcpp_compute_LC_MVOP_Se_Sp_baseline
 List Rcpp_compute_LC_MVOP_Se_Sp_baseline(NumericVector trace_beta_flat, IntegerVector beta_dims, CharacterVector beta_names, NumericVector trace_C_flat, IntegerVector C_dims, CharacterVector C_names, List baseline_case_nd, List baseline_case_d, IntegerVector n_covs_nd, IntegerVector n_covs_d, int n_binary_tests, int n_ordinal_tests, IntegerVector n_thr_per_ord_test, std::string C_param_name);
 RcppExport SEXP _BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline(SEXP trace_beta_flatSEXP, SEXP beta_dimsSEXP, SEXP beta_namesSEXP, SEXP trace_C_flatSEXP, SEXP C_dimsSEXP, SEXP C_namesSEXP, SEXP baseline_case_ndSEXP, SEXP baseline_case_dSEXP, SEXP n_covs_ndSEXP, SEXP n_covs_dSEXP, SEXP n_binary_testsSEXP, SEXP n_ordinal_testsSEXP, SEXP n_thr_per_ord_testSEXP, SEXP C_param_nameSEXP) {
@@ -91,6 +112,17 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     fn_reset_stan_load_timer();
     return R_NilValue;
+END_RCPP
+}
+// Rcpp_fn_check_joint_trajectory
+Rcpp::List Rcpp_fn_check_joint_trajectory(const Rcpp::List EHMC_args_as_Rcpp_List);
+RcppExport SEXP _BayesMVP_Rcpp_fn_check_joint_trajectory(SEXP EHMC_args_as_Rcpp_ListSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_fn_check_joint_trajectory(EHMC_args_as_Rcpp_List));
+    return rcpp_result_gen;
 END_RCPP
 }
 // Rcpp_wrapper_EIGEN_double_mat
@@ -719,12 +751,15 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
+    {"_BayesMVP_Rcpp_BayesMVP_SIMD_lane_width_for_vect_type", (DL_FUNC) &_BayesMVP_Rcpp_BayesMVP_SIMD_lane_width_for_vect_type, 1},
+    {"_BayesMVP_Rcpp_BayesMVP_compiled_SIMD_levels", (DL_FUNC) &_BayesMVP_Rcpp_BayesMVP_compiled_SIMD_levels, 0},
     {"_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline", (DL_FUNC) &_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline, 14},
     {"_BayesMVP_cpp_fn_post_burnin_prep_for_sampling", (DL_FUNC) &_BayesMVP_cpp_fn_post_burnin_prep_for_sampling, 9},
     {"_BayesMVP_set_debug_cutpoint_grads", (DL_FUNC) &_BayesMVP_set_debug_cutpoint_grads, 1},
     {"_BayesMVP_fn_get_stan_load_time_sec", (DL_FUNC) &_BayesMVP_fn_get_stan_load_time_sec, 0},
     {"_BayesMVP_fn_get_stan_load_count", (DL_FUNC) &_BayesMVP_fn_get_stan_load_count, 0},
     {"_BayesMVP_fn_reset_stan_load_timer", (DL_FUNC) &_BayesMVP_fn_reset_stan_load_timer, 0},
+    {"_BayesMVP_Rcpp_fn_check_joint_trajectory", (DL_FUNC) &_BayesMVP_Rcpp_fn_check_joint_trajectory, 1},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_mat", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_mat, 4},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec, 4},
     {"_BayesMVP_Rcpp_wrapper_fn_lp_grad", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_fn_lp_grad, 9},

@@ -139,6 +139,13 @@ ALWAYS_INLINE  LogSumVecSingedResult log_sum_vec_signed_v1(   const Eigen::Ref<c
    
              // const double huge_neg = -700.0;
              double max_log_abs = stan::math::max(log_abs_vec);  // find max 
+             
+             //// 2026-09-22 (defect D2, assistant): every term exactly zero (log_abs_vec = -Inf throughout). Without this, -Inf - (-Inf) = NaN
+             //// made the sum NaN; same guard as log_sum_vec_signed_T (MVP_log_scale_grad_calc_fns_T.hpp). Callers here: the latent-trait
+             //// log-scale helpers (LC_LT_*, whose PartialLog path is disabled in lp_grad_model_selector.hpp) and the uncalled original MVP ones.
+             if (std::isinf(max_log_abs) && (max_log_abs < 0.0)) {
+               return {-700.0, 1.0};
+             }
            
              const Eigen::Matrix<double, -1, 1> shifted_logs = (log_abs_vec.array() - max_log_abs);   ///// Shift logs and clip
              // shifted_logs = (shifted_logs.array() < huge_neg).select(huge_neg, shifted_logs);   ///// additionally clip (can comment out for no clipping)

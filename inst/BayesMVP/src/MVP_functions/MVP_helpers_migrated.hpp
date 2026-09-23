@@ -46,6 +46,11 @@ inline KernelChoice kernel_choice_from_args(const Model_fn_args_struct &A) {
   KernelChoice k;
   k.Phi_approx     = (Phi_type == "Phi_approx") || (Phi_type == "Phi_approx_2");
   k.inv_Phi_approx = (inv_Phi_type == "inv_Phi_approx");
+  //// 2026-09-22 (assistant): any other Phi_type / inv_Phi_type string used to be treated silently as the exact setting; now it stops.
+  if ((k.Phi_approx == false) && (Phi_type != "Phi"))
+    throw std::runtime_error("kernel_choice_from_args: unknown Phi_type '" + Phi_type + "' (allowed: Phi, Phi_approx, Phi_approx_2)");
+  if ((k.inv_Phi_approx == false) && (inv_Phi_type != "inv_Phi"))
+    throw std::runtime_error("kernel_choice_from_args: unknown inv_Phi_type '" + inv_Phi_type + "' (allowed: inv_Phi, inv_Phi_approx)");
   if      (nuis == "Phi")        k.nuisance = NuisTf::Phi;
   else if (nuis == "Phi_approx") k.nuisance = NuisTf::Phi_approx;
   else if (nuis == "inv_logit")  k.nuisance = NuisTf::inv_logit;

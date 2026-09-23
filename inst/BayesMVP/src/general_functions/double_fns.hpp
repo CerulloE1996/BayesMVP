@@ -243,7 +243,67 @@ inline double fast_dZ_dv_from_log_p(const double Z,
       const double log_inv_phi = 0.5 * Z * Z - NEG_HALF_LOG_2PI;           // log(1/phi(Z))
       if (Z < 0.0) return  std::exp(log_p    + log_inv_phi) * dlog_p_dv;       //  (Phi/phi)     * dlog_p/dv
       else         return -std::exp(log_1m_p + log_inv_phi) * dlog_1m_p_dv;   // -((1-Phi)/phi) * dlog_1m_p/dv
-      
+
+}
+
+
+
+
+////
+//// ---- Exact normal tails for the autodiff (stan::math::var) reference paths:
+////
+//// Added 2026-09-22 (assistant, approved change "native exact tails"). Used by the Phi_type = "Phi" branches of
+//// MVP_lp_grad_AD_fns.hpp, std_MVP_lp_grad_AD_fns.hpp, MVOP_lp_grad_AD_fns.hpp and LC_LT_lp_grad_AD_fns.hpp,
+//// which previously switched to the Phi_approx (cubic-logistic) tails beyond overflow_threshold / underflow_threshold
+//// whatever Phi_type was. The values come from the SAME double kernels as the manual-gradient paths (fast_log_Phi,
+//// fast_inv_Phi_from_log_p above), and the derivatives are supplied analytically through precomputed_gradients:
+////
+////   log Phi(x):                 d/dx log Phi(x) = phi(x) / Phi(x)                    (= fast_dlog_Phi_dx(x) = 1 / R(-x) for x < -2.5)
+////   Z = Phi^{-1}(p), p = exp(log_p):
+////                               dZ/dlog_p    =  p / phi(Z)       =  exp(log_p    + Z^2/2 + 0.5 log(2 pi))
+////                               dZ/dlog_1m_p = -(1 - p) / phi(Z)  = -exp(log_1m_p + Z^2/2 + 0.5 log(2 pi))
+////
+//// log_p and log_1m_p are two representations of the same probability, so the total derivative of Z may be routed
+//// through EITHER of them; we route it through the side that cannot overflow (log_p when Z < 0, log_1m_p when Z >= 0),
+//// exactly as fast_dZ_dv_from_log_p does. This is only valid when the caller computes log_p and log_1m_p as
+//// consistent functions of the same upstream vars (every call site in the AD files does: one is log1m_exp of the other,
+//// or both are exact expressions in the same (Bound_Z, u)).
+////
+//// Requires stan/math/rev (var_fns.hpp, which includes it, is always included before this file).
+////
+inline stan::math::var log_Phi_exact_var(const stan::math::var &x_var) {
+
+      const double x_value = x_var.val();
+      const double log_Phi_value = fast_log_Phi(x_value);
+      const double derivative_of_log_Phi_wrt_x = fast_dlog_Phi_dx(x_value);
+      return stan::math::precomputed_gradients(log_Phi_value,
+                                               std::vector<stan::math::var>{x_var},
+                                               std::vector<double>{derivative_of_log_Phi_wrt_x});
+
+}
+
+
+
+
+inline stan::math::var inv_Phi_from_log_p_exact_var(const stan::math::var &log_p_var,
+                                                    const stan::math::var &log_1m_p_var) {
+
+      const double log_p_value    = log_p_var.val();
+      const double log_1m_p_value = log_1m_p_var.val();
+      const double Z_value        = fast_inv_Phi_from_log_p(log_p_value, log_1m_p_value);
+      const double log_inv_phi_Z  = 0.5 * Z_value * Z_value - NEG_HALF_LOG_2PI;    // log(1/phi(Z))
+      if (Z_value < 0.0) {
+            const double derivative_of_Z_wrt_log_p = std::exp(log_p_value + log_inv_phi_Z);
+            return stan::math::precomputed_gradients(Z_value,
+                                                     std::vector<stan::math::var>{log_p_var},
+                                                     std::vector<double>{derivative_of_Z_wrt_log_p});
+      } else {
+            const double derivative_of_Z_wrt_log_1m_p = -std::exp(log_1m_p_value + log_inv_phi_Z);
+            return stan::math::precomputed_gradients(Z_value,
+                                                     std::vector<stan::math::var>{log_1m_p_var},
+                                                     std::vector<double>{derivative_of_Z_wrt_log_1m_p});
+      }
+
 }
 
 
@@ -792,10 +852,10 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Ma
  
  inline  Eigen::Matrix<double, -1, -1  > inv_Phi_approx_from_logit_prob_Stan(  Eigen::Matrix<double, -1, -1  > logit_p)   {
    using namespace stan::math;
-   Eigen::Array<double, -1, -1  > x_i = 0.3418*logit_p.array();
+   Eigen::Array<double, -1, -1  > x_i = 0.34176618822627863*logit_p.array();
    Eigen::Array<double, -1, -1  > asinh_stuff_div_3 =  0.33333333333333331483 *   log(  ( x_i.array()  +  sqrt(fma(x_i.matrix(), x_i.matrix(), 1.0)).array()  ).matrix() ).array() ;          // now do arc_sinh part
    Eigen::Array<double, -1, -1  > exp_x_i = exp(asinh_stuff_div_3.matrix() ).array();
-   return (  2.74699999999999988631 * (  fma(exp_x_i.matrix(), exp_x_i.matrix(), -1.0).array()   / exp_x_i ).array()   ).matrix()    ;  //   now do sinh parth part
+   return (  2.7472242570765295 * (  fma(exp_x_i.matrix(), exp_x_i.matrix(), -1.0).array()   / exp_x_i ).array()   ).matrix()    ;  //   now do sinh parth part
    
  }
  
@@ -804,10 +864,10 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Ma
  
   
   inline  Eigen::Matrix<double, -1, -1  > inv_Phi_approx_from_logit_prob_Eigen_double(  Eigen::Matrix<double, -1, -1  > logit_p)   {
-   Eigen::Array<double, -1, -1  > x_i = 0.3418*logit_p.array();
+   Eigen::Array<double, -1, -1  > x_i = 0.34176618822627863*logit_p.array();
    Eigen::Array<double, -1, -1  > asinh_stuff_div_3 =  0.33333333333333331483 *  ( x_i  + (x_i*x_i + 1.0 ).sqrt() ).log() ;   // now do arc_sinh part
    Eigen::Array<double, -1, -1  > exp_x_i =  (asinh_stuff_div_3).exp();
-   return  (  2.74699999999999988631 * ( (exp_x_i*exp_x_i  - 1.0) / exp_x_i )  ).matrix()   ;  //   now do sinh parth part
+   return  (  2.7472242570765295 * ( (exp_x_i*exp_x_i  - 1.0) / exp_x_i )  ).matrix()   ;  //   now do sinh parth part
  }
  
  
@@ -1355,10 +1415,10 @@ inline   double  fast_Phi_approx(const double x )  {
 
 inline  Eigen::Matrix<double, -1, -1  > inv_Phi_approx_Eigen_double(  const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> x)   {
   
-  Eigen::Matrix<double, -1, -1  > x_i = -0.3418*( 1.0/x.array()  - 1.0 ).log();
+  Eigen::Matrix<double, -1, -1  > x_i = -0.34176618822627863*( 1.0/x.array()  - 1.0 ).log();
   Eigen::Matrix<double, -1, -1  > asinh_stuff_div_3 = ( 0.33333333333333331483 *  ( x_i.array()   + (x_i.array() *x_i.array()  + 1.0 ).sqrt() ).log()  ).matrix() ;          // now do arc_sinh part
   Eigen::Matrix<double, -1, -1  > exp_x_i =  (asinh_stuff_div_3).exp();
-  return  2.74699999999999988631 * ( ( exp_x_i.array() *exp_x_i.array()   - 1.0).array()  / exp_x_i.array()  ).matrix() ;  //   now do sinh parth part
+  return  2.7472242570765295 * ( ( exp_x_i.array() *exp_x_i.array()   - 1.0).array()  / exp_x_i.array()  ).matrix() ;  //   now do sinh parth part
   
 } 
 
@@ -1367,10 +1427,10 @@ inline  Eigen::Matrix<double, -1, -1  > inv_Phi_approx_Eigen_double(  const Eige
 
 inline  double  inv_Phi_approx_std( const double x )  {
   const double m_logit_p =   std::log( 1.0/x  - 1.0 )  ; // log first
-  const double x_i = -0.3418*m_logit_p;
+  const double x_i = -0.34176618822627863*m_logit_p;
   const double asinh_stuff_div_3 =  0.33333333333333331483 * std::log( x_i  +  std::sqrt(  fma(x_i, x_i, 1.0) ) )  ;          // now do arc_sinh part
   const double exp_x_i =  std::exp(asinh_stuff_div_3);
-  return  2.74699999999999988631 * ( fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
+  return  2.7472242570765295 * ( fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
 }
 
 
@@ -1382,11 +1442,11 @@ inline  double  inv_Phi_approx_std( const double x )  {
 
 inline Eigen::Matrix<double, -1, -1> inv_Phi_approx_Stan(const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> x)   {
   
-            Eigen::Matrix<double, -1, -1  > x_i = ( -0.3418*stan::math::log(  ( 1.0/x.array() - 1.0 ).matrix()  ).array()  ).matrix() ;
+            Eigen::Matrix<double, -1, -1  > x_i = ( -0.34176618822627863*stan::math::log(  ( 1.0/x.array() - 1.0 ).matrix()  ).array()  ).matrix() ;
             Eigen::Matrix<double, -1, -1  > asinh_stuff_div_3 = (  0.33333333333333331483 *  stan::math::log(  ( x_i.array()  + stan::math::sqrt( (x_i.array()*x_i.array() + 1.0 ).matrix() ).array()  ).matrix()  ).array() ).matrix() ;          // now do arc_sinh part
             Eigen::Matrix<double, -1, -1  > exp_x_i =  stan::math::exp(asinh_stuff_div_3.matrix() ).matrix();
             
-            return  ( 2.74699999999999988631 * ( ( exp_x_i.array()*exp_x_i.array()  - 1.0) / exp_x_i.array() ).array() ).matrix() ;  //   now do sinh parth part
+            return  ( 2.7472242570765295 * ( ( exp_x_i.array()*exp_x_i.array()  - 1.0) / exp_x_i.array() ).array() ).matrix() ;  //   now do sinh parth part
 }
 
 
@@ -1395,11 +1455,11 @@ inline Eigen::Matrix<double, -1, -1> inv_Phi_approx_Stan(const Eigen::Ref<const 
  
 inline Eigen::Matrix<double, -1, -1  > inv_Phi_approx_Eigen(  const Eigen::Ref<const Eigen::Matrix<double, -1, -1>>  x)   {
   
-            Eigen::Array<double, -1, -1  > x_i = -0.3418*( 1.0/x.array() - 1.0 ).log();
+            Eigen::Array<double, -1, -1  > x_i = -0.34176618822627863*( 1.0/x.array() - 1.0 ).log();
             Eigen::Array<double, -1, -1  > asinh_stuff_div_3 =  0.33333333333333331483 *  ( x_i  + (x_i*x_i + 1.0 ).sqrt() ).log() ;          // now do arc_sinh part
             Eigen::Array<double, -1, -1  > exp_x_i =  (asinh_stuff_div_3).exp();
             
-            return   (  2.74699999999999988631 * ( ( exp_x_i*exp_x_i  - 1.0) / exp_x_i )  ).matrix() ;  //   now do sinh parth part
+            return   (  2.7472242570765295 * ( ( exp_x_i*exp_x_i  - 1.0) / exp_x_i )  ).matrix() ;  //   now do sinh parth part
             
 }
 
@@ -1412,10 +1472,10 @@ inline Eigen::Matrix<double, -1, -1  > inv_Phi_approx_Eigen(  const Eigen::Ref<c
 inline  double  fast_inv_Phi_approx_wo_checks( const double x )  {
   
   const double m_logit_p = fast_log_1_wo_checks( 1.0/x - 1.0); // log first
-  const double x_i = -0.3418*m_logit_p;
+  const double x_i = -0.34176618822627863*m_logit_p;
   const double asinh_stuff_div_3 =  0.33333333333333331483 * fast_log_1_wo_checks( x_i  +  std::sqrt(  fma(x_i, x_i, 1.0) ) ) ;          // now do arc_sinh part
   const double exp_x_i = fast_exp_1_wo_checks(asinh_stuff_div_3);
-  return  2.74699999999999988631 * ( ((exp_x_i*exp_x_i)  - 1.0) / exp_x_i ) ;  //   now do sinh parth part
+  return  2.7472242570765295 * ( ((exp_x_i*exp_x_i)  - 1.0) / exp_x_i ) ;  //   now do sinh parth part
   
 }
  
@@ -1425,10 +1485,10 @@ inline  double  fast_inv_Phi_approx( const double x )  {
   
       if ( (x > 0) &&  (x < 1)) {
             const double m_logit_p = fast_log_1(1.0/x - 1.0); // log first
-            const double x_i = -0.3418*m_logit_p;
+            const double x_i = -0.34176618822627863*m_logit_p;
             const double asinh_stuff_div_3 =  0.33333333333333331483 * fast_log_1(x_i + std::sqrt(fma(x_i, x_i, 1.0))) ;          // now do arc_sinh part
             const double exp_x_i = fast_exp_1(asinh_stuff_div_3);
-            return  2.74699999999999988631 * (((exp_x_i*exp_x_i)  - 1.0) / exp_x_i) ;  //   now do sinh parth part
+            return  2.7472242570765295 * (((exp_x_i*exp_x_i)  - 1.0) / exp_x_i) ;  //   now do sinh parth part
       }  else {
             if ((x < 0) || (x > 1)) {
               // return std::numeric_limits<double>::quiet_NaN();
@@ -1459,10 +1519,10 @@ inline  double  fast_inv_Phi_approx( const double x )  {
 // need to add citation to this (slight modification from a forum post)
 inline    double inv_Phi_approx_from_logit_prob_std(const double logit_p) {
   
-  double x_i = 0.3418*logit_p;
+  double x_i = 0.34176618822627863*logit_p;
   double asinh_stuff_div_3 =  0.33333333333333331483 *  std::log( x_i  +   std::sqrt(  fma(x_i, x_i, 1.0) ) ) ;          // now do arc_sinh part
   double exp_x_i =  std::exp(asinh_stuff_div_3);
-  return  2.74699999999999988631 * ( fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
+  return  2.7472242570765295 * ( fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
   
 }
 
@@ -1474,10 +1534,10 @@ inline    double inv_Phi_approx_from_logit_prob_std(const double logit_p) {
 // need to add citation to this (slight modification from a forum post)
 inline    double fast_inv_Phi_approx_from_logit_prob_wo_checks(const double  logit_p) {
   
-  double x_i = 0.3418*logit_p;
+  double x_i = 0.34176618822627863*logit_p;
   double asinh_stuff_div_3 =  0.33333333333333331483 *  fast_log_1(x_i  +   std::sqrt(x_i*x_i + 1.0)) ;          // now do arc_sinh part
   double exp_x_i =  fast_exp_1_wo_checks(asinh_stuff_div_3);
-  return  2.74699999999999988631 * ( (exp_x_i*exp_x_i  - 1.0) / exp_x_i ) ;  //   now do sinh parth part
+  return  2.7472242570765295 * ( (exp_x_i*exp_x_i  - 1.0) / exp_x_i ) ;  //   now do sinh parth part
   
 }
  
@@ -1485,10 +1545,10 @@ inline    double fast_inv_Phi_approx_from_logit_prob_wo_checks(const double  log
 // need to add citation to this (slight modification from a forum post)
 inline   double fast_inv_Phi_approx_from_logit_prob(const double  logit_p) {
   
-  double x_i = 0.3418*logit_p;
+  double x_i = 0.34176618822627863*logit_p;
   double asinh_stuff_div_3 =  0.33333333333333331483 *  fast_log_1_wo_checks(x_i  +   std::sqrt(x_i*x_i + 1.0)) ;          // now do arc_sinh part
   double exp_x_i =  fast_exp_1_wo_checks(asinh_stuff_div_3);
-  return  2.74699999999999988631 * ( (exp_x_i*exp_x_i  - 1.0) / exp_x_i ) ;  //   now do sinh parth part
+  return  2.7472242570765295 * ( (exp_x_i*exp_x_i  - 1.0) / exp_x_i ) ;  //   now do sinh parth part
   
 }
  
@@ -1664,42 +1724,102 @@ inline  double    fast_tanh_wo_checks(const   double x  )   {
  
 
 
-//// based on Abramowitz-Stegun polynomial approximation for Phi
-inline double fast_Phi_wo_checks(double x) {
-  
-      static const double a = 0.2316419;
-      static const double b1 = 0.31938153;
-      static const double b2 = -0.356563782;
-      static const double b3 = 1.781477937;
-      static const double b4 = -1.821255978;
-      static const double b5 = 1.330274429;
-      static const double rsqrt_2pi = 0.3989422804014327;
-      
-      double z = std::fabs(x);
-      double t = 1.0 / (1.0 + a * z);
-      double poly = b1 * t + b2 * t * t + b3 * t * t * t + b4 * t * t * t * t + b5 * t * t * t * t * t;
-      double val;
-      
-      if (x >= 0.0) {
-        
-         val =  1.0 - rsqrt_2pi * fast_exp_1(-0.5 * z * z ) * poly;
-        
-      } else {
-        
-         val = rsqrt_2pi * fast_exp_1(-0.5 * z * z) * poly;
-        
-      } 
+//// ---- fast_Phi: relative-minimax rational approximation of the Mills ratio (2026-09-22, replaces Abramowitz & Stegun 26.2.17):
+////
+////   Phi(-z) = phi(z) * R(z),   R(z) = Phi(-z) / phi(z) = sqrt(pi/2) * erfcx(z / sqrt(2)),   z = |x|,
+////   R(z) ~= P6(z) / Q7(z)  on z in [0, 37.5],   max relative error 7.8e-12 (measured on a dense grid in mpmath, double coefficients),
+////   so  Phi(-z) = exp(-z^2/2) * N6(z) / Q7(z)  with  N6 = P6 / sqrt(2 pi)  (the 1/sqrt(2 pi) of phi is folded into N6),
+////   and Phi(x) = 1 - Phi(-x) for x > 0 (the same reflection as before).
+////
+//// Why: A&S 26.2.17 (Zelen & Severo 1964 / Hastings 1955 form, published) has absolute error <= 7.5e-8 but RELATIVE error 5e-5 at
+//// x = -3, 8e-3 at -7.5 and 0.16 at -37.5, while every caller registers the exact density phi(x) as the gradient, so value and
+//// gradient disagreed in the lower tail (and log(fast_Phi) was off by up to 0.17 nats). The rational form is relative-accurate for
+//// every x, branch-free, and costs the same as A&S: one exp, one divide and 13 FMAs (A&S: 1 FMA + 9 multiplies + 4 adds).
+////
+//// Provenance: the Mills-ratio/rational form is standard (e.g. Cody 1969, Math. Comp. 23:631-637, uses rationals for erfc);
+//// THESE coefficients were fitted by an assistant (Claude, 2026-09-22) with a relative-error Sanathanan-Koerner / Lawson
+//// near-minimax fit in 40-digit mpmath, constrained to N6(0) = 0.5 exactly so that fast_Phi(0) = 0.5 with no jump at x = 0.
+//// FAST_PHI_MILLS_Z_CAP caps only the rational's argument (the exp still sees the true z): it keeps N and Q finite for
+//// |x| = inf / huge |x| (exp(-z^2/2) = 0 there, so the result is 0 / 1 exactly as before) and does not change any x in [-37.5, 8.25].
+#ifndef BAYESMVP_FAST_PHI_MILLS_COEFFICIENTS_DEFINED
+#define BAYESMVP_FAST_PHI_MILLS_COEFFICIENTS_DEFINED
+static constexpr double FAST_PHI_MILLS_Z_CAP = 38.5;
+static constexpr double FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[7] = {   //// N6(z) = sum_k c[k] z^k   (includes 1/sqrt(2 pi))
+        0.5,
+        0.5968126365007661,
+        0.34755100079419643,
+        0.12199983678527791,
+        0.027010741025906854,
+        0.0035954377698120227,
+        0.0002302422023077616 };
+static constexpr double FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[8] = {   //// Q7(z) = sum_k d[k] z^k
+        1.0,
+        1.9915098343653488,
+        1.7840969388752417,
+        0.9377097714656843,
+        0.314821789667328,
+        0.06828298351478591,
+        0.009012426603260822,
+        0.0005771316095331759 };
+static_assert(FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[0] == 0.5, "fast_Phi Mills rational: N(0) must be exactly 0.5 so that fast_Phi(0) = 0.5");
+static_assert(FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[0] == 1.0, "fast_Phi Mills rational: Q(0) must be exactly 1");
+static_assert(FAST_PHI_MILLS_Z_CAP >= 37.5, "fast_Phi Mills rational: the cap must not bind inside fast_Phi's range [-37.5, 8.25]");
+#endif
 
-      
-      /// ensure output is between 0 and 1 
-      if  ((val > 0) && (val < 1))  { 
+
+
+
+//// Phi(x) = exp(-z^2/2) * N(z) / Q(z) for x < 0, 1 minus that for x >= 0 (z = |x|): see the FAST_PHI_MILLS_* block above (2026-09-22).
+//// Same rational as fast_Phi_wo_checks_AVX2 / _AVX512. It uses std::exp, not the scalar fast_exp_1: fast_exp_1_wo_checks's
+//// -log(2) split (l2h + l2l) is off by 4.7e-11, which gives exp(-z^2/2) a relative error of ~|i| * 4.7e-11 (i = the binary exponent),
+//// i.e. 2e-9 at z = 7.5 and 5e-8 at z = 37.5; std::exp keeps the scalar kernel within ~1e-14 of the AVX kernels
+//// (fast_exp_1_AVX2 / _AVX512 use the exact split -0.693145751953125 + -1.42860682030941723212e-6).
+inline double fast_Phi_wo_checks(double x) {
+
+      const double z = std::fabs(x);
+      //// NaN x: the comparison is false, so z_rational = the cap (as _mm512_min_pd), and the NaN still propagates through std::exp.
+      const double z_rational = (z < FAST_PHI_MILLS_Z_CAP) ? z : FAST_PHI_MILLS_Z_CAP;
+
+      double numerator = FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[6];
+      numerator = std::fma(numerator, z_rational, FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[5]);
+      numerator = std::fma(numerator, z_rational, FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[4]);
+      numerator = std::fma(numerator, z_rational, FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[3]);
+      numerator = std::fma(numerator, z_rational, FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[2]);
+      numerator = std::fma(numerator, z_rational, FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[1]);
+      numerator = std::fma(numerator, z_rational, FAST_PHI_MILLS_NUMERATOR_COEFFICIENTS[0]);
+
+      double denominator = FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[7];
+      denominator = std::fma(denominator, z_rational, FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[6]);
+      denominator = std::fma(denominator, z_rational, FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[5]);
+      denominator = std::fma(denominator, z_rational, FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[4]);
+      denominator = std::fma(denominator, z_rational, FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[3]);
+      denominator = std::fma(denominator, z_rational, FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[2]);
+      denominator = std::fma(denominator, z_rational, FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[1]);
+      denominator = std::fma(denominator, z_rational, FAST_PHI_MILLS_DENOMINATOR_COEFFICIENTS[0]);
+
+      const double lower_tail_probability = std::exp(-0.5 * z * z) * (numerator / denominator);   //// Phi(-z) = exp(-z^2/2) * N(z) / Q(z), same order as the AVX kernels
+      double val;
+
+      if (x >= 0.0) {
+
+         val =  1.0 - lower_tail_probability;
+
+      } else {
+
+         val = lower_tail_probability;
+
+      }
+
+
+      /// ensure output is between 0 and 1
+      if  ((val > 0) && (val < 1))  {
         return val;
-      } else if (val > 1) { 
+      } else if (val >= 1) {   //// >= (2026-09-22): val == 1.0 (x > ~8.29) used to fall to the final branch and return 0
         return 1;
-      } else { 
+      } else {
         return 0;
       }
-      
+
 }
 
 
@@ -1709,7 +1829,9 @@ inline double fast_Phi(const double x) {
 
     const double sqrt_2_recip = 0.707106781186547461715;
 
-    if  ((x > -37.5) && (x < 8.25)) {
+    if (std::isnan(x)) return x;   //// preserve NaN (was returned as 1.0), as fast_Phi_AVX2 / _AVX512 already do (2026-09-22)
+
+    if  ((x >= -37.5) && (x < 8.25)) {   //// >= : x == -37.5 used to fall through to the final branch and return 1.0 (2026-09-22)
       
           return  fast_Phi_wo_checks(x) ; // 0.5 * (1.0 + fast_erf_wo_checks(x * sqrt_2_recip));
       

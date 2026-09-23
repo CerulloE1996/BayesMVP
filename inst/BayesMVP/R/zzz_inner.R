@@ -18,9 +18,9 @@ setup_env_post_install <- function() {
           library(RcppParallel)
           
           if (.Platform$OS.type == "windows") {
-            mvp_user_dir <- file.path(Sys.getenv("USERPROFILE"), "BayesMVP")
+            mvp_user_dir <- file.path(Sys.getenv("USERPROFILE"), "BayesMVP_development_2026_09_21")
           } else { 
-            mvp_user_dir <- file.path(Sys.getenv("HOME"), "BayesMVP")
+            mvp_user_dir <- file.path(Sys.getenv("HOME"), "BayesMVP_development_2026_09_21")
           }
           
           
@@ -89,6 +89,38 @@ setup_env_post_install <- function() {
 
 
 
+#' R_fn_stop_if_several_TBB_copies_loaded
+#' @keywords internal
+R_fn_stop_if_several_TBB_copies_loaded <- function(package_name) {
+
+      ##
+      ## ---- One TBB runtime per R process (2026-09-22):
+      ## If two different libtbb.so.2 files are mapped, the chain workers (RcppParallel::parallelFor) and a BridgeStan
+      ## model's reduce_sum run on different TBB copies. RcppParallel::setThreadOptions() then limits only the first,
+      ## and reduce_sum uses every CPU the process may use (measured on the 4-class LC-MVOP model: 35-47 busy threads
+      ## for 4-16 requested). This happened whenever NicoStan / BayesMVP was loaded before RcppParallel: the package .so
+      ## bound to CmdStan's libtbb.so.2, then RcppParallel's .onLoad loaded its own copy globally and the model bound to that.
+      ## NAMESPACE now imports RcppParallel, so its TBB is loaded before this package's .so and only one copy exists.
+      ## This check makes any other load path fail loudly. Linux only (reads /proc/self/maps).
+      ##
+      if (!file.exists("/proc/self/maps")) return(invisible(NULL))
+      ##
+      mapped_file_paths <- sub("^.* ", "", readLines("/proc/self/maps", warn = FALSE))
+      TBB_library_paths <- unique(grep("/libtbb\\.so(\\.[0-9]+)*$", mapped_file_paths, value = TRUE))
+      ##
+      if (length(TBB_library_paths) > 1) {
+        stop(paste0(package_name, ": ", length(TBB_library_paths), " different copies of the TBB library are loaded (",
+                    paste(TBB_library_paths, collapse = ", "), "), so Stan models using reduce_sum would ignore the thread count. ",
+                    "Restart R and load RcppParallel, NicoStan or BayesMVP before anything else that loads a TBB library."))
+      }
+      ##
+      return(invisible(TBB_library_paths))
+
+}
+
+
+
+
 #' .onLoad
 #' @keywords internal
 #' @export
@@ -97,6 +129,8 @@ setup_env_post_install <- function() {
   
       library(Rcpp)
       library(RcppParallel)
+      ##
+      R_fn_stop_if_several_TBB_copies_loaded(package_name = pkgname)
   
       is_windows <- .Platform$OS.type == "windows"
       

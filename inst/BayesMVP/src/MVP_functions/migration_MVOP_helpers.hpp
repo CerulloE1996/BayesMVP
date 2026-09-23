@@ -52,6 +52,67 @@ inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
                                            const KernelChoice &k
 ) {
 
+  ////
+  //// ---- 2026-09-22 (assistant, approved change): for exact Phi (Phi_type = "Phi") the right-side seam is removed by reflection.
+  ////
+  //// Binary: identical to fn_MVP_compute_lp_GHK_cols_T (see the derivation there): prob = Phi(sign_y * B), sign_y = 1 - 2y,
+  ////         q = (y - (2y-1) u) prob, Z = sign_y * Phi^{-1}(q).
+  //// Ordinal: when BOTH bounds are positive (lower bound lb > 0), Phi(ub) - Phi(lb) is a difference of two numbers near 1
+  ////         (catastrophic cancellation near lb = +7.5, just inside overflow_threshold). Using Phi(x) = 1 - Phi(-x):
+  ////           reflect  = (lb > 0);  a = reflect ? -ub : lb;  b = reflect ? -lb : ub     (a < b; a = -Inf when ub = +Inf)
+  ////           prob     = Phi(b) - Phi(a)                       [ = Phi(-lb) - Phi(-ub) = Phi(ub) - Phi(lb) when reflecting ]
+  ////           q        = Phi(a) + w prob,  w = reflect ? (1 - u) : u
+  ////                      [ reflecting: q = u Phi(-ub) + (1 - u) Phi(-lb) = 1 - (Phi(lb) + u (Phi(ub) - Phi(lb))) = 1 - Phi_Z ]
+  ////           Z        = reflect ? -Phi^{-1}(q) : Phi^{-1}(q),  Phi_Z = reflect ? 1 - q : q
+  ////           Phi(lb)  = reflect ? 1 - Phi(b) : Phi(a)       (stored for completeness; only the Phi_approx derivative reads it)
+  ////         Non-reflected rows use exactly the old operations. The gradient code is unchanged: it uses the analytic
+  ////         derivatives phi(lb), phi(ub) (from the bounds) and 1/phi(Z) (from Z), which do not depend on how prob was formed.
+  ////
+  if (!k.Phi_approx) {
+    
+        if (is_binary) {
+          
+              prob.col(t).array() = (1.0 - 2.0 * y_chunk.col(t).array()) * Bound_Z.col(t).array();
+              Phi_col_inplace<vec>(prob, t, k);
+              Bound_U_Phi_Bound_Z.col(t).array() = y_chunk.col(t).array()
+                                                 + (1.0 - 2.0 * y_chunk.col(t).array()) * prob.col(t).array();
+              Z_std_norm.col(t).array() = (y_chunk.col(t).array() - (2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array())
+                                        * prob.col(t).array();                                                       //// q
+              Phi_Z.col(t).array() = y_chunk.col(t).array()
+                                   + (1.0 - 2.0 * y_chunk.col(t).array()) * Z_std_norm.col(t).array();
+              inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
+              Z_std_norm.col(t).array() *= (1.0 - 2.0 * y_chunk.col(t).array());
+              y1_log_prob.col(t) = prob.col(t);
+              apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+          
+        } else {
+          
+              const Eigen::Array<bool, -1, 1> reflect_mask_col = (Bound_Z.col(t).array() > 0.0);                   //// lb > 0 (then ub > lb > 0)
+              //// Phi(a) -> Bound_U_Phi_Bound_Z (temporarily), Phi(b) -> prob:
+              Bound_U_Phi_Bound_Z.col(t).array() = reflect_mask_col.select(-Upper_Bound_Z.col(t).array(), Bound_Z.col(t).array());
+              Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
+              prob.col(t).array() = reflect_mask_col.select(-Bound_Z.col(t).array(), Upper_Bound_Z.col(t).array());
+              Phi_col_inplace<vec>(prob, t, k);
+              prob.col(t).array() -= Bound_U_Phi_Bound_Z.col(t).array();                                               //// prob = Phi(b) - Phi(a)
+              //// q = Phi(a) + w prob:
+              Z_std_norm.col(t).array() = Bound_U_Phi_Bound_Z.col(t).array()
+                                        + reflect_mask_col.select(1.0 - u_array.col(t).array(), u_array.col(t).array()) * prob.col(t).array();
+              Phi_Z.col(t).array() = reflect_mask_col.select(1.0 - Z_std_norm.col(t).array(), Z_std_norm.col(t).array());
+              //// Phi(lb) = reflect ? 1 - Phi(b) = 1 - (Phi(a) + prob) : Phi(a):
+              Bound_U_Phi_Bound_Z.col(t).array() = reflect_mask_col.select(1.0 - (Bound_U_Phi_Bound_Z.col(t).array() + prob.col(t).array()),
+                                                                           Bound_U_Phi_Bound_Z.col(t).array());
+              inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
+              Z_std_norm.col(t).array() = reflect_mask_col.select(-Z_std_norm.col(t).array(), Z_std_norm.col(t).array());
+              y1_log_prob.col(t) = prob.col(t);
+              apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+          
+        }
+        
+        return;
+    
+  }
+
+  //// ---- Phi_approx setting: original code below, unchanged ----
   if (is_binary) {
 
         //// Phi(BZ):

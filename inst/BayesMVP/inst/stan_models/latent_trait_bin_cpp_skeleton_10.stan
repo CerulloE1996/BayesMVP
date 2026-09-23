@@ -62,22 +62,22 @@ functions {
  
       // need to add citation to this (slight modification from a HP. calculators forum post)
       real inv_Phi_approx_from_prob(real p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit(p)  )) ;
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit(p)  )) ;
       }
       
       // need to add citation to this (slight modification from a HP. calculators forum post)
       vector inv_Phi_approx_from_prob(vector p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit(p)  )) ;  
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit(p)  )) ;  
       }
       
       // need to add citation to this  (slight modification from a HP. calculators forum post)
       real inv_Phi_approx_from_logit_prob(real logit_p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit_p  )) ; 
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit_p  )) ; 
       }
       
       // need to add citation to this (slight modification from a HP. calculators forum post)
       vector inv_Phi_approx_from_logit_prob(vector logit_p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 *logit_p  )) ; 
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 *logit_p  )) ; 
       }
  
       vector rowwise_sum(matrix M) {      // M is (N x T) matrix
@@ -128,8 +128,8 @@ data {
       array[n_class] matrix[1, n_tests] prior_beta_mean;  ////  // array[n_class, n_tests, n_covariates_max]  real prior_beta_mean;
       array[n_class] matrix<lower=0>[1, n_tests] prior_beta_sd;     //// array[n_class, n_tests, n_covariates_max]  real<lower=0> prior_beta_sd;
       ////
-      matrix<lower=0>[n_pops, 1] prev_prior_a; // NOTE: Some Stan vector's written as mtx. w/ 1 col to avoid issues w/ custom C++ fns ; ## NOTE: Some Stan vector's written as mtx. w/ 1 col to avoid issues w/ custom C++ fns 
-      matrix<lower=0>[n_pops, 1] prev_prior_b; // NOTE: Some Stan vector's written as mtx. w/ 1 col to avoid issues w/ custom C++ fns 
+      matrix<lower=0>[n_pops, 1] prior_prev_a; // NOTE: Some Stan vector's written as mtx. w/ 1 col to avoid issues w/ custom C++ fns ; ## NOTE: Some Stan vector's written as mtx. w/ 1 col to avoid issues w/ custom C++ fns 
+      matrix<lower=0>[n_pops, 1] prior_prev_b; // NOTE: Some Stan vector's written as mtx. w/ 1 col to avoid issues w/ custom C++ fns 
       ///// other
       int Phi_type;
       int handle_numerical_issues;
@@ -143,7 +143,7 @@ data {
 
 
 parameters {
-      matrix[N, n_tests] u_raw; ////  put nuisance parameters FIRST (NOTE: doesnt have to be on "raw" scale to work as grad is computed w.r.t unconstrained anyway!)
+      // Internal constrain-only skeleton: the native sampler owns the nuisance block.
       vector[n_class * n_tests] LT_b_raw_vec; //// Put the b's before the a's for this model!
       vector[n_class * n_tests] LT_a_vec; //// Put the b's before the a's for this model!
       vector[n_pops] p_raw;
@@ -281,7 +281,6 @@ generated quantities {
      // }
 
 }
-
 
 
 

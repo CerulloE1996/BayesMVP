@@ -110,21 +110,32 @@ void                             fn_lp_grad_LT_LC_multi_attempts_InPlace_process
   
   Eigen::Matrix<double, -1, 1> out_mat_orig = out_mat; // store initial input 
   
+  //// 2026-09-22 (assistant): audit item D5, as in MVP_lp_grad_multi_attempts.hpp. Attempt 1 is now inside try/catch, mirroring the
+  //// autodiff attempt below, so a Stan-math exception moves on to the fallback instead of escaping. The settings strings are checked
+  //// first, outside any try, so a mistyped setting still stops with a clear message (latent_trait accepts "Phi_approx_rough").
+  fn_check_settings_strings_before_multi_attempts(  Model_args_as_cpp_struct,
+                                                    true,
+                                                    "fn_lp_grad_LT_LC_multi_attempts_InPlace_process");
+  
   ///// 1st attempt
   { //// if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {   // NOT log-scale and NOT autodiff (least numerically stable but fastest)
         
         NaN_or_Inf_indicator = 0;  // Reset NaN_or_Inf indicator
-    
-        fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(  out_mat, 
-                                                           theta_main_vec_ref,
-                                                           theta_us_vec_ref,
-                                                           y_ref,
-                                                           grad_option,
-                                                           Model_args_as_cpp_struct);
         
-        if (is_NaN_or_Inf_Eigen(out_mat)) { 
-          NaN_or_Inf_indicator = 1;
-        } 
+        try {
+              fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(  out_mat, 
+                                                                 theta_main_vec_ref,
+                                                                 theta_us_vec_ref,
+                                                                 y_ref,
+                                                                 grad_option,
+                                                                 Model_args_as_cpp_struct);
+              
+              if (is_NaN_or_Inf_Eigen(out_mat)) { 
+                NaN_or_Inf_indicator = 1;
+              } 
+        } catch (const std::exception &) {
+              NaN_or_Inf_indicator = 1;
+        }
     
   } 
   

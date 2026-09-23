@@ -31,7 +31,6 @@ init_and_run_burnin_ChESSR(
   manual_tau,
   tau_if_manual,
   tau_if_manual_in_L_units = FALSE,
-  tau_objective = c("KE", "ChEES", "ChEES_per_tau"),
   tau_weight_by_p_jump = FALSE,
   tau_ramp = c("original", "staged"),
   eps_reinit_at_ChEES_handover = TRUE,
@@ -56,9 +55,6 @@ init_and_run_burnin_ChESSR(
   force_autodiff_for_metric,
   force_PartialLog_for_metric,
   force_multi_attempts_for_metric,
-  vect_type,
-  Phi_type,
-  inv_Phi_type,
   metric_type_main,
   metric_shape_main,
   ratio_M_main,
@@ -95,3 +91,5 @@ init_and_run_burnin_ChESSR(
 \description{
 init_and_run_burnin_ChESSR
 }
+
+\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{KE}, \code{ChEES}, \code{ChEESR}, or \code{SNAPER}. Historical \code{ChESSR} spellings select \code{ChEESR}. The frozen BayesMVPlegacy package retains the previous API and defaults.}

@@ -75,16 +75,16 @@ functions {
       }
 
       real inv_Phi_approx_from_prob(real p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit(p)  )) ;
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit(p)  )) ;
       }
       vector inv_Phi_approx_from_prob(vector p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit(p)  )) ;  
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit(p)  )) ;  
       }
       real inv_Phi_approx_from_logit_prob(real logit_p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 * logit_p  )) ; 
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 * logit_p  )) ; 
       }
       vector inv_Phi_approx_from_logit_prob(vector logit_p) { 
-            return 5.494 *  sinh(0.33333333333333331483 * asinh( 0.3418 *logit_p  )) ; 
+            return 5.494448514153059 *  sinh(0.33333333333333331483 * asinh( 0.34176618822627863 *logit_p  )) ; 
       }
  
       vector rowwise_sum(matrix M) {
@@ -102,6 +102,97 @@ functions {
             rowwise_maxes_2d_array[, 1] = rowwise_max(array_2d_to_lse);
             rowwise_maxes_2d_array[, 2] = rowwise_maxes_2d_array[, 1];
             return rowwise_maxes_2d_array[, 1] + log(rowwise_sum(exp((array_2d_to_lse - rowwise_maxes_2d_array))));
+      }
+
+      //////////////////////////////////////////////////////////////////////////
+      //// ---- EXACT normal GHK helpers (added 2026-09-22, round 5):
+      ////
+      //// This file always uses the exact standard normal CDF (no Phi_type branches, no under/overflow tail branches). Before this
+      //// change its GHK step formed 1 - Phi(x) by subtraction: the binary y == 1 step used log1m(Phi(Bound_Z)) and
+      //// inv_Phi(Phi(Bound_Z) + (1 - Phi(Bound_Z)) * u), and the ordinal step formed Phi(upper) - Phi(lower) and
+      //// inv_Phi(Phi(lower) + prob * u). Stan's Phi(x) returns exactly 1 for x > 8.25 (and 0 for x < -37.5),
+      //// so beyond those points the log-likelihood contribution was log(0) = -Inf (NaN gradient) and Z = +/-Inf, and relative accuracy was
+      //// already being lost well before (1 - Phi(x) is below 1e-7 from x ~ 5.2). The routines below use the reflection
+      //// 1 - Phi(x) = Phi(-x) on the log scale, so 1 - Phi(x) is never formed by subtraction, and Z is taken from whichever of
+      //// log(q) / log(1 - q) is the smaller side. The target is unchanged (at ordinary points the value and gradient agree with the
+      //// old code to rounding). log_Phi_stable, inv_Phi_from_log_lower, normal_from_log_uniform, Phi_exact_binary_step and
+      //// Phi_exact_interval_step are copied verbatim from LC_MVOP_PartialLog_v2.stan (the same routines as its Phi_type == 0 path).
+      ////
+      real log_Phi_stable(real x) {
+                //// Differentiate the SAME expression used for the log-CDF value. This avoids
+                //// the separate approximate derivative in the bundled std_normal_lcdf routine.
+                if (x < -10.0) {
+                    //// Laplace continued fraction for the Mills ratio Phi(-t) / phi(t).
+                    //// Twenty terms agree to double precision in this t > 10 branch.
+                    real t = -x;
+                    real r = 0.0;
+                    for (k in 1:20) r = (21.0 - k) / (t + r);
+                    return -0.5 * square(x) - 0.5 * log(2.0 * pi()) - log(t + r);
+                }
+                if (x <= 0.0) return log(erfc(-x / sqrt(2.0))) - log(2.0);
+                return log1m(0.5 * erfc(x / sqrt(2.0)));
+      }
+      real inv_Phi_from_log_lower(real log_p) {
+                //// Called only for a probability <= 0.5. Exponentiating is safe down to -700.
+                if (log_p > -700.0) return inv_Phi(exp(log_p));
+                real z = -sqrt(-2.0 * log_p);
+                for (i in 1:5) {
+                    real lp = log_Phi_stable(z);
+                    z -= (lp - log_p) * exp(lp - std_normal_lpdf(z));
+                }
+                return z;
+      }
+      real normal_from_log_uniform(real log_u, real log1m_u) {
+                if (log_u <= -log(2.0)) return inv_Phi_from_log_lower(log_u);
+                return -inv_Phi_from_log_lower(log1m_u);
+      }
+      ////
+      //// Binary GHK step (exact normal): y == 1 -> Z truncated to (Bound_Z, Inf), y == 0 -> Z truncated to (-Inf, Bound_Z).
+      //// Returns [Z_std_norm, log-likelihood contribution].
+      ////
+      vector Phi_exact_binary_step(real Bound_Z, real y_obs, real u_obs) {
+                vector[2] Z_and_log_lik;
+                real log_q;
+                real log_1m_q;
+                if (y_obs == 1) {
+                    //// log(1 - Phi(Bound_Z)) = log Phi(-Bound_Z);  q = Phi(Bound_Z) + (1 - Phi(Bound_Z)) u,  1 - q = (1 - Phi(Bound_Z)) (1 - u).
+                    Z_and_log_lik[2] = log_Phi_stable(-Bound_Z);
+                    log_1m_q = log1m(u_obs) + Z_and_log_lik[2];
+                    log_q = log1m_exp(log_1m_q);
+                } else {
+                    //// log Phi(Bound_Z);  q = Phi(Bound_Z) u.
+                    Z_and_log_lik[2] = log_Phi_stable(Bound_Z);
+                    log_q = log(u_obs) + Z_and_log_lik[2];
+                    log_1m_q = log1m_exp(log_q);
+                }
+                Z_and_log_lik[1] = normal_from_log_uniform(log_q, log_1m_q);
+                return Z_and_log_lik;
+      }
+      ////
+      //// Interval GHK step (exact normal): Z truncated to (Bound_Z_lo, Bound_Z_hi). Returns [Z_std_norm, log-likelihood contribution].
+      //// Bound_Z_lo > 0 uses the reflected (right-side) form, so neither Phi(hi) - Phi(lo) nor Phi(lo) + prob * u is formed near 1.
+      ////
+      vector Phi_exact_interval_step(real Bound_Z_lo, real Bound_Z_hi, real u_obs) {
+                vector[2] Z_and_log_lik;
+                real log_q;
+                real log_1m_q;
+                if (Bound_Z_lo > 0) {
+                    //// P = (1 - Phi(lo)) - (1 - Phi(hi)),  1 - q = (1 - u)(1 - Phi(lo)) + u (1 - Phi(hi))  (sum of positive terms).
+                    real log_1m_Phi_lo = log_Phi_stable(-Bound_Z_lo);
+                    real log_1m_Phi_hi = log_Phi_stable(-Bound_Z_hi);
+                    Z_and_log_lik[2] = log_diff_exp(log_1m_Phi_lo, log_1m_Phi_hi);
+                    log_1m_q = log_sum_exp(log_1m_Phi_lo + log1m(u_obs), log_1m_Phi_hi + log(u_obs));
+                    log_q = log1m_exp(log_1m_q);
+                } else {
+                    //// P = Phi(hi) - Phi(lo),  q = (1 - u) Phi(lo) + u Phi(hi)  (sum of positive terms; 1 - q >= (1 - u) / 2 here).
+                    real log_Phi_lo = log_Phi_stable(Bound_Z_lo);
+                    real log_Phi_hi = log_Phi_stable(Bound_Z_hi);
+                    Z_and_log_lik[2] = log_diff_exp(log_Phi_hi, log_Phi_lo);
+                    log_q = log_sum_exp(log_Phi_lo + log1m(u_obs), log_Phi_hi + log(u_obs));
+                    log_1m_q = log1m_exp(log_q);
+                }
+                Z_and_log_lik[1] = normal_from_log_uniform(log_q, log_1m_q);
+                return Z_and_log_lik;
       }
 
       //////////////////////////////////////////////////////////////////////////
@@ -247,6 +338,8 @@ transformed data {
       ////
       //// ---- Ordinal indices:
       ////
+      int n_thr_max_gq = (n_ordinal_tests > 0) ? max(n_thr_per_ord_test) : 1;   //// moved here from generated quantities (2026-09-22, round 5): see there
+      ////
       int n_total_C_per_class = (n_ordinal_tests > 0) ? sum(n_thr_per_ord_test) : 0;
       array[max(n_ordinal_tests, 1)] int ord_start_index;
       array[max(n_ordinal_tests, 1)] int ord_end_index;
@@ -350,16 +443,12 @@ transformed parameters {
                                   ////
                                   real Bound_Z = -(Xbeta_nt + inc) * L_Omega_diag_recip[c, t];
                                   
-                                  real Bound_U_Phi_BZ = Phi(Bound_Z);
-                                  if (y[n, t] == 1) {
-                                      real Phi_Z = Bound_U_Phi_BZ + (1.0 - Bound_U_Phi_BZ) * u[t];
-                                      Z_std_norm[t] = inv_Phi(Phi_Z);
-                                      y1[t] = log1m(Bound_U_Phi_BZ);
-                                  } else {
-                                      real Phi_Z = Bound_U_Phi_BZ * u[t];
-                                      Z_std_norm[t] = inv_Phi(Phi_Z);
-                                      y1[t] = log(Bound_U_Phi_BZ);
-                                  }
+                                  //// Exact normal binary step on the log scale with reflection (2026-09-22, round 5). The old code used
+                                  //// log1m(Phi(Bound_Z)) and inv_Phi(Phi + (1 - Phi) * u) for y == 1, which give -Inf / +Inf once Phi(Bound_Z) rounds to 1
+                                  //// (Bound_Z > 8.25); y == 0 likewise fails once Phi(Bound_Z) rounds to 0 (Bound_Z < -37.5). Same target: see Phi_exact_binary_step.
+                                  vector[2] Z_and_log_lik = Phi_exact_binary_step(Bound_Z, y[n, t], u[t]);
+                                  Z_std_norm[t] = Z_and_log_lik[1];
+                                  y1[t] = Z_and_log_lik[2];
                               
                           } else {
                             
@@ -377,32 +466,30 @@ transformed parameters {
                                   real L_tt_recip = L_Omega_diag_recip[c, t];
                                   
                                   // Compute standardized upper and lower bounds:
-                                  real Phi_lower;
-                                  real Phi_upper;
+                                  //// Exact normal step on the log scale with reflection (2026-09-22, round 5). The old code formed
+                                  //// prob_t = Phi_upper - Phi_lower, which rounds to 0 (log(0) = -Inf, Z = +/-Inf) once both bounds are above 8.25 or below -37.5.
+                                  //// Same target: the bottom / top category is the one-sided (binary y == 0 / y == 1) step, a middle
+                                  //// category the two-sided step (see Phi_exact_binary_step / Phi_exact_interval_step).
+                                  vector[2] Z_and_log_lik;
                                   
                                   if (k_obs == 1) {
                                       // First category: lower = -inf
-                                      Phi_lower = 0.0;
                                       real upper_z = (C_t[1] - mu_plus_inc) * L_tt_recip;
-                                      Phi_upper = Phi(upper_z);
+                                      Z_and_log_lik = Phi_exact_binary_step(upper_z, 0.0, u[t]);
                                   } else if (k_obs == n_cat_t) {
                                       // Last category: upper = +inf
                                       real lower_z = (C_t[n_thr_t] - mu_plus_inc) * L_tt_recip;
-                                      Phi_lower = Phi(lower_z);
-                                      Phi_upper = 1.0;
+                                      Z_and_log_lik = Phi_exact_binary_step(lower_z, 1.0, u[t]);
                                   } else {
                                       // Middle category: both bounds finite
                                       real lower_z = (C_t[k_obs - 1] - mu_plus_inc) * L_tt_recip;
                                       real upper_z = (C_t[k_obs] - mu_plus_inc) * L_tt_recip;
-                                      Phi_lower = Phi(lower_z);
-                                      Phi_upper = Phi(upper_z);
+                                      Z_and_log_lik = Phi_exact_interval_step(lower_z, upper_z, u[t]);
                                   }
                                   
                                   // GHK contribution:
-                                  real prob_t = Phi_upper - Phi_lower;
-                                  real Phi_Z = Phi_lower + prob_t * u[t];
-                                  Z_std_norm[t] = inv_Phi(Phi_Z);
-                                  y1[t] = log(prob_t);
+                                  Z_std_norm[t] = Z_and_log_lik[1];
+                                  y1[t] = Z_and_log_lik[2];
                               
                           }
                           
@@ -506,7 +593,9 @@ generated quantities {
       ////
       //// ---- Ordinal baseline Se/Sp at each threshold:
       ////
-      int n_thr_max_gq = (n_ordinal_tests > 0) ? max(n_thr_per_ord_test) : 1;
+      //// int n_thr_max_gq = (n_ordinal_tests > 0) ? max(n_thr_per_ord_test) : 1;
+      //// (2026-09-22, round 5: moved to transformed data, as in LC_MVOP_PartialLog_v1.stan. Declared here it made the file fail to
+      //// compile: a generated-quantities variable cannot size the top-level declarations below.)
       ////
       array[max(n_ordinal_tests, 1)] vector[n_thr_max_gq] Se_baseline_ord;
       array[max(n_ordinal_tests, 1)] vector[n_thr_max_gq] Sp_baseline_ord;
