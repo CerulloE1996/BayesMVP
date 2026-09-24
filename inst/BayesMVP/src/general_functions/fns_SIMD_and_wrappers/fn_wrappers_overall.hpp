@@ -45,7 +45,7 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
        
           } else if (vect_type == "AVX512") { 
       
-              //// ---- SIMD requests (2026-09-22: BOTH levels are compiled on an AVX-512 build; replaces the D3 fallback, see History):
+              //// ---- SIMD requests (BOTH levels are compiled on an AVX-512 build; replaces the earlier fallback, see History):
               ////        "AVX512" -> fn_process_Ref_double_AVX512 (8-lane fast_*_AVX512 kernels),
               ////        "AVX2"   -> fn_process_Ref_double_AVX2   (genuine 256-bit fast_*_AVX2 kernels; compiled on AVX2-only AND on
               ////                                                  AVX-512 builds).
@@ -58,7 +58,7 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
               ////      Plain string branches, AVX512 first: string comparisons cost several ns each and this runs once per vector
               ////      operation in the likelihood (a resolver call here added ~10 ns per call, 8-20% on 8-48-element vectors).
               ////      The AVX512 request now needs 2 comparisons (3 before). No per-element branching, no per-call printing.
-              ////      History: until 2026-09-22 (audit item D3) a request for the level that was not compiled printed "Error: AVX2 is not
+              ////      History: previously, a request for the level that was not compiled printed "Error: AVX2 is not
               ////      available" on every call and returned x UNCHANGED; the D3 fix then ran the ONE compiled level instead, so "AVX2" on
               ////      an AVX-512 build silently meant the 8-lane AVX-512 kernels (and "AVX512" on an AVX2 build the 4-lane ones).
               ////
@@ -82,7 +82,7 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
       
           } else { 
             
-                //// ---- Unrecognised vect_type string (2026-09-22): previously fell through and left x UNCHANGED.
+                //// ---- Unrecognised vect_type string: previously fell through and left x UNCHANGED.
                 ////      The R front end rejects unknown strings before sampling; here we compute the exact
                 ////      Stan-math value rather than silently returning the input.
                 fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);

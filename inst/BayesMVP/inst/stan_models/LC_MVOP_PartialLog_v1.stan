@@ -234,7 +234,7 @@ functions {
       }
 
       //////////////////////////////////////////////////////////////////////////
-      //// ---- EXACT normal GHK helpers (added 2026-09-22, round 5):
+      //// ---- EXACT normal GHK helpers:
       ////
       //// This file always uses the exact standard normal CDF (no Phi_type branches, no under/overflow tail branches). Before this
       //// change its GHK step formed 1 - Phi(x) by subtraction: the binary y == 1 step used log1m(Phi(Bound_Z)) and
@@ -602,7 +602,7 @@ transformed parameters {
                                 if (t <= n_binary_tests) {
                                     //// BINARY test:
                                     real Bound_Z = -(Xbeta_nt + inc) * L_Omega_diag_recip[c, t];
-                                    //// Exact normal binary step on the log scale with reflection (2026-09-22, round 5). The old code used
+                                    //// Exact normal binary step on the log scale with reflection. The old code used
                                     //// log1m(Phi(Bound_Z)) and inv_Phi(Phi + (1 - Phi) * u) for y == 1, which give -Inf / +Inf once Phi(Bound_Z) rounds to 1
                                     //// (Bound_Z > 8.25); y == 0 likewise fails once Phi(Bound_Z) rounds to 0 (Bound_Z < -37.5). Same target: see Phi_exact_binary_step.
                                     vector[2] Z_and_log_lik = Phi_exact_binary_step(Bound_Z, y[n, t], u[t]);
@@ -617,7 +617,7 @@ transformed parameters {
                                     vector[n_thr_t] C_t = get_test_values(C_vec[c], ord_start_index, ord_end_index, t_ord);
                                     real mu_plus_inc = Xbeta_nt + inc;
                                     real L_tt_recip = L_Omega_diag_recip[c, t];
-                                    //// Exact normal step on the log scale with reflection (2026-09-22, round 5). The old code formed
+                                    //// Exact normal step on the log scale with reflection. The old code formed
                                     //// prob_t = Phi_upper - Phi_lower, which rounds to 0 (log(0) = -Inf, Z = +/-Inf) once both bounds are above 8.25 or below -37.5.
                                     //// Same target: the bottom / top category is the one-sided (binary y == 0 / y == 1) step, a middle
                                     //// category the two-sided step (see Phi_exact_binary_step / Phi_exact_interval_step).

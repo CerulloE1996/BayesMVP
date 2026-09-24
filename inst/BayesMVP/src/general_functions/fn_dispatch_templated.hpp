@@ -18,7 +18,7 @@
 //// (fns_SIMD_and_wrappers/fn_SIMD_level_resolver.hpp), the same function the string dispatch
 //// (fn_EIGEN_Ref_double) uses: "AVX512" -> Vec::AVX512, "AVX2" -> Vec::AVX2 (the genuine 4-lane
 //// kernels, also on AVX-512 builds), "Stan"/"Loop" -> Vec::Scalar.
-//// 2026-09-22: a level that is not compiled in (e.g. AVX512 on an AVX2-only laptop) now THROWS.
+//// a level that is not compiled in (e.g. AVX512 on an AVX2-only laptop) now THROWS.
 //// It used to fall back silently (AVX512 -> AVX2 -> Scalar), so an R-side vect_type = "AVX512" on
 //// an AVX2 machine ran AVX2 without saying so (the R front end now stops before sampling in that
 //// case). apply_raw<>'s compile-time fallback below is kept only so that DISPATCH_VEC can
@@ -38,7 +38,7 @@
 
 #include "fns_SIMD_and_wrappers/fn_SIMD_level_resolver.hpp"
 
-//// 2026-09-22: one definition of "compiled", shared with the string dispatch (same conditions as before:
+//// one definition of "compiled", shared with the string dispatch (same conditions as before:
 //// AVX512F+VL+DQ for the 8-lane kernels, AVX2+FMA for the 4-lane kernels).
 #define BMVP_HAS_AVX512 BAYESMVP_COMPILED_AVX512_KERNELS
 #define BMVP_HAS_AVX2   BAYESMVP_COMPILED_AVX2_KERNELS
@@ -68,7 +68,7 @@ inline Vec best_compiled_vec() {
 }
 
 //// Translate the Model_args string to the enum ONCE per driver call.
-//// 2026-09-22: resolved by fn_BayesMVP_SIMD_lane_width_for_vect_type(), which THROWS for a level that is not compiled and for
+//// resolved by fn_BayesMVP_SIMD_lane_width_for_vect_type(), which THROWS for a level that is not compiled and for
 //// unknown strings (including "AVX", which used to map silently to Scalar; the R front end already rejects it). Previously a
 //// request for a level that was not compiled was clamped silently to the best compiled level.
 inline Vec vec_from_string(const std::string &vect_type) {

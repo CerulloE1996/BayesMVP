@@ -118,7 +118,7 @@ Checks performed in this session:
   sampling worker constructor was removed, and `store_iteration()` now only
   checks/writes the nuisance stream when nuisance is actually sampled.
 
-## APMS bridge integration (Claude review feedback)
+## APMS bridge integration
 
 - The bridge settings now default to the paper's algorithm:
   `partitioned_HMC = FALSE`, `diffusion_HMC = TRUE`, with

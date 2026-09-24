@@ -94,7 +94,7 @@ setup_env_post_install <- function() {
 R_fn_stop_if_several_TBB_copies_loaded <- function(package_name) {
 
       ##
-      ## ---- One TBB runtime per R process (2026-09-22):
+      ## ---- One TBB runtime per R process:
       ## If two different libtbb.so.2 files are mapped, the chain workers (RcppParallel::parallelFor) and a BridgeStan
       ## model's reduce_sum run on different TBB copies. RcppParallel::setThreadOptions() then limits only the first,
       ## and reduce_sum uses every CPU the process may use (measured on the 4-class LC-MVOP model: 35-47 busy threads

@@ -40,7 +40,7 @@
 //
 // Kernel dispatch: AVX-512 (8 lanes) when compiled with -mavx512f -mavx512vl -mavx512dq, else AVX2
 // (4 lanes) with -mavx2; anything less is a compile error (a silently scalar build is what we do NOT
-// want to benchmark). 2026-09-22: compiling with -DBAYESMVP_FORCE_AVX2 selects the 4-lane AVX2 kernels
+// want to benchmark). Compiling with -DBAYESMVP_FORCE_AVX2 selects the 4-lane AVX2 kernels
 // even when AVX-512 is enabled (e.g. BridgeStan make argument CPPFLAGS_OPTIM=-DBAYESMVP_FORCE_AVX2), so an
 // AVX-512 machine can run the AVX2 arm with every other compile flag unchanged; bmvp_simd_lanes() then
 // returns 4, which callers check against the requested backend. Tail handling: a partial final block goes through a padded stack buffer whose

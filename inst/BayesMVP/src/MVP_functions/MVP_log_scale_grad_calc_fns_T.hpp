@@ -63,7 +63,7 @@ inline LogSumSignedResult_T log_sum_vec_signed_T(  const Eigen::Ref<const Eigen:
 ) {
   
         const double mx = log_abs.maxCoeff();
-        //// 2026-09-22 (defect D2, assistant): every term is exactly zero (log_abs = -Inf throughout, e.g. the per-row gradients w.r.t. L_Omega(0, 0)
+        //// every term is exactly zero (log_abs = -Inf throughout, e.g. the per-row gradients w.r.t. L_Omega(0, 0)
         //// when test 1's bound is exactly 0). Before this guard, -Inf - (-Inf) = NaN made the whole sum NaN, and the chain rule then turned the
         //// correlation gradient into NaN (0 * NaN). Return the same "log zero" as the s == 0 case below.
         if (std::isinf(mx) && (mx < 0.0)) {
@@ -105,7 +105,7 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 //// =====================================================================================
 //// 1a. Exact normal-tail kernels over a gathered vector (tail rows only).
 ////
-//// Added 2026-09-22 (assistant, approved change "native exact tails"). The tail fix-ups below
+//// The tail fix-ups below
 //// previously used the Phi_approx pair (log_Phi_approx + inv_Phi_approx_from_logit_prob) for
 //// EVERY Phi_type, which spliced the exact interior (Phi_type = "Phi") onto cubic-logistic tails
 //// at overflow_threshold / underflow_threshold (a jump of ~10.7 nats in log Phi at -7.5).
@@ -202,7 +202,7 @@ inline void fn_inv_Phi_from_log_p_exact_T(  const Eigen::Matrix<double, -1, 1> &
 //// 1. GHK log-scale fix-ups for the problem rows (index). Eigen indexed views need a
 ////    temporary per expression; those allocations are unavoidable and small (|index| rows).
 ////
-////    2026-09-22 (assistant, approved change): both functions now take the KernelChoice.
+////    Both functions now take the KernelChoice.
 ////     - Phi_approx AND inv_Phi_approx (the fully approximate setting): the original code,
 ////       unchanged, runs first and returns.
 ////     - otherwise the tail CDF follows kernel_choice.Phi_approx and the tail inverse follows
@@ -567,7 +567,7 @@ inline void fn_MVP_grad_prep_log_scale_T(  Eigen::Ref<Eigen::Matrix<double, -1, 
                                                   + log_prob_recip_rowwise_prod_temp.col(t).array();
           }
         } else {
-          //// 2026-09-22 (defect D2): was log_common_grad_term_1.setConstant(-700.0), a sentinel that the problem-row
+          //// was log_common_grad_term_1.setConstant(-700.0), a sentinel that the problem-row
           //// replacement functions then used as if it were the real term, zeroing the log-scale nuisance / L_Omega
           //// gradients of every problem row of tests 2..n_tests in the standard (single-class) MVP. With one class,
           //// prev = 1 and the likelihood prob_n is the product of ALL the test probabilities, so the latent-class
@@ -741,7 +741,7 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
                 log_terms.col(j).array()  = log_abs_z_grad_term.col(j).array() + log_abs_L_Omega_double(t + ii, t + j - 1);
                 sign_terms.col(j).array() = -sign_z_grad_term.col(j).array() * stan::math::sign(L_Omega_double(t + ii, t + j - 1));
               }
-              //// 2026-09-22 (defect D2, assistant): leftCols(ii + 1), was leftCols(ii). Columns 0..ii are filled just above (the positive
+              //// leftCols(ii + 1), was leftCols(ii). Columns 0..ii are filled just above (the positive
               //// L(t + ii, t - 1) term and the ii negative terms j = 1..ii), matching Enzo's natural-scale recursion in
               //// fn_MVP_compute_nuisance_grad_v2 (zg0 * L(t + ii, t - 1) - zg[1..ii] . L(t + ii, t..t + ii - 1)). leftCols(ii) dropped the
               //// j = ii term, so every problem row of the nuisance columns 0..n_tests - 4 was wrong for n_tests >= 4 (the 3-test fixtures

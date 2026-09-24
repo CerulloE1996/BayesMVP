@@ -15,8 +15,8 @@
  
  
 //// -------------------------------------------------------------------------------------------------------------------------------------------------------------
-//// ---- 2026-09-22: BOTH SIMD levels are compiled on an AVX-512 build.
-////      Until 2026-09-22 this file compiled ONE level (#if USE_AVX_512 ... #elif USE_AVX2, macros from NicoStan's SIMD_config.hpp):
+//// ---- BOTH SIMD levels are compiled on an AVX-512 build.
+////      previously this file compiled ONE level (#if USE_AVX_512 ... #elif USE_AVX2, macros from NicoStan's SIMD_config.hpp):
 ////      fn_process_Ref_double_AVX ran the AVX-512 kernels on an AVX-512 build and the AVX2 kernels on an AVX2 build, and the helpers
 ////      below were typed on the single FuncAVX of SIMD_config.hpp. So vect_type = "AVX2" on an AVX-512 build could only ever run the
 ////      8-lane kernels. Now:
@@ -64,7 +64,7 @@ ALWAYS_INLINE  void fn_AVX_row_or_col_vector(    Eigen::Ref<T>  x_Ref,
        if (N >= vect_size) {
              
                      //// last vect_size elements, copied BEFORE the SIMD pass overwrites them (the scalar remainder pass below recomputes
-                     //// them from their original values). 2026-09-22: moved inside "if (N >= vect_size)"; it used to run for every N and so
+                     //// them from their original values). Moved inside "if (N >= vect_size)"; it used to run for every N and so
                      //// read x_Ref(N - vect_size), i.e. before the start of the vector, whenever N < vect_size (the copy was unused then).
                      Eigen::Matrix<double, -1, 1> x_tail = Eigen::Matrix<double, -1, 1>::Zero(vect_size); // last vect_size elements
                      {
@@ -211,7 +211,7 @@ ALWAYS_INLINE  void    fn_process_double_AVX_sub_function(    Eigen::Ref<T> x_Re
  
 
 #if BAYESMVP_COMPILED_AVX512_KERNELS
-//// ---- 8-lane (AVX-512) processor: the body of the old AVX-512 fn_process_Ref_double_AVX, renamed (2026-09-22) so that it can
+//// ---- 8-lane (AVX-512) processor: the body of the old AVX-512 fn_process_Ref_double_AVX, renamed so that it can
 ////      coexist with the 4-lane one below; the only other change is the <8> lane-width argument of the helpers.
  
 template <typename T>
@@ -299,7 +299,7 @@ ALWAYS_INLINE  void       fn_process_Ref_double_AVX512(    Eigen::Ref<T> x_Ref,
  
  
 #if BAYESMVP_COMPILED_AVX2_KERNELS
-//// ---- 4-lane (AVX2) processor: the body of the old AVX2 fn_process_Ref_double_AVX, renamed (2026-09-22). It used to be compiled
+//// ---- 4-lane (AVX2) processor: the body of the old AVX2 fn_process_Ref_double_AVX, renamed. It used to be compiled
 ////      only when AVX-512 was NOT available (#elif USE_AVX2); it is now compiled on AVX-512 builds too, so vect_type = "AVX2" runs
 ////      the genuine 256-bit fast_*_AVX2 kernels there. The only other change is the <4> lane-width argument of the helpers.
  
@@ -387,7 +387,7 @@ ALWAYS_INLINE  void       fn_process_Ref_double_AVX2(       Eigen::Ref<T> x_Ref,
  
  
 //// ---- fn_process_Ref_double_AVX: the name NicoStan's SIMD_config.hpp forward-declares (whenever USE_AVX2 or USE_AVX_512 is defined).
-////      Kept for compatibility (2026-09-22): it runs the HIGHEST compiled level, exactly what it did before. BayesMVP's own dispatch no
+////      Kept for compatibility: it runs the HIGHEST compiled level, exactly what it did before. BayesMVP's own dispatch no
 ////      longer calls it; fn_EIGEN_Ref_double calls fn_process_Ref_double_AVX512 / fn_process_Ref_double_AVX2 directly.
 template <typename T>
 ALWAYS_INLINE  void       fn_process_Ref_double_AVX(         Eigen::Ref<T> x_Ref,

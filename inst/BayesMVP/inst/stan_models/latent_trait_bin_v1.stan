@@ -75,7 +75,7 @@ functions {
       }
 
       //////////////////////////////////////////////////////////////////////////
-      //// ---- EXACT normal GHK helpers (added 2026-09-22, round 5):
+      //// ---- EXACT normal GHK helpers:
       ////
       //// This file always uses the exact standard normal CDF (no Phi_type branches, no under/overflow tail branches). Before this
       //// change its GHK step formed 1 - Phi(x) by subtraction: the binary y == 1 step used log1m(Phi(Bound_Z)) and
@@ -244,7 +244,7 @@ transformed parameters {
                             for (t in 1:n_tests) {
 
                                     real Bound_Z =  -(LT_a[c, t] + inc) / L_Sigma[c][t, t];
-                                    //// Exact normal binary step on the log scale with reflection (2026-09-22, round 5). The old code used
+                                    //// Exact normal binary step on the log scale with reflection. The old code used
                                     //// log1m(Phi(Bound_Z)) and inv_Phi(Phi + (1 - Phi) * u) for y == 1, which give -Inf / +Inf once Phi(Bound_Z) rounds to 1
                                     //// (Bound_Z > 8.25); y == 0 likewise fails once Phi(Bound_Z) rounds to 0 (Bound_Z < -37.5). Same target: see Phi_exact_binary_step.
                                     vector[2] Z_and_log_lik = Phi_exact_binary_step(Bound_Z, y[n, t], u[n, t]);

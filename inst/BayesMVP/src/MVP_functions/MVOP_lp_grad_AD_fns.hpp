@@ -95,8 +95,8 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         const std::string &vect_type_inv_Phi_approx_from_logit_prob = Model_args_as_cpp_struct.Model_args_strings(10);
         const std::string &nuisance_transformation =   Model_args_as_cpp_struct.Model_args_strings(12);
         
-        //// 2026-09-22 (assistant): Phi_type and inv_Phi_type are validated here (unknown strings throw) and honoured independently,
-        //// as the manual paths do (see fn_AD_Phi_setting_from_strings in MVP_manual_trans_and_J_fns.hpp). Audit item D6: before this date
+        //// Phi_type and inv_Phi_type are validated here (unknown strings throw) and honoured independently,
+        //// as the manual paths do (see fn_AD_Phi_setting_from_strings in MVP_manual_trans_and_J_fns.hpp). Previously,
         //// the standard-scale step below used the exact Phi / inv_Phi whatever Phi_type was, so Phi_type = "Phi_approx" was silently
         //// ignored except in the tails.
         const AD_Phi_setting_struct AD_Phi_setting = fn_AD_Phi_setting_from_strings(  Phi_type,
@@ -241,7 +241,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         ////
         // stan::math::var log_det_J_unc_to_C_raw = 0.0;
         {
-          //// 2026-09-22 (assistant): the prevalence parameters exist only when n_class > 1, so the cutpoints start at
+          //// the prevalence parameters exist only when n_class > 1, so the cutpoints start at
           //// n_us + n_corrs + n_covariates_total + (n_class > 1 ? n_pops : 0), as in the manual MVOP path (MVOP_lp_grad_common_T.hpp).
           //// This line used "+ n_pops" unconditionally; for single-class MVOP (n_pops = 1 by default) every cutpoint was read one
           //// position too far and the last one read theta_var(n_params), past the end of the vector, which is why
@@ -384,11 +384,11 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         } else if (nuisance_transformation == "tanh") {
           Eigen::Matrix<stan::math::var, -1, 1> tanh_u_unc = tanh(u_unconstrained_vec_var);
           u_vec.array() =     0.5 * (  tanh_u_unc.array() + 1.0).array() ;
-          log_jac_u  +=   u_unconstrained_vec_var.size() * log(2.0) ;   //// du/dx = 2 u (1 - u), so +log(2) per coordinate (was -log(2) once before 2026-09-22)
+          log_jac_u  +=   u_unconstrained_vec_var.size() * log(2.0) ;   //// du/dx = 2 u (1 - u), so +log(2) per coordinate (was -log(2) previously)
           log_jac_u   +=    sum(log(u_vec));
           log_jac_u   +=    sum(log1m(u_vec));
         } else if (nuisance_transformation == "inv_logit") {
-          //// 2026-09-22 (assistant): branch added (audit item D4). Without it u_vec (var) stayed uninitialised and the process segfaulted.
+          //// branch added. Without it u_vec (var) stayed uninitialised and the process segfaulted.
           //// Same transform and log-Jacobian as the manual path (fn_MVP_compute_nuisance_T / _log_jac_u_T): u = inv_logit(x), du/dx = u (1 - u).
           u_vec.array() =   inv_logit(u_unconstrained_vec_var).array();
           log_jac_u   +=    sum(log(u_vec));
@@ -482,7 +482,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                 current_chunk_size = chunk_size_orig;
               }
               
-              //// 2026-09-22 (assistant): chunk-major nuisance layout, i.e. the layout the manual MVOP paths read (u_unc_vec_chunk =
+              //// chunk-major nuisance layout, i.e. the layout the manual MVOP paths read (u_unc_vec_chunk =
               //// theta_us_vec_ref.segment(row_start * n_tests, chunk_size * n_tests), reshaped chunk_size x n_tests) and the one the MVP /
               //// LC_MVP autodiff copies already use. The previous index, u_vec(t * N + n_index), is the same layout only when there is a
               //// single chunk; with several chunks (num_chunks > 1, or AVX-512 chunk rounding) this copy, which is also the multi_attempts
@@ -560,11 +560,11 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                       if (Bound_Z_hi < underflow_threshold) {
                         
                             //// ================= LEFT TAIL (log scale) =================
-                            //// Phi_type = "Phi" (2026-09-22, assistant, approved change): EXACT log Phi (log_Phi_exact_var, double_fns.hpp;
+                            //// Phi_type = "Phi": EXACT log Phi (log_Phi_exact_var, double_fns.hpp;
                             ////   derivative phi(x)/Phi(x)) and EXACT inverse below (was the Phi_approx tail for every Phi_type).
                             //// Otherwise: log Phi(x) ~=~ log_inv_logit(0.07056*x^3 + 1.5976*x), unchanged.
                             ////
-                            const bool use_exact_normal_tails = (use_Phi_approx == false);   //// validated Phi_type (2026-09-22)
+                            const bool use_exact_normal_tails = (use_Phi_approx == false);   //// validated Phi_type
                             const stan::math::var log_Phi_lo = use_exact_normal_tails ? log_Phi_exact_var(Bound_Z_lo)
                                                                                       : stan::math::log_inv_logit( 0.07056 * stan::math::square(Bound_Z_lo) * Bound_Z_lo + 1.5976 * Bound_Z_lo );
                             const stan::math::var log_Phi_hi = use_exact_normal_tails ? log_Phi_exact_var(Bound_Z_hi)
@@ -582,17 +582,17 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                                                                                           log_Phi_hi + stan::math::log(u_array(n, t)) );
                             const stan::math::var log_1m_Phi_Z = stan::math::log1m_exp(log_Phi_Z);
                             ////
-                            //// 2026-09-22 (assistant): the inverse follows inv_Phi_type (it followed Phi_type before): exact, dZ/dlog Phi_Z = Phi_Z/phi(Z),
+                            //// the inverse follows inv_Phi_type (it followed Phi_type before): exact, dZ/dlog Phi_Z = Phi_Z/phi(Z),
                             //// or inv_Phi_approx from logit(Phi_Z).
                             Z_std_norm(t) = fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z, log_1m_Phi_Z, use_inv_Phi_approx);
                         
                       } else if (Bound_Z_lo > overflow_threshold) {
                         
                             //// ================= RIGHT TAIL (log scale) =================
-                            //// Phi_type = "Phi" (2026-09-22, assistant, approved change): EXACT log(1 - Phi(x)) = log Phi(-x) and EXACT inverse below.
+                            //// Phi_type = "Phi": EXACT log(1 - Phi(x)) = log Phi(-x) and EXACT inverse below.
                             //// Otherwise: log(1 - Phi(x)) ~=~ log_inv_logit( -(0.07056*x^3 + 1.5976*x) ), unchanged.
                             ////
-                            const bool use_exact_normal_tails = (use_Phi_approx == false);   //// validated Phi_type (2026-09-22)
+                            const bool use_exact_normal_tails = (use_Phi_approx == false);   //// validated Phi_type
                             const stan::math::var log_1m_Phi_lo = use_exact_normal_tails ? log_Phi_exact_var(-Bound_Z_lo)
                                                                                          : stan::math::log_inv_logit( - 0.07056 * stan::math::square(Bound_Z_lo) * Bound_Z_lo - 1.5976 * Bound_Z_lo );
                             const stan::math::var log_1m_Phi_hi = use_exact_normal_tails ? log_Phi_exact_var(-Bound_Z_hi)
@@ -610,7 +610,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                                                                                           log_1m_Phi_hi + stan::math::log(u_array(n, t)) );
                             const stan::math::var log_Phi_Z    = stan::math::log1m_exp(log_1m_Phi_Z);
                             ////
-                            //// 2026-09-22 (assistant): the inverse follows inv_Phi_type (it followed Phi_type before): exact, dZ/dlog(1 - Phi_Z) = -(1 - Phi_Z)/phi(Z),
+                            //// the inverse follows inv_Phi_type (it followed Phi_type before): exact, dZ/dlog(1 - Phi_Z) = -(1 - Phi_Z)/phi(Z),
                             //// or inv_Phi_approx from logit(Phi_Z).
                             Z_std_norm(t) = fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z, log_1m_Phi_Z, use_inv_Phi_approx);
                         
@@ -620,13 +620,13 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                             //// Guaranteed here: Bound_Z_hi >= UF and Bound_Z_lo <= OF, so
                             //// prob_t >= ~Phi(UF) > 0 -- no log(0), bounded cancellation.
                             ////
-                            //// 2026-09-22 (assistant): audit item D6. The Phi_approx setting used stan::math::Phi for Phi_lo / Phi_hi and
+                            //// The Phi_approx setting used stan::math::Phi for Phi_lo / Phi_hi and
                             //// stan::math::inv_Phi for Z in the non-reflected block below, i.e. the exact-Phi likelihood. Now the CDF follows
                             //// Phi_type and the inverse follows inv_Phi_type, with the formulas of the manual path (fn_MVOP_compute_lp_GHK_cols_T:
                             //// reflection only for the exact CDF, Phi_Z = Phi_lo + u (Phi_hi - Phi_lo) otherwise).
                             if ((use_Phi_approx == false) && (Bound_Z_lo > 0.0)) {
                               
-                                  //// 2026-09-22 (assistant, approved change): right-side seam fixed by reflection. Both bounds are positive,
+                                  //// right-side seam fixed by reflection. Both bounds are positive,
                                   //// so Phi(hi) - Phi(lo) would cancel near lo = +7.5. With Phi(x) = 1 - Phi(-x):
                                   ////   prob = Phi(-lo) - Phi(-hi),   1 - Phi_Z = (1 - u) Phi(-lo) + u Phi(-hi),   Z = -Phi^{-1}(1 - Phi_Z).
                                   const stan::math::var Phi_minus_lo = stan::math::Phi(-Bound_Z_lo);

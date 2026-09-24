@@ -39,7 +39,7 @@ static constexpr double HALF_LOG_TWO_PI   =  0.91893853320467274178;  // 0.5*log
 //// paths everywhere else use the APPROX pair (log_Phi_approx + inv_Phi_approx_from_
 //// logit_prob), so this file must too, or it disagrees with the standard-scale pass
 //// that produced its inputs.
-//// 2026-09-22 (assistant): the note above now applies to the Phi_approx setting only. For
+//// the note above now applies to the Phi_approx setting only. For
 //// Phi_type = "Phi" / inv_Phi_type = "inv_Phi" the log-scale tail paths use the exact pair
 //// fast_log_Phi / fast_inv_Phi_from_log_p (double_fns.hpp); see
 //// fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal and MVP_log_scale_grad_calc_fns_T.hpp.
@@ -216,7 +216,7 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
   
       const int index_size = index.size();
       ////
-      //// ---- 2026-09-22 (assistant, approved change "native exact tails"):
+      //// ---- Native exact tails:
       ////
       //// Previously these rows ALWAYS used the Phi_approx tail pair (sl_log_Phi = cubic-logistic log Phi,
       //// sl_inv_Phi_from_logit = cubic inverse), whatever Phi_type was, while fn_MVOP_row_grads_log_scale

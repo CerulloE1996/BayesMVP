@@ -9,7 +9,7 @@
 // [[Rcpp::plugins(cpp17)]]
 
 
-//// ---- SIMD dispatch information for the R front end (added 2026-09-22).
+//// ---- SIMD dispatch information for the R front end.
 ////
 ////      This translation unit is compiled with the same Makevars flags as main.cpp, so the BAYESMVP_COMPILED_* macros describe the
 ////      SAME build as the likelihood code, and fn_BayesMVP_SIMD_lane_width_for_vect_type() is the SAME inline function that

@@ -34,7 +34,7 @@ using namespace Eigen;
 
 
 
-//// 2026-09-22: compiled on AVX-512 builds too (the guard was "__AVX2__ && !AVX-512"), so that vect_type = "AVX2" runs the 4-lane
+//// compiled on AVX-512 builds too (the guard was "__AVX2__ && !AVX-512"), so that vect_type = "AVX2" runs the 4-lane
 //// kernels there instead of falling through fn_log_sum_exp_2d_double below to Stan's scalar log_sum_exp.
 #if BAYESMVP_COMPILED_AVX2_KERNELS
   
@@ -101,7 +101,7 @@ ALWAYS_INLINE  Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_double(      Eigen
       } else if (vect_type == "Stan") {
         return  log_sum_exp_2d_Stan_double(x);
       } else if (vect_type == "AVX2") {
-        //// 2026-09-22: a SIMD level this build did not compile now THROWS (as in fn_EIGEN_Ref_double; fn_SIMD_level_resolver.hpp).
+        //// a SIMD level this build did not compile now THROWS (as in fn_EIGEN_Ref_double; fn_SIMD_level_resolver.hpp).
         //// Before, "AVX2" was compiled out on AVX-512 builds (and "AVX512" on AVX2 builds) and the request silently fell through
         //// to the Stan return at the bottom of this function. Same string comparisons as before (no extra per-call cost).
 #if BAYESMVP_COMPILED_AVX2_KERNELS

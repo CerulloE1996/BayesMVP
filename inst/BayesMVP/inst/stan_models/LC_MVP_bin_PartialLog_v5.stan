@@ -128,7 +128,7 @@ functions {
       }
 
       //////////////////////////////////////////////////////////////////////////
-      //// ---- EXACT normal GHK helpers for Phi_type == 0 (added 2026-09-22, round 3):
+      //// ---- EXACT normal GHK helpers for Phi_type == 0:
       ////
       //// Phi_type == 0 now uses the EXACT standard normal CDF in every branch. Before this change the under/overflow tail branches
       //// always used the Phi_approx (cubic-logistic) tails whatever Phi_type was, so at +/-7.5 the Phi_type == 0 target jumped by
@@ -140,9 +140,9 @@ functions {
       //// log(q) / log(1 - q) is the smaller side.
       //// log_Phi_stable, inv_Phi_from_log_lower and normal_from_log_uniform are copied verbatim from the NicoStan four_class models.
       //// Phi_type == 1 and Phi_type == 2 never call these functions (their targets are unchanged by this block).
-      //// [Round 4, 2026-09-22: Phi_type == 1 now ALSO calls these scalar routines, in its tail branches and per-subject loop; its vectorised
+      //// Phi_type == 1 now ALSO calls these scalar routines, in its tail branches and per-subject loop; its vectorised
       //// ordinary branches use Phi_exact_binary_Z_and_log_lik_vectorised / Phi_exact_interval_Z_and_log_lik_vectorised below. Phi_type == 2
-      //// never calls them.]
+      //// never calls them.
       ////
       real log_Phi_stable(real x) {
                 //// Differentiate the SAME expression used for the log-CDF value. This avoids
@@ -241,10 +241,10 @@ functions {
       }
 
       //////////////////////////////////////////////////////////////////////////
-      //// ---- VECTORISED exact normal GHK helpers for Phi_type == 1 (added 2026-09-22, round 4):
+      //// ---- VECTORISED exact normal GHK helpers for Phi_type == 1:
       ////
       //// Phi_type == 1 is BayesMVP's exact "Phi" (R: Phi_type = "Phi" -> 1). Before this change its tail branches used the Phi_approx
-      //// (cubic-logistic) tails, so the Phi_type == 1 target jumped at +/-7.5 (up to 1.26 nats measured on 2026-09-22), and its ordinary
+      //// (cubic-logistic) tails, so the Phi_type == 1 target jumped at +/-7.5 (up to 1.26 nats measured), and its ordinary
       //// branch formed 1 - Phi(x) by subtraction (1.0 - Phi(Bound_Z), Phi_hi - Phi_lo with both near 1). Now the Phi_type == 1 tail branches
       //// and per-subject loop use the exact scalar routines above (shared with Phi_type == 0), and its ordinary branches use the two
       //// vectorised routines below.
@@ -297,7 +297,7 @@ functions {
       }
 
       //////////////////////////////////////////////////////////////////////////
-      //// ---- Stable Phi_approx (Phi_type == 2) GHK helpers (added 2026-09-22):
+      //// ---- Stable Phi_approx (Phi_type == 2) GHK helpers:
       ////
       //// poly(x) = 0.07056 x^3 + 1.5976 x and Phi_approx(x) = inv_logit(poly(x)), so log Phi_approx(x) = log_inv_logit(poly(x)) and
       //// log(1 - Phi_approx(x)) = log_inv_logit(-poly(x)) exactly. These helpers compute the SAME target as the old probability-scale
@@ -408,7 +408,7 @@ data {
 
 transformed data {
       ////
-      //// ---- Fail-loud checks on Phi_type and the thresholds (added 2026-09-22, round 4):
+      //// ---- Fail-loud checks on Phi_type and the thresholds:
       //// Phi_type must be 0 (exact, scalar), 1 (BayesMVP's exact "Phi", vectorised ordinary branch) or 2 (Phi_approx); any other value used to
       //// fall silently into the Phi_type == 1 code. The Phi_type == 1 vectorised ordinary branch needs -35 <= underflow_threshold and
       //// overflow_threshold <= 35 (see Phi_exact_binary_Z_and_log_lik_vectorised).
@@ -666,7 +666,7 @@ transformed parameters {
     
                                                        // if (Phi_type == 2) {
                                                           if (Phi_type != 2) {
-                                                                //// Round 4 (2026-09-22): Phi_type == 1 (BayesMVP's exact "Phi") takes this exact tail branch too (it used the Phi_approx tail below).
+                                                                //// Phi_type == 1 (BayesMVP's exact "Phi") takes this exact tail branch too (it used the Phi_approx tail below).
                                                                 //// Phi_type == 0: EXACT normal lower tail (y == 0, Bound_Z < underflow_threshold), from the SAME routine as the Phi_type == 0
                                                                 //// ordinary branch, so the target, its gradient and Z are continuous at underflow_threshold. Phi_type == 2 keeps the Phi_approx tail below (unchanged).
                                                                 matrix[local_size, 2] Phi_exact_Z_and_log_lik = Phi_exact_binary_Z_and_log_lik(Bound_Z[index], rep_vector(0.0, local_size), u[index, t]);
@@ -698,7 +698,7 @@ transformed parameters {
     
                                                      // if (Phi_type == 2) {
                                                             if (Phi_type != 2) {
-                                                                  //// Round 4 (2026-09-22): Phi_type == 1 (BayesMVP's exact "Phi") takes this exact tail branch too (it used the Phi_approx tail below).
+                                                                  //// Phi_type == 1 (BayesMVP's exact "Phi") takes this exact tail branch too (it used the Phi_approx tail below).
                                                                   //// Phi_type == 0: EXACT normal upper tail (y == 1, Bound_Z > overflow_threshold; log(1 - Phi) = log Phi(-Bound_Z)), from the SAME routine as the Phi_type == 0
                                                                   //// ordinary branch, so the target, its gradient and Z are continuous at overflow_threshold. Phi_type == 2 keeps the Phi_approx tail below (unchanged).
                                                                   matrix[local_size, 2] Phi_exact_Z_and_log_lik = Phi_exact_binary_Z_and_log_lik(Bound_Z[index], rep_vector(1.0, local_size), u[index, t]);

@@ -10,9 +10,9 @@
 
 
 //// -------------------------------------------------------------------------------------------------------------------------------------------------------------
-//// ---- Which SIMD kernel sets this build compiles, and which one a vect_type string selects (added 2026-09-22):
+//// ---- Which SIMD kernel sets this build compiles, and which one a vect_type string selects:
 ////
-////      Until 2026-09-22 the native models' string dispatch (fn_EIGEN_Ref_double -> fn_process_Ref_double_AVX) compiled ONE
+////      previously the native models' string dispatch (fn_EIGEN_Ref_double -> fn_process_Ref_double_AVX) compiled ONE
 ////      SIMD level: on an AVX-512 build a vect_type = "AVX2" request ran the 8-lane AVX-512 kernels (and the R front end then
 ////      stopped on "AVX2"), and fn_log_sum_exp_2d_double silently ran Stan's scalar log_sum_exp for it. The AVX2 kernel
 ////      header (BayesMVP/math/fast_and_approx_AVX2_fns.hpp) was already compiled on every AVX2-capable build, AVX-512 ones

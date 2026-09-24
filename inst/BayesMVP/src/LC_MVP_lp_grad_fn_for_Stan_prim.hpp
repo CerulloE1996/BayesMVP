@@ -183,7 +183,7 @@
 
 
 //////////////-------- first determine SIMD (i.e. vectorisation) type to use as global static variable - will add more in future -------------------------------------------
-//// 2026-09-22: same conditions as the native dispatch (fn_SIMD_level_resolver.hpp: AVX512F+VL+DQ for the 8-lane kernels, AVX2+FMA for the
+//// same conditions as the native dispatch (fn_SIMD_level_resolver.hpp: AVX512F+VL+DQ for the 8-lane kernels, AVX2+FMA for the
 //// 4-lane ones; "__AVX512F__ alone" used to select "AVX512", which the resolver now rejects on a build without VL/DQ). Compiling the
 //// Stan model with -DBAYESMVP_FORCE_AVX2 selects the 4-lane AVX2 kernels on an AVX-512 machine (as in stan_external_functions.hpp).
 static const std::string vect_type = [] {

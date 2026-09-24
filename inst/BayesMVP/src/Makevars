@@ -347,8 +347,8 @@ override PKG_CPPFLAGS = $(BASE_FLAGS) \
     
 ##     -fsanitize=address,undefined -fno-omit-frame-pointer
 override PKG_CXXFLAGS = $(PKG_CPPFLAGS) 
-override CPPFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out on 27th Feb 2026)
-override CXXFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out on 27th Feb 2026)
+override CPPFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out)
+override CXXFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out)
 ##
 ifeq ($(HAVE_CCACHE),YES)
   override CC  = $(CCACHE) $(CPP_COMPILER)

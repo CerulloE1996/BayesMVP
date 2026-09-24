@@ -648,7 +648,7 @@ Eigen::Matrix<double, -1, -1>     Rcpp_wrapper_EIGEN_double_mat(             con
   Eigen::Matrix<double, -1, -1> x_copy = x;
     Eigen::Ref<Eigen::Matrix<double, -1, -1>> x_copy_ref(x_copy);
     
-    //// 2026-09-22: honours vect_type through the native models' own dispatch, fn_EIGEN_Ref_double ("AVX512" = 8-lane kernels,
+    //// honours vect_type through the native models' own dispatch, fn_EIGEN_Ref_double ("AVX512" = 8-lane kernels,
     ////             "AVX2" = 4-lane kernels - also on AVX-512 builds -, "Stan", "Loop"; a SIMD level the build did not compile throws,
     ////             which Rcpp turns into an R error). Before, this wrapper ignored vect_type and always ran the highest compiled level.
     #if defined(NICOSTAN_WITH_BUILTINS)
@@ -688,7 +688,7 @@ Eigen::Matrix<double, -1, 1>     Rcpp_wrapper_EIGEN_double_colvec(           con
   Eigen::Matrix<double, -1, 1> x_copy = x;
   Eigen::Ref<Eigen::Matrix<double, -1, 1>> x_copy_ref(x_copy);
   
-  //// 2026-09-22: the guard used to test HAS_AVX2 / HAS_AVX_512, which are Makevars variables and never C++ macros, so this wrapper
+  //// the guard used to test HAS_AVX2 / HAS_AVX_512, which are Makevars variables and never C++ macros, so this wrapper
   ////             returned x UNCHANGED for every fn and vect_type. It now honours vect_type through fn_EIGEN_Ref_double, like the
   ////             matrix wrapper above.
   #if defined(NICOSTAN_WITH_BUILTINS)

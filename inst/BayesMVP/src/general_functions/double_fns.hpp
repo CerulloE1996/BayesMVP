@@ -252,7 +252,7 @@ inline double fast_dZ_dv_from_log_p(const double Z,
 ////
 //// ---- Exact normal tails for the autodiff (stan::math::var) reference paths:
 ////
-//// Added 2026-09-22 (assistant, approved change "native exact tails"). Used by the Phi_type = "Phi" branches of
+//// Used by the Phi_type = "Phi" branches of
 //// MVP_lp_grad_AD_fns.hpp, std_MVP_lp_grad_AD_fns.hpp, MVOP_lp_grad_AD_fns.hpp and LC_LT_lp_grad_AD_fns.hpp,
 //// which previously switched to the Phi_approx (cubic-logistic) tails beyond overflow_threshold / underflow_threshold
 //// whatever Phi_type was. The values come from the SAME double kernels as the manual-gradient paths (fast_log_Phi,
@@ -1724,7 +1724,7 @@ inline  double    fast_tanh_wo_checks(const   double x  )   {
  
 
 
-//// ---- fast_Phi: relative-minimax rational approximation of the Mills ratio (2026-09-22, replaces Abramowitz & Stegun 26.2.17):
+//// ---- fast_Phi: relative-minimax rational approximation of the Mills ratio (replaces Abramowitz & Stegun 26.2.17):
 ////
 ////   Phi(-z) = phi(z) * R(z),   R(z) = Phi(-z) / phi(z) = sqrt(pi/2) * erfcx(z / sqrt(2)),   z = |x|,
 ////   R(z) ~= P6(z) / Q7(z)  on z in [0, 37.5],   max relative error 7.8e-12 (measured on a dense grid in mpmath, double coefficients),
@@ -1737,7 +1737,7 @@ inline  double    fast_tanh_wo_checks(const   double x  )   {
 //// every x, branch-free, and costs the same as A&S: one exp, one divide and 13 FMAs (A&S: 1 FMA + 9 multiplies + 4 adds).
 ////
 //// Provenance: the Mills-ratio/rational form is standard (e.g. Cody 1969, Math. Comp. 23:631-637, uses rationals for erfc);
-//// THESE coefficients were fitted by an assistant (Claude, 2026-09-22) with a relative-error Sanathanan-Koerner / Lawson
+//// THESE coefficients were fitted with a relative-error Sanathanan-Koerner / Lawson
 //// near-minimax fit in 40-digit mpmath, constrained to N6(0) = 0.5 exactly so that fast_Phi(0) = 0.5 with no jump at x = 0.
 //// FAST_PHI_MILLS_Z_CAP caps only the rational's argument (the exp still sees the true z): it keeps N and Q finite for
 //// |x| = inf / huge |x| (exp(-z^2/2) = 0 there, so the result is 0 / 1 exactly as before) and does not change any x in [-37.5, 8.25].
@@ -1769,7 +1769,7 @@ static_assert(FAST_PHI_MILLS_Z_CAP >= 37.5, "fast_Phi Mills rational: the cap mu
 
 
 
-//// Phi(x) = exp(-z^2/2) * N(z) / Q(z) for x < 0, 1 minus that for x >= 0 (z = |x|): see the FAST_PHI_MILLS_* block above (2026-09-22).
+//// Phi(x) = exp(-z^2/2) * N(z) / Q(z) for x < 0, 1 minus that for x >= 0 (z = |x|): see the FAST_PHI_MILLS_* block above.
 //// Same rational as fast_Phi_wo_checks_AVX2 / _AVX512. It uses std::exp, not the scalar fast_exp_1: fast_exp_1_wo_checks's
 //// -log(2) split (l2h + l2l) is off by 4.7e-11, which gives exp(-z^2/2) a relative error of ~|i| * 4.7e-11 (i = the binary exponent),
 //// i.e. 2e-9 at z = 7.5 and 5e-8 at z = 37.5; std::exp keeps the scalar kernel within ~1e-14 of the AVX kernels
@@ -1814,7 +1814,7 @@ inline double fast_Phi_wo_checks(double x) {
       /// ensure output is between 0 and 1
       if  ((val > 0) && (val < 1))  {
         return val;
-      } else if (val >= 1) {   //// >= (2026-09-22): val == 1.0 (x > ~8.29) used to fall to the final branch and return 0
+      } else if (val >= 1) {   //// >=: val == 1.0 (x > ~8.29) used to fall to the final branch and return 0
         return 1;
       } else {
         return 0;
@@ -1829,9 +1829,9 @@ inline double fast_Phi(const double x) {
 
     const double sqrt_2_recip = 0.707106781186547461715;
 
-    if (std::isnan(x)) return x;   //// preserve NaN (was returned as 1.0), as fast_Phi_AVX2 / _AVX512 already do (2026-09-22)
+    if (std::isnan(x)) return x;   //// preserve NaN (was returned as 1.0), as fast_Phi_AVX2 / _AVX512 already do
 
-    if  ((x >= -37.5) && (x < 8.25)) {   //// >= : x == -37.5 used to fall through to the final branch and return 1.0 (2026-09-22)
+    if  ((x >= -37.5) && (x < 8.25)) {   //// >=: x == -37.5 used to fall through to the final branch and return 1.0
       
           return  fast_Phi_wo_checks(x) ; // 0.5 * (1.0 + fast_erf_wo_checks(x * sqrt_2_recip));
       

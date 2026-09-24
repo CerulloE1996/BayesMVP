@@ -518,7 +518,7 @@ models it is set at model initialisation through \code{model_args_list$vect_type
 validates it and defaults it to the SIMD level compiled into the installed BayesMVP), and for \code{Model_type = "Stan"} it is
 not used at all (the .stan file defines its own maths). A non-NULL value stops with an error for Stan models; for built-in
 models it must equal the initialised \code{model_args_list$vect_type}, otherwise it stops and points to \code{model_args_list}.
-(Before 2026-09-22 this argument was silently ignored.)}
+(Previously this argument was silently ignored.)}
 
 \item{\code{Phi_type}}{Leave NULL (the default). Same rules as \code{vect_type}: set it through \code{model_args_list$Phi_type} at
 initialisation for the built-in models (only the exact setting "Phi" is currently accepted by BayesMVP); not used for Stan models,

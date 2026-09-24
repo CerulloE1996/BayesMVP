@@ -18,9 +18,8 @@
 #' NicoStan template), which reports the compile-time macros. That C++ function returns "Stan" when neither AVX-512 nor
 #' AVX2 was compiled; this helper maps that to "none". This is NOT the CPU's runtime capability
 #' (R_fn_detect_vectorisation_support() reports that); only compiled levels can be used by the native kernels.
-#' It is the default vect_type of the native models. Since 2026-09-22 an AVX-512 build ALSO contains the AVX2 kernels;
+#' It is the default vect_type of the native models. An AVX-512 build ALSO contains the AVX2 kernels;
 #' fn_get_compiled_SIMD_levels_of_BayesMVP() returns every compiled level.
-#' Added 2026-09-22 (audit item D3).
 #' @noRd
 fn_get_compiled_SIMD_level_of_BayesMVP <-  function() {
 
@@ -49,9 +48,8 @@ fn_get_compiled_SIMD_level_of_BayesMVP <-  function() {
 #### =====================================================================================================================================
 #' fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled
 #'
-#' Stops with a clear message if the installed BayesMVP binary predates the 2026-09-22 SIMD dispatch change (both kernel sets on
+#' Stops with a clear message if the installed BayesMVP binary predates the SIMD dispatch change (both kernel sets on
 #' AVX-512 builds, src/Rcpp_SIMD_dispatch_info.cpp). Enzo sources the R files without reinstalling, and C++ changes need a rebuild.
-#' Added 2026-09-22.
 #' @noRd
 fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled <-  function() {
 
@@ -60,7 +58,7 @@ fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled <-  function() {
         ##
         for (required_cpp_export_name in c("Rcpp_BayesMVP_compiled_SIMD_levels", "Rcpp_BayesMVP_SIMD_lane_width_for_vect_type")) {
               if (!exists(required_cpp_export_name, envir = BayesMVP_namespace, inherits = FALSE)) {
-                    stop(paste0("The installed BayesMVP binary has no ", required_cpp_export_name, "() (added 2026-09-22 with the ",
+                    stop(paste0("The installed BayesMVP binary has no ", required_cpp_export_name, "() (added with the ",
                                 "AVX2 + AVX-512 SIMD dispatch). The R code you sourced needs the matching C++ build: reinstall ",
                                 "NicoStan, then BayesMVP."))
               }
@@ -85,7 +83,7 @@ fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled <-  function() {
 #' functions and inputs are probed and the first difference found decides. Returns 1 if element 1 never changes up to length 9.
 #' Only meaningful for the SIMD strings "AVX512" / "AVX2": "Stan" runs Stan math on Eigen arrays, which Eigen itself may
 #' vectorise in packets (8 doubles on an AVX-512 build; the first test run of this probe measured 8 for "Stan"), and that is not a
-#' BayesMVP kernel, so R_fn_BayesMVP_SIMD_lane_width_for_vect_type() does not probe "Stan" / "Loop". Added 2026-09-22.
+#' BayesMVP kernel, so R_fn_BayesMVP_SIMD_lane_width_for_vect_type() does not probe "Stan" / "Loop".
 #' @param vect_type one SIMD vect_type string ("AVX512" or "AVX2").
 #' @return integer: measured lane width (8, 4, or 1 if no SIMD kernel ran).
 #' @noRd
@@ -135,8 +133,8 @@ fn_probe_BayesMVP_SIMD_lane_width_of_dispatch <-  function(vect_type) {
 #'     drives vec_from_string, the templated dispatch), and
 #'   - for "AVX512" / "AVX2" it MEASURES the width on the real string dispatch, fn_EIGEN_Ref_double
 #'     (fn_probe_BayesMVP_SIMD_lane_width_of_dispatch()), and stops if the two disagree.
-#' On an AVX-512 build "AVX2" gives 4 (the genuine 256-bit kernels run; before 2026-09-22 the 8-lane kernels ran), and on an
-#' AVX2-only build "AVX512" stops with the C++ error message (those kernels were not compiled). Added 2026-09-22.
+#' On an AVX-512 build "AVX2" gives 4 (the genuine 256-bit kernels run; previously the 8-lane kernels ran), and on an
+#' AVX2-only build "AVX512" stops with the C++ error message (those kernels were not compiled).
 #' @param vect_type character vector of vect_type strings.
 #' @return integer vector of lane widths, named by vect_type.
 #' @export
@@ -185,16 +183,16 @@ R_fn_BayesMVP_SIMD_lane_width_for_vect_type <-  function(vect_type) {
 #' fn_get_compiled_SIMD_levels_of_BayesMVP
 #'
 #' Returns ALL SIMD kernel sets compiled into the INSTALLED BayesMVP binary, highest first: c("AVX512", "AVX2") on an
-#' AVX-512 build (since 2026-09-22 an AVX-512 build compiles the AVX2 kernels too, and vect_type = "AVX2" runs them),
+#' AVX-512 build (which compiles the AVX2 kernels too, so vect_type = "AVX2" runs them),
 #' "AVX2" on an AVX2-only build (e.g. Enzo's laptop), character(0) if neither. It asks the C++ export
 #' Rcpp_BayesMVP_compiled_SIMD_levels() (src/Rcpp_SIMD_dispatch_info.cpp), and stops if its highest level disagrees
 #' with fn_get_compiled_SIMD_level_of_BayesMVP() (main.cpp's detect_vectorization_support()), since the two translation
-#' units must describe the same build. Added 2026-09-22.
+#' units must describe the same build.
 #' @noRd
 fn_get_compiled_SIMD_levels_of_BayesMVP <-  function() {
 
         ##
-        ## ---- The R files can be sourced without reinstalling BayesMVP; this helper needs the 2026-09-22 C++ build:
+        ## ---- The R files can be sourced without reinstalling BayesMVP; this helper needs the C++ build:
         ##
         fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled()
         ##
@@ -225,15 +223,14 @@ fn_get_compiled_SIMD_levels_of_BayesMVP <-  function() {
 #' fn_check_native_model_vect_types_and_Phi_types
 #'
 #' Stops (fail loudly) if a native (hard-coded C++) BayesMVP model is asked for a math setting it cannot honour.
-#' Added 2026-09-22.
 #'
 #' (1) vect_type and every per-kernel vect_type_* string must be one of the values that the C++ dispatch
 #'     (fn_EIGEN_Ref_double in fn_wrappers_overall.hpp, fn_log_sum_exp_2d_double, vec_from_string) actually implements
 #'     in THIS build: "Stan", "Loop", or a compiled SIMD level (see fn_get_compiled_SIMD_levels_of_BayesMVP()).
-#'     Since 2026-09-22 an AVX-512 build compiles BOTH kernel sets, so "AVX512" (8-lane kernels) and "AVX2" (genuine
+#'     An AVX-512 build compiles BOTH kernel sets, so "AVX512" (8-lane kernels) and "AVX2" (genuine
 #'     4-lane kernels) are both accepted there; an AVX2-only build (e.g. the laptop) accepts "AVX2" and STOPS on "AVX512".
-#'     (History: until 2026-09-22 the build compiled only one level, so "AVX2" on an AVX-512 build was first returned
-#'     UNCHANGED (audit item D3) and then, after the D3 fix, stopped here.) Strings the dispatch does not know (e.g. "AVX",
+#'     (History: previously the build compiled only one level, so "AVX2" on an AVX-512 build was first returned
+#'     UNCHANGED and then, after the fallback fix, stopped here.) Strings the dispatch does not know (e.g. "AVX",
 #'     which R_fn_detect_vectorisation_support() returns on AVX-only CPUs) stop too.
 #'     Self-check: for every accepted string, BayesMVP:::Rcpp_BayesMVP_SIMD_lane_width_for_vect_type() - the same C++
 #'     resolver the dispatchers switch on - must report the expected kernel width (AVX512 = 8, AVX2 = 4, Stan / Loop = 1),
@@ -241,7 +238,7 @@ fn_get_compiled_SIMD_levels_of_BayesMVP <-  function() {
 #'
 #' (2) Phi_type / inv_Phi_type: the native C++ models ALWAYS receive the exact setting (Phi_type = "Phi",
 #'     inv_Phi_type = "inv_Phi" are hard-coded into Model_args_strings by build_Model_args_as_Rcpp_List), so any
-#'     other request was silently ignored. It is deliberately NOT wired through: the 2026-09-22 native validation
+#'     other request was silently ignored. It is deliberately NOT wired through: the native validation
 #'     (audit/claude_2026_09_22/validation_round3/native) found that the approximate setting has inconsistent
 #'     value/gradient (finite-difference failures) for the ordinal native models MVOP and LC_MVOP, and that the
 #'     autodiff fallback paths of MVP, MVOP and LC_MVOP ignore it (so a fallback step would silently switch to exact).
@@ -371,7 +368,7 @@ fn_check_native_model_vect_types_and_Phi_types <-  function( Model_type,
                                  "BayesMVP models (Model_type = '", Model_type, "'); only the exact setting ", Phi_field_name, " = '",
                                  exact_Phi_value, "' is accepted. The native C++ likelihoods (MVP, LC_MVP, latent_trait, MVOP, LC_MVOP) ",
                                  "always use exact Phi / inv_Phi, so this request would otherwise be silently ignored. The approximate ",
-                                 "setting is not wired through because validation (2026-09-22) found inconsistent value/gradient for the ",
+                                 "setting is not wired through because validation found inconsistent value/gradient for the ",
                                  "ordinal native models (MVOP, LC_MVOP) and that the autodiff fallback paths of MVP, MVOP and LC_MVOP ",
                                  "ignore it. (This does not restrict Model_type = 'Stan' models, whose Phi choice lives in the .stan file.)"))
               }
@@ -387,10 +384,10 @@ fn_check_native_model_vect_types_and_Phi_types <-  function( Model_type,
 
 #' init_hard_coded_model_finalise_model_args_list
 #'
-#' Math-setting rules for the native models (2026-09-22; see fn_check_native_model_vect_types_and_Phi_types):
+#' Math-setting rules for the native models (see fn_check_native_model_vect_types_and_Phi_types):
 #'   - vect_type defaults to the highest SIMD level COMPILED into the installed BayesMVP ("AVX512"/"AVX2"; "Stan" if
 #'     neither), not the CPU's runtime capability; a requested vect_type / vect_type_* that this build cannot honour
-#'     stops. An AVX-512 build accepts both "AVX512" and "AVX2" (2026-09-22); an AVX2-only build stops on "AVX512".
+#'     stops. An AVX-512 build accepts both "AVX512" and "AVX2"; an AVX2-only build stops on "AVX512".
 #'   - Phi_type / inv_Phi_type: only the exact setting ("Phi" / "inv_Phi") is accepted; anything else stops.
 #' @export
 init_hard_coded_model_args <- function( Model_type,
@@ -582,7 +579,7 @@ init_hard_coded_model_args <- function( Model_type,
         model_args_list$n_covariates_total <- outs$n_covariates_total
         
         ##
-        ## ---- Native-model math settings (2026-09-22): check the USER-SUPPLIED vect_type / vect_type_* / Phi_type /
+        ## ---- Native-model math settings: check the USER-SUPPLIED vect_type / vect_type_* / Phi_type /
         ##      inv_Phi_type BEFORE the defaults and the per-kernel overwrite below, so that nothing requested is
         ##      silently ignored (see fn_check_native_model_vect_types_and_Phi_types):
         ##
@@ -784,7 +781,7 @@ init_hard_coded_model_args <- function( Model_type,
           model_args_list[[vt]] <- model_args_list$vect_type
         }
         ##
-        ## ---- Re-check the RESOLVED settings (defaults included) - 2026-09-22:
+        ## ---- Re-check the RESOLVED settings (defaults included):
         ##
         fn_check_native_model_vect_types_and_Phi_types( Model_type                                          = Model_type,
                                                         model_args_list                                     = model_args_list,
@@ -885,7 +882,7 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         Model_args_doubles <- matrix(Model_args_doubles, ncol = 1, nrow = length(Model_args_doubles))
         
         ##
-        ## ---- 2026-09-22: final guard on the strings the C++ reads. Phi_type / inv_Phi_type are hard-coded to the exact
+        ## ---- final guard on the strings the C++ reads. Phi_type / inv_Phi_type are hard-coded to the exact
         ##      setting below (the only one accepted for native models), and every vect_type* must be honoured by this
         ##      build - see fn_check_native_model_vect_types_and_Phi_types. (No per-kernel overwrite happens here, so no
         ##      per-kernel/vect_type agreement is required at this point.)

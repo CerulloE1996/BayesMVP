@@ -160,14 +160,14 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
               if (!under_index.empty())
                 fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T<vec>(t, under_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c], prob[c], y1_log_prob[c],
                                                                       log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
-                                                                      k);   //// 2026-09-22: exact tails when Phi_type = "Phi"
+                                                                      k);   //// exact tails when Phi_type = "Phi"
               if (!over_index.empty())
                 fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T<vec>(t, (int)over_index.size(), over_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c], prob[c], y1_log_prob[c],
                                                                      log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
-                                                                     k);   //// 2026-09-22: exact tails when Phi_type = "Phi"
+                                                                     k);   //// exact tails when Phi_type = "Phi"
             } else if (!ord_problem_index.empty()) {
               fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(t, ord_problem_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], prob[c], y1_log_prob[c], Bound_Z[c], Upper_Bound_Z[c], u_array, S,
-                                                            k);   //// 2026-09-22: exact tails when Phi_type = "Phi"
+                                                            k);   //// exact tails when Phi_type = "Phi"
             }
             if (t < n_tests - 1) prod_container_or_inc_array = Z_std_norm[c].leftCols(t + 1) * L[c].row(t + 1).head(t + 1).transpose();
           }

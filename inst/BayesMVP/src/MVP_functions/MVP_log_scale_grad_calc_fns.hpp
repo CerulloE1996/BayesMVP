@@ -227,7 +227,7 @@ static std::atomic<long long> g_n_tail_obs{0};
 
 
 ////
-//// ---- 2026-09-22 (assistant, approved change "native exact tails"): forward declarations of the templated tail fix-ups
+//// ---- forward declarations of the templated tail fix-ups
 ////      (defined in MVP_log_scale_grad_calc_fns_T.hpp, which main.cpp includes right after this file), so the string-dispatch
 ////      versions below can delegate to them for every setting other than the fully approximate one. Only the latent-trait
 ////      PartialLog path (LC_LT_lp_grad_log_scale_MD_AD_fns.hpp) still calls these string-dispatch versions.
@@ -296,7 +296,7 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_underflow(        const 
 ) {
 
             ////
-            //// ---- 2026-09-22: any setting other than the fully approximate one uses the templated exact-capable version:
+            //// ---- any setting other than the fully approximate one uses the templated exact-capable version:
             ////
             {
               const KernelChoice kernel_choice_for_tails = fn_kernel_choice_for_tails_from_args(Model_args_as_cpp_struct);
@@ -398,7 +398,7 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_overflow(     const int 
 ) {
 
          ////
-         //// ---- 2026-09-22: any setting other than the fully approximate one uses the templated exact-capable version:
+         //// ---- any setting other than the fully approximate one uses the templated exact-capable version:
          ////
          {
            const KernelChoice kernel_choice_for_tails = fn_kernel_choice_for_tails_from_args(Model_args_as_cpp_struct);
@@ -564,7 +564,7 @@ ALWAYS_INLINE  void fn_MVP_grad_prep_log_scale(          Eigen::Ref<Eigen::Matri
 
            } else {
 
-                 //// 2026-09-22 (defect D2, same fix as fn_MVP_grad_prep_log_scale_T): was log_common_grad_term_1.setConstant(-700.0).
+                 //// Same fix as fn_MVP_grad_prep_log_scale_T: was log_common_grad_term_1.setConstant(-700.0).
                  //// The log-scale problem-row gradient functions use this term as if it were real, so the sentinel zeroed the
                  //// problem-row gradients of a single-class model. With one class (prev = 1, prob_n = product of all test
                  //// probabilities) the latent-class expression above reduces exactly to log(prod_{s >= t} 1 / prob_s).
@@ -950,7 +950,7 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
                     }
   
                     //// combine terms
-                    //// 2026-09-22 (defect D2, assistant): leftCols(ii + 1), was leftCols(ii) - columns 0..ii are filled above; see
+                    //// leftCols(ii + 1), was leftCols(ii) - columns 0..ii are filled above; see
                     //// fn_MVP_compute_nuisance_grad_log_scale_T in MVP_log_scale_grad_calc_fns_T.hpp. This original copy is only called by the
                     //// latent-trait log-scale path (LC_LT_lp_grad_log_scale_MD_AD_fns.hpp), which lp_grad_model_selector.hpp currently disables.
                     log_abs_sum_exp_general_v2( log_terms.leftCols(ii + 1), 

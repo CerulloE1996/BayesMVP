@@ -31,7 +31,7 @@ using namespace Eigen;
  
 
 ////
-//// ---- 2026-09-22 (assistant, approved change): forward declaration of the templated version defined further down this file,
+//// ---- forward declaration of the templated version defined further down this file,
 ////      so that the string-dispatch version (still used by the latent_trait NoLog / PartialLog paths) can delegate to it for
 ////      exact Phi and pick up the right-side-seam reflection derived there.
 ////
@@ -67,7 +67,7 @@ ALWAYS_INLINE  void fn_MVP_compute_lp_GHK_cols(   const int t,
        const std::string vect_type_inv_Phi = Model_args_as_cpp_struct.Model_args_strings(9);
        
        ////
-       //// ---- 2026-09-22: exact Phi (Phi_type = "Phi") -> templated version with the right-side-seam reflection
+       //// ---- exact Phi (Phi_type = "Phi") -> templated version with the right-side-seam reflection
        ////      (prob = Phi((1 - 2y) Bound_Z), Z = (1 - 2y) Phi^{-1}((y - (2y - 1) u) prob); derivation in fn_MVP_compute_lp_GHK_cols_T).
        ////      Same Phi / inv_Phi / log kernels as the string dispatch (stan::math for "Stan", fast_*_AVX2 / _AVX512 otherwise).
        ////
@@ -174,7 +174,7 @@ inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
         }
         
         ////
-        //// ---- Exact Phi (Phi_type = "Phi"): right-side seam fixed by reflection (2026-09-22, assistant, approved change).
+        //// ---- Exact Phi (Phi_type = "Phi"): right-side seam fixed by reflection.
         ////
         //// The old code formed prob = 1 - Phi(Bound_Z) for y = 1 and Phi_Z = Phi(B) + u (1 - Phi(B)), Z = Phi^{-1}(Phi_Z).
         //// Near Bound_Z = +7.5 (just inside overflow_threshold), 1 - Phi(B) ~ 3e-14 is the difference of two numbers

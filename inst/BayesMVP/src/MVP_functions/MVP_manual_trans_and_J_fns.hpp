@@ -61,14 +61,14 @@ ALWAYS_INLINE  void  fn_MVP_compute_nuisance(         Eigen::Matrix<double, -1, 
         
           } else if (nuisance_transformation == "inv_logit") {
             
-              //// 2026-09-22 (assistant): "inv_logit" branch added. Before this date the chain had no "inv_logit" branch and no
+              //// "inv_logit" branch added. Previously the chain had no "inv_logit" branch and no
               //// final else, so latent_trait with nuisance_transformation = "inv_logit" left u_vec at zero and returned NaN lp
               //// silently. Same transform as fn_MVP_compute_nuisance_T (MVP_helpers_migrated.hpp): u = inv_logit(u_unc).
               u_vec.array() +=      fn_EIGEN_double( u_unc_vec, "inv_logit", vect_type_Phi, false).array();
             
           } else {
             
-              //// 2026-09-22: unknown strings now stop with a clear message instead of silently leaving u_vec at zero.
+              //// unknown strings now stop with a clear message instead of silently leaving u_vec at zero.
               throw std::invalid_argument("fn_MVP_compute_nuisance: unknown nuisance_transformation '" + nuisance_transformation +
                                           "' (allowed: Phi, Phi_approx, Phi_approx_rough, tanh, inv_logit).");
             
@@ -125,7 +125,7 @@ ALWAYS_INLINE double fn_MVP_compute_nuisance_log_jac_u(       const Eigen::Ref<c
         
           } else if (nuisance_transformation == "inv_logit") {
             
-              //// 2026-09-22 (assistant): du/dx = u (1 - u), so log J = sum log(u) + log(1 - u) (no constant), as in
+              //// du/dx = u (1 - u), so log J = sum log(u) + log(1 - u) (no constant), as in
               //// fn_MVP_compute_nuisance_log_jac_u_T (MVP_helpers_migrated.hpp).
               log_jac_u  =    fn_EIGEN_double( u_vec, "log", vect_type_log ).sum()
                             + fn_EIGEN_double( u_vec , "log1m", vect_type_log ).sum();
@@ -188,7 +188,7 @@ ALWAYS_INLINE void fn_MVP_nuisance_first_deriv(     Eigen::Matrix<double, -1, 1>
         
           } else if (nuisance_transformation == "inv_logit") {
             
-              du_wrt_duu.array() +=    u_vec.array() * (1.0 - u_vec.array() ) ;     //// 2026-09-22 (assistant): du/dx = u (1 - u)
+              du_wrt_duu.array() +=    u_vec.array() * (1.0 - u_vec.array() ) ;     //// du/dx = u (1 - u)
             
           } else {
             
@@ -236,7 +236,7 @@ ALWAYS_INLINE void  fn_MVP_nuisance_deriv_of_log_det_J(   Eigen::Matrix<double, 
              
                 //// d/dx [ log(g'(x)) + log(u) + log(1 - u) ], with g(x) = a x^3 + b x, u = inv_logit(g(x)), g' = 3 a x^2 + b:
                 ////   = g' (1 - 2u) + g''/g',   g'' = 6 a x   (matches fn_MVP_nuisance_deriv_of_log_det_J_T in MVP_helpers_migrated.hpp).
-                //// The second term was (1 - 2u)/g' before 2026-09-22, which is wrong everywhere except x = 0.
+                //// The second term was (1 - 2u)/g' previously, which is wrong everywhere except x = 0.
                 d_J_wrt_duu.array() += (  ( du_wrt_duu.array() * (  (1.0 - 2.0 * u_vec.array()  ) / ( u_vec.array() * (1.0 - u_vec.array() ) )  )   ).array()  + (  ( 6.0 * a * u_unc_vec.array() )  / (a_times_3*u_unc_vec.array().square() + b).array() ) ).array() ;
             
           } else if (nuisance_transformation == "Phi_approx_rough") {   ;    
@@ -249,7 +249,7 @@ ALWAYS_INLINE void  fn_MVP_nuisance_deriv_of_log_det_J(   Eigen::Matrix<double, 
             
           } else if (nuisance_transformation == "inv_logit") {
             
-                d_J_wrt_duu.array() +=  (1.0 - 2.0 * u_vec.array() ) ;   //// 2026-09-22 (assistant): d/dx [log(u) + log(1 - u)] = 1 - 2u
+                d_J_wrt_duu.array() +=  (1.0 - 2.0 * u_vec.array() ) ;   //// d/dx [log(u) + log(1 - u)] = 1 - 2u
             
           } else {
             
@@ -276,15 +276,15 @@ ALWAYS_INLINE void  fn_MVP_nuisance_deriv_of_log_det_J(   Eigen::Matrix<double, 
 ////
 //// ---- Phi_type / inv_Phi_type handling shared by the four autodiff (stan::math::var) reference copies:
 ////
-//// Added 2026-09-22 (assistant). Used by MVP_lp_grad_AD_fns.hpp (LC_MVP), std_MVP_lp_grad_AD_fns.hpp (MVP),
-//// MVOP_lp_grad_AD_fns.hpp (MVOP and LC_MVOP) and LC_LT_lp_grad_AD_fns.hpp (latent_trait). Before this date:
+//// Used by MVP_lp_grad_AD_fns.hpp (LC_MVP), std_MVP_lp_grad_AD_fns.hpp (MVP),
+//// MVOP_lp_grad_AD_fns.hpp (MVOP and LC_MVOP) and LC_LT_lp_grad_AD_fns.hpp (latent_trait). Previously:
 ////   - the autodiff copies of MVP, MVOP and LC_MVOP computed the standard-scale (interior) GHK step with the EXACT Phi / inv_Phi
-////     whatever Phi_type was, so Phi_type = "Phi_approx" only reached their tails (audit item D6);
+////     whatever Phi_type was, so Phi_type = "Phi_approx" only reached their tails;
 ////   - every autodiff copy tied the inverse CDF to Phi_type and ignored inv_Phi_type, whereas the manual-gradient paths choose the
 ////     CDF from Phi_type and the inverse from inv_Phi_type independently (KernelChoice, MVP_helpers_migrated.hpp);
 ////   - an unknown Phi_type string was not rejected: in the LC_MVP and latent_trait copies it matched no branch, so the likelihood
 ////     was silently left out of lp; in the MVP and MVOP copies it was treated as "Phi_approx" in the tails and as "Phi" elsewhere.
-//// (The missing "inv_logit" nuisance branch of the same copies, audit item D4, is fixed inline in each copy.)
+//// (The missing "inv_logit" nuisance branch of the same copies, is fixed inline in each copy.)
 //// The string rules here are the ones kernel_choice_from_args applies to the manual paths, so manual and autodiff agree:
 ////   Phi_type:     "Phi" -> exact CDF;  "Phi_approx" or "Phi_approx_2" -> Phi_approx(x) = inv_logit(0.07056 x^3 + 1.5976 x)
 ////                 (Bowling et al., 2009);
@@ -362,9 +362,9 @@ inline stan::math::var fn_AD_inv_Phi_from_log_probs_var(  const stan::math::var 
 ////
 //// ---- Up-front check of the settings strings for the multi_attempts evaluators:
 ////
-//// Added 2026-09-22 (assistant), together with the try/catch around attempts 1 and 2 of fn_lp_grad_MVP_multi_attempts_InPlace_process,
+//// This check accompanies the try/catch around attempts 1 and 2 of fn_lp_grad_MVP_multi_attempts_InPlace_process,
 //// fn_lp_grad_MVOP_multi_attempts_InPlace_process (MVP_lp_grad_multi_attempts.hpp) and attempt 1 of fn_lp_grad_LT_LC_multi_attempts_InPlace_process
-//// (LT_LC_lp_grad_multi_attempts.hpp), audit item D5. Those try/catch blocks catch std::exception, like the existing attempt 3, so that a
+//// (LT_LC_lp_grad_multi_attempts.hpp). Those try/catch blocks catch std::exception, like the existing attempt 3, so that a
 //// numerical exception (Stan math's "Phi: x is nan", inv_Phi out of range, fast_inv_Phi_approx's out-of-range argument, ...) moves on to
 //// the next attempt. A mistyped SETTING must not be swallowed that way, so it is checked here, before any attempt runs:
 ////   nuisance_transformation: Phi, Phi_approx, tanh, inv_logit, and Phi_approx_rough only where the manual path accepts it

@@ -1104,7 +1104,7 @@ ALWAYS_INLINE     __m512d CopySign( const __m512d srcSign,
 
 
 
-//// ---- fast_Phi: relative-minimax rational approximation of the Mills ratio (2026-09-22, replaces Abramowitz & Stegun 26.2.17):
+//// ---- fast_Phi: relative-minimax rational approximation of the Mills ratio (replaces Abramowitz & Stegun 26.2.17):
 ////
 ////   Phi(-z) = phi(z) * R(z),   R(z) = Phi(-z) / phi(z) = sqrt(pi/2) * erfcx(z / sqrt(2)),   z = |x|,
 ////   R(z) ~= P6(z) / Q7(z)  on z in [0, 37.5],   max relative error 7.8e-12 (measured on a dense grid in mpmath, double coefficients),
@@ -1117,7 +1117,7 @@ ALWAYS_INLINE     __m512d CopySign( const __m512d srcSign,
 //// every x, branch-free, and costs the same as A&S: one exp, one divide and 13 FMAs (A&S: 1 FMA + 9 multiplies + 4 adds).
 ////
 //// Provenance: the Mills-ratio/rational form is standard (e.g. Cody 1969, Math. Comp. 23:631-637, uses rationals for erfc);
-//// THESE coefficients were fitted by an assistant (Claude, 2026-09-22) with a relative-error Sanathanan-Koerner / Lawson
+//// THESE coefficients were fitted with a relative-error Sanathanan-Koerner / Lawson
 //// near-minimax fit in 40-digit mpmath, constrained to N6(0) = 0.5 exactly so that fast_Phi(0) = 0.5 with no jump at x = 0.
 //// FAST_PHI_MILLS_Z_CAP caps only the rational's argument (the exp still sees the true z): it keeps N and Q finite for
 //// |x| = inf / huge |x| (exp(-z^2/2) = 0 there, so the result is 0 / 1 exactly as before) and does not change any x in [-37.5, 8.25].
@@ -1149,7 +1149,7 @@ static_assert(FAST_PHI_MILLS_Z_CAP >= 37.5, "fast_Phi Mills rational: the cap mu
 
 
 
-//// Phi(x) = exp(-z^2/2) * N(z) / Q(z) for x <= 0, 1 minus that for x > 0 (z = |x|): see the FAST_PHI_MILLS_* block above (2026-09-22).
+//// Phi(x) = exp(-z^2/2) * N(z) / Q(z) for x <= 0, 1 minus that for x > 0 (z = |x|): see the FAST_PHI_MILLS_* block above.
 ALWAYS_INLINE __m512d fast_Phi_wo_checks_AVX512(__m512d x) {
 
         const __m512d z = _mm512_abs_pd(x); /////  std::fabs(x);

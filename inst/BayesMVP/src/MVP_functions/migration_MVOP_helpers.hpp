@@ -53,7 +53,7 @@ inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
 ) {
 
   ////
-  //// ---- 2026-09-22 (assistant, approved change): for exact Phi (Phi_type = "Phi") the right-side seam is removed by reflection.
+  //// ---- for exact Phi (Phi_type = "Phi") the right-side seam is removed by reflection.
   ////
   //// Binary: identical to fn_MVP_compute_lp_GHK_cols_T (see the derivation there): prob = Phi(sign_y * B), sign_y = 1 - 2y,
   ////         q = (y - (2y-1) u) prob, Z = sign_y * Phi^{-1}(q).

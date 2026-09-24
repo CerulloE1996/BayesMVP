@@ -175,14 +175,14 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
               if (n_underflows > 0) {
                 fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T<vec>(t, under_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c],
                                                                       prob[c], y1_log_prob[c], log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
-                                                                      kchoice);   //// 2026-09-22: exact tails when Phi_type = "Phi"
+                                                                      kchoice);   //// exact tails when Phi_type = "Phi"
                 V tmp = log_phi_Bound_Z[c](under_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Bound_Z[c](under_index, t) = tmp;
                 tmp   = log_phi_Z_recip[c](under_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Z_recip[c](under_index, t) = tmp;
               }
               if (n_overflows > 0) {
                 fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T<vec>(t, n_overflows, over_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c],
                                                                      prob[c], y1_log_prob[c], log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
-                                                                     kchoice);   //// 2026-09-22: exact tails when Phi_type = "Phi"
+                                                                     kchoice);   //// exact tails when Phi_type = "Phi"
                 V tmp = log_phi_Bound_Z[c](over_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Bound_Z[c](over_index, t) = tmp;
                 tmp   = log_phi_Z_recip[c](over_index, t); apply_inplace<vec, Fn::exp>(tmp); phi_Z_recip[c](over_index, t) = tmp;
               }
@@ -215,7 +215,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
         }
 
         ////
-        //// ---- 2026-09-22 (defect D2, assistant): problem sets for the GRADIENT replacement functions (per test, plus "severe" rows for every test):
+        //// ---- problem sets for the GRADIENT replacement functions (per test, plus "severe" rows for every test):
         ////
         //// The log-scale gradient functions below (fn_MVP_compute_nuisance_grad_log_scale_T, ..._coefficients_..., ..._L_Omega_...) overwrite, for the
         //// rows they are given, the natural-scale per-row gradients with exact log-scale ones; Enzo's design gives the functions of test t the rows in
@@ -262,7 +262,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
         //// ---- gradients ----
         for (int c = 0; c < n_class; c++) {
 
-          //// 2026-09-22 (D2): any problem row (per-test or severe) in this class and chunk
+          //// Any problem row (per-test or severe) in this class and chunk
           const bool chunk_has_gradient_problem_rows = std::any_of(n_gradient_problem_array[c].begin(), n_gradient_problem_array[c].end(),
                                                                    [](const int n_rows) { return n_rows > 0; });
 
@@ -286,7 +286,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
           M ys = M::Zero(chunk_size, n_tests), ym = M::Zero(chunk_size, n_tests);   //// y_sign_chunk_times_... / y_m_ysign_x_u_array_times_...
 
           if (grad_option != "none") {
-            //// 2026-09-22 (defect D2, assistant): the log-scale preparation now also runs for n_class == 1 whenever the chunk has a
+            //// the log-scale preparation now also runs for n_class == 1 whenever the chunk has a
             //// problem row. The problem-row replacement functions below (fn_MVP_compute_nuisance_grad_log_scale_T,
             //// fn_MVP_compute_L_Omega_grad_log_scale_T and, for intercept-only models, fn_MVP_compute_coefficients_grad_log_scale_T)
             //// are called for n_class == 1 as well, and they read log_common_grad_term_1, log_prob_rowwise_prod_temp, log_abs_ys,
@@ -363,7 +363,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
           //// ---- coefficients ----
           if ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "coeff_only")) {
             Eigen::Matrix<int, -1, 1> n_cov_vec_c = n_covariates_per_outcome_vec.row(c).transpose();
-            //// 2026-09-22 (defect D2, assistant): a single-class, intercept-only chunk WITH SEVERE rows (see above) now takes the same per-row +
+            //// a single-class, intercept-only chunk WITH SEVERE rows (see above) now takes the same per-row +
             //// log-scale-replacement route as the latent-class intercept-only models (the branch below), instead of the natural-scale row sums
             //// of fn_MVP_compute_coefficients_grad_v3, whose prob_recip * phi_Bound_Z terms are 0 * Inf = NaN once a |Bound_Z| passes ~38.5
             //// (exactly the region the multi_attempts fallback sends here). v3 is exact for moderate tails, so other chunks are unchanged.
@@ -383,7 +383,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
                                                   log_abs_grad_prob, sign_grad_prob, log_abs_prod, sign_prod, true, Model_args_as_cpp_struct);
             } else {
               if (use_single_class_log_scale_intercepts) {
-                //// 2026-09-22 (D2): the intercept branch of fn_MVP_compute_coefficients_grad_v2 below uses the latent-class form
+                //// The intercept branch of fn_MVP_compute_coefficients_grad_v2 below uses the latent-class form
                 //// common_grad_term_1(t) * sum_ii grad_prob(ii) * prob_rowwise_prod_temp(t) / prob(t + ii). With one class
                 //// log_common_grad_term_1(t) = sum_{s >= t} log(1 / prob_s) (fn_MVP_grad_prep_log_scale_T), so this equals Enzo's
                 //// single-class sum_ii grad_prob(ii) / prob(t + ii) on the non-problem rows; the problem rows are replaced on the log scale.
@@ -461,7 +461,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<Ei
 
           //// ---- prevalence ----
           if ((n_class > 1) && ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "prev_only"))) {
-            //// 2026-09-22 (defect D2, assistant): the per-row weight prod_t prob_ct / prob_n (<= 1 / prev_c) is now formed on the log scale,
+            //// the per-row weight prod_t prob_ct / prob_n (<= 1 / prev_c) is now formed on the log scale,
             //// exp(sum_t log prob_ct - lp_n). It was fn_MVP_prev_multi_pop_accumulate_grad(prob[c], prob_n_recip, ...), i.e.
             //// prob[c].rowwise().prod() * prob_n_recip = 0 * Inf = NaN once a row's log-likelihood is below ~ -745 (LC_MVP at intercept
             //// +/- 30 in the validation fixture). Same weight, same accumulation; the NoLog path keeps the natural-scale helper.
