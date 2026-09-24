@@ -193,8 +193,16 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
             if (ord_idx_of_test(t) < 0) {
               fn_MVP_compute_phi_Bound_Z_cols_T<vec>(t, phi_Bound_Z, Bound_U_Phi_Bound_Z[c], Bound_Z[c], k);
             } else {
-              phi_Bound_Z.col(t).array() = -0.5 * Bound_Z[c].col(t).array().square();             apply_col_inplace<vec, Fn::exp>(phi_Bound_Z, t);       phi_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
-              phi_Upper_Bound_Z.col(t).array() = -0.5 * Upper_Bound_Z[c].col(t).array().square(); apply_col_inplace<vec, Fn::exp>(phi_Upper_Bound_Z, t); phi_Upper_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
+              if (k.Phi_approx) {
+                //// d/dx Phi_approx(x) = (3a x^2 + b) s (1 - s), with s = Phi_approx(x), a = 0.07056, b = 1.5976:
+                phi_Bound_Z.col(t) = Bound_Z[c].col(t);             Phi_col_inplace<vec>(phi_Bound_Z, t, k);
+                phi_Bound_Z.col(t).array() = (3.0 * 0.07056 * Bound_Z[c].col(t).array().square() + 1.5976) * phi_Bound_Z.col(t).array() * (1.0 - phi_Bound_Z.col(t).array());
+                phi_Upper_Bound_Z.col(t) = Upper_Bound_Z[c].col(t); Phi_col_inplace<vec>(phi_Upper_Bound_Z, t, k);
+                phi_Upper_Bound_Z.col(t).array() = (3.0 * 0.07056 * Upper_Bound_Z[c].col(t).array().square() + 1.5976) * phi_Upper_Bound_Z.col(t).array() * (1.0 - phi_Upper_Bound_Z.col(t).array());
+              } else {
+                phi_Bound_Z.col(t).array() = -0.5 * Bound_Z[c].col(t).array().square();             apply_col_inplace<vec, Fn::exp>(phi_Bound_Z, t);       phi_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
+                phi_Upper_Bound_Z.col(t).array() = -0.5 * Upper_Bound_Z[c].col(t).array().square(); apply_col_inplace<vec, Fn::exp>(phi_Upper_Bound_Z, t); phi_Upper_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
+              }
               for (int i = 0; i < chunk_size; ++i) { if (std::isinf(Bound_Z[c](i, t))) phi_Bound_Z(i, t) = 0.0; if (std::isinf(Upper_Bound_Z[c](i, t))) phi_Upper_Bound_Z(i, t) = 0.0; }
             }
           }

@@ -236,14 +236,8 @@ fn_get_compiled_SIMD_levels_of_BayesMVP <-  function() {
 #'     resolver the dispatchers switch on - must report the expected kernel width (AVX512 = 8, AVX2 = 4, Stan / Loop = 1),
 #'     otherwise this stops.
 #'
-#' (2) Phi_type / inv_Phi_type: the native C++ models ALWAYS receive the exact setting (Phi_type = "Phi",
-#'     inv_Phi_type = "inv_Phi" are hard-coded into Model_args_strings by build_Model_args_as_Rcpp_List), so any
-#'     other request was silently ignored. It is deliberately NOT wired through: the native validation
-#'     (audit/claude_2026_09_22/validation_round3/native) found that the approximate setting has inconsistent
-#'     value/gradient (finite-difference failures) for the ordinal native models MVOP and LC_MVOP, and that the
-#'     autodiff fallback paths of MVP, MVOP and LC_MVOP ignore it (so a fallback step would silently switch to exact).
-#'     Hence the exact setting is the only accepted value for ALL native models
-#'     (MVP, LC_MVP, latent_trait, MVOP, LC_MVOP).
+#' (2) Phi_type / inv_Phi_type are no longer restricted here: they are passed through to the native C++ models, which
+#'     accept "Phi" / "Phi_approx" / "Phi_approx_2" and "inv_Phi" / "inv_Phi_approx" and stop on anything else.
 #'
 #' @param Model_type the native model type.
 #' @param model_args_list the (user-supplied or resolved) model argument list.
@@ -351,30 +345,6 @@ fn_check_native_model_vect_types_and_Phi_types <-  function( Model_type,
 
         }
         ##
-        ## ---- (2) exact Phi / inv_Phi only (see the function documentation above for why):
-        ##
-        exact_setting_by_field_name <-  list( Phi_type     = "Phi",
-                                              inv_Phi_type = "inv_Phi")
-        ##
-        for (Phi_field_name in names(exact_setting_by_field_name)) {
-
-              requested_Phi_value <-  model_args_list[[Phi_field_name]]
-              exact_Phi_value     <-  exact_setting_by_field_name[[Phi_field_name]]
-              ##
-              if (is.null(requested_Phi_value)) next
-              ##
-              if (!identical(as.character(requested_Phi_value), exact_Phi_value)) {
-                    stop(paste0( Phi_field_name, " = '", paste(requested_Phi_value, collapse = ", "), "' is not supported for the native ",
-                                 "BayesMVP models (Model_type = '", Model_type, "'); only the exact setting ", Phi_field_name, " = '",
-                                 exact_Phi_value, "' is accepted. The native C++ likelihoods (MVP, LC_MVP, latent_trait, MVOP, LC_MVOP) ",
-                                 "always use exact Phi / inv_Phi, so this request would otherwise be silently ignored. The approximate ",
-                                 "setting is not wired through because validation found inconsistent value/gradient for the ",
-                                 "ordinal native models (MVOP, LC_MVOP) and that the autodiff fallback paths of MVP, MVOP and LC_MVOP ",
-                                 "ignore it. (This does not restrict Model_type = 'Stan' models, whose Phi choice lives in the .stan file.)"))
-              }
-
-        }
-        ##
         return(invisible(TRUE))
 
 }
@@ -388,7 +358,7 @@ fn_check_native_model_vect_types_and_Phi_types <-  function( Model_type,
 #'   - vect_type defaults to the highest SIMD level COMPILED into the installed BayesMVP ("AVX512"/"AVX2"; "Stan" if
 #'     neither), not the CPU's runtime capability; a requested vect_type / vect_type_* that this build cannot honour
 #'     stops. An AVX-512 build accepts both "AVX512" and "AVX2"; an AVX2-only build stops on "AVX512".
-#'   - Phi_type / inv_Phi_type: only the exact setting ("Phi" / "inv_Phi") is accepted; anything else stops.
+#'   - Phi_type / inv_Phi_type: "Phi" / "inv_Phi" by default; "Phi_approx" / "inv_Phi_approx" are passed through to the C++.
 #' @export
 init_hard_coded_model_args <- function( Model_type,
                                         model_args_list
@@ -882,8 +852,8 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         Model_args_doubles <- matrix(Model_args_doubles, ncol = 1, nrow = length(Model_args_doubles))
         
         ##
-        ## ---- final guard on the strings the C++ reads. Phi_type / inv_Phi_type are hard-coded to the exact
-        ##      setting below (the only one accepted for native models), and every vect_type* must be honoured by this
+        ## ---- final guard on the strings the C++ reads. Phi_type / inv_Phi_type are passed through as set in
+        ##      model_args_list (exact by default), and every vect_type* must be honoured by this
         ##      build - see fn_check_native_model_vect_types_and_Phi_types. (No per-kernel overwrite happens here, so no
         ##      per-kernel/vect_type agreement is required at this point.)
         ##
@@ -897,11 +867,11 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         }
         ##
         # Model_args_strings - ORDER MATTERS!
-        # [1] Phi_type and [2] inv_Phi_type are the exact setting on purpose (native models accept nothing else).
+        # [1] Phi_type and [2] inv_Phi_type as set in model_args_list ("Phi" / "inv_Phi" by default; the C++ stops on unknown values).
         Model_args_strings <- c(
           as.character(model_args_list$vect_type),              # [0]
-          "Phi",                                                # [1] Phi_type
-          "inv_Phi",                                            # [2] inv_Phi_type
+          as.character(model_args_list$Phi_type %||% "Phi"),         # [1] Phi_type
+          as.character(model_args_list$inv_Phi_type %||% "inv_Phi"), # [2] inv_Phi_type
           ##
           as.character(model_args_list$vect_type_exp %||% model_args_list$vect_type),      # [3]
           as.character(model_args_list$vect_type_log %||% model_args_list$vect_type),      # [4]
