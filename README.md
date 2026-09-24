@@ -117,4 +117,3 @@ The two-class latent-class MVP and latent-trait implementations were used in the
 
 BayesMVP is licensed under GPL-3. See [LICENSE](LICENSE) for the complete licence text.
 
-Approximate-CDF model paths using `Phi_approx` / `inv_Phi_approx` are experimental and are not supported for production native fits. Finite-difference checks found gradient failures when these settings were forced into the native MVOP and LC-MVOP `NoLog` paths. The native defaults remain `Phi` / `inv_Phi`, and the R interface rejects approximate-CDF model settings. This limitation concerns the model CDF/inverse-CDF choice; `nuisance_transformation = "Phi_approx"` is a separate setting.
