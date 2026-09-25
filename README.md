@@ -2,6 +2,8 @@
 
 BayesMVP is the specialised model extension for [NicoStan](https://github.com/CerulloE1996/NicoStan). NicoStan supplies the general Stan-compatible sampler, warm-up, trajectory-length adaptation and diagnostics. BayesMVP adds native manually implemented gradients and model-specific C++ code for multivariate probit models.
 
+BayesMVP was originally a standalone R package (and NicoStan was formerly called "BayesMVP"); however, it has now been split into 2 R packages: [NicoStan](https://github.com/CerulloE1996/NicoStan), for the general Stan interface (which relies heavily on [BridgeStan](https://roualdes.us/bridgestan/latest/)), and BayesMVP, which is now an extension to NicoStan, specifically for the extremely efficient fitting of multivariate probit (MVP) based models (including the latent class MVP [LC-MVP] and the latent trait model, for both binary and/or ordinal outcomes/tests).
+
 The extension contains:
 
 - **MVP:** the multivariate probit model for correlated binary outcomes.
@@ -12,8 +14,39 @@ The extension contains:
 
 These models are used for correlated binary and ordinal outcomes, including diagnostic and screening test-accuracy models without a perfect reference standard. The ordinal latent-class model is described in [Cerullo et al. (2022)](https://doi.org/10.1002/jrsm.1567), and the latent-class MVP versus latent-trait simulation study is reported in [Cerullo et al. (2025)](https://arxiv.org/abs/2509.18489v1).
 
+## Efficiency compared with Stan and Mplus
+
+The table below shows the estimated time needed to reach a target minimum effective sample size (ESS) - i.e., the ESS target must be met by every sensitivity, specificity and prevalence parameter - for the LC-MVP model, fitted to simulated binary data (6 tests) based on real, publicly available COVID-19 data, on a 96-core AMD EPYC 9654 server (see our upcoming paper for full details).
+
+| $N$ | Target min. ESS | NicoStan + BayesMVP | Stan (NUTS, via cmdstanr) | Mplus (PX-Gibbs) | Speed-up vs. Stan | Speed-up vs. Mplus |
+|---|---|---|---|---|---|---|
+| 500 | 7,000 | 7.66 s | 45.6 s | - | ~6× | - |
+| 2,500 | 2,500 | 9.89 s | 3,025 s (50.4 min) | - | ~300-400× | - |
+| 10,000 | 1,000 | 12.20 s | 21,440 s (357.3 min) | 550 s (9.2 min) | ~1,500-2,000× | ~40-50× |
+
+Note that these times include burnin; the NicoStan + BayesMVP times also include computing the posterior summaries.
+
+Furthermore, for our ordinal example dataset (LC-MVOP), which is based on a real dataset on three tests to screen and/or diagnose depression (specifically, the MINI as the imperfect gold standard, and the PHQ-9 and CES-D-10 as the two ordinal tests), with N = 5,000, NicoStan/BayesMVP was **over 500× more efficient than Stan** and **over 1000× more efficient than Mplus**. The latter is because Mplus's Gibbs-based algorithm struggles greatly with ordinal outcomes, and Mplus does not let you fit ordinal outcomes with more than 10 categories; hence, we had to group categories together just to attempt to measure its efficiency.
+
+## How BayesMVP computes the log-posterior and its gradient
+
+BayesMVP uses manually derived gradients, hand-coded in C++, for all of its models (i.e., rather than relying on automatic differentiation); more specifically, each log-posterior/gradient evaluation uses up to three levels:
+
+1. **Hand-coded gradient (standard scale):** the fastest option, and the one used for almost every evaluation.
+2. **Hand-coded gradient on the log scale:** if the first evaluation returns a non-finite value (e.g., due to numerical underflow/overflow in the tails of the normal CDF), the evaluation is repeated at exactly the same position using log-scale versions of the same manually derived gradients, which are more numerically stable. This is on by default (`multi_attempts = TRUE`). Note that the log-scale gradients are not yet available for the latent trait model (which still uses the hand-coded standard-scale gradient first).
+3. **Automatic differentiation:** as a final backup, the gradient is computed using reverse-mode autodiff from the Stan math C++ library. This is on by default for the latent trait model (where it is the only backup, until its log-scale gradients are finished), and can be switched on for the other models via `options(BayesMVP_autodiff_fallback = TRUE)`.
+
+Note that the backups only change how the gradient is computed at that position (i.e., they do not change the target distribution), so the sampler itself is unaffected.
+
 ## What BayesMVP adds
 
+- Manually derived likelihood gradients, hand-coded in C++, for the MVP, LC-MVP, MVOP, LC-MVOP and latent trait models, with log-scale and autodiff backups (see [above](#how-bayesmvp-computes-the-log-posterior-and-its-gradient)).
+- Cache-aware chunking of the likelihood/gradient evaluation (`num_chunks`, chosen automatically by default), which greatly improves parallel scaling at large N, as well as within-chain parallelism (WCP) through NicoStan.
+- Covariates (`X`; intercept-only by default), and multiple populations/studies (`n_pops`, `pop`), each with their own disease prevalence (and Beta prior).
+- Correlation matrices use the flexible Cholesky parameterisation of [Sean Pinkney](https://github.com/spinkney) ([Pinkney, 2024](https://arxiv.org/abs/2405.07286)) (the default, `corr_param = "Sean"`), which also allows the correlations to be constrained to be positive (`corr_force_positive = TRUE`); additionally, known/fixed correlations (`known_values_list`) and a choice of correlation priors are supported.
+- Ordinal and mixed binary/ordinal outcomes (MVOP, LC-MVOP), with any number of categories per test (`n_cat_per_ord_test`).
+- A choice of nuisance-parameter transformations (`nuisance_transformation = "Phi"`, `"Phi_approx"`, `"tanh"` or `"inv_logit"`), and of the normal CDF (`Phi_type = "Phi"` or `"Phi_approx"`).
+- Numerically stable tails: beyond the `overflow_threshold` / `underflow_threshold` (±7.5 by default), the normal CDF and its inverse are computed on the log scale.
 - Manually implemented likelihood gradients for the specialised MVP, latent-class MVP, MVOP and latent-trait implementations.
 - Native C++ implementations built on Eigen, Stan Math, RcppParallel and the NicoStan sampler core.
 - Reusable AVX2 and AVX-512 mathematical functions for vectorised exponentials, logarithms, normal distribution functions and related kernels.
