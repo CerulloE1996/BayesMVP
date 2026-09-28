@@ -365,3 +365,21 @@ double                           Stan_wrapper_lp_fn_latent_trait_var(           
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

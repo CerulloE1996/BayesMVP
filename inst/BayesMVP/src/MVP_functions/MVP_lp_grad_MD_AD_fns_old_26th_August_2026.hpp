@@ -1514,7 +1514,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
 //// Requires: fn_dispatch_templated.hpp, MVP_helpers_migrated.hpp, and fn_MVP_compute_lp_GHK_cols<vec>
 //// (the version you already have in MVP_manual_grad_calc_fns.hpp).
 ////
-//// What changed vs your version:
+//// What changed vs the previous implementation:
 ////   - one chunk loop over n_total_chunks; the remainder is just the last iteration with a smaller
 ////     chunk_size and a workspace resize. The 500-line duplicated "LAST CHUNK" block is gone.
 ////   - no Model_args_last_chunk, no "Stan" overrides, no vt_* strings: every element-wise call is

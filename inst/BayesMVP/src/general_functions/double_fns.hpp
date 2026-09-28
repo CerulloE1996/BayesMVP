@@ -93,14 +93,14 @@ inline std::array<Eigen::Matrix<T, -1, -1>, N> array_of_mats( int rows,
 //
 //  R(x) is evaluated with the Laplace continued fraction  R(x) = 1/(x + 1/(x + 2/(x + 3/(x + ...))))
 //  by backward recurrence of depth MILLS_CF_DEPTH. Depth 40 is full double precision for x >= 2.5
-//  (run normal_tail_self_test() once; lower the depth after benchmarking if you like — the tail
+//  (run normal_tail_self_test() once; lower the depth after benchmarking if desired — the tail
 //  path is only taken for |x| > NORMAL_TAIL_THRESH, and a rational minimax in 1/x can replace the
 //  fraction later; the self-test validates any replacement).
 //
-//  Body (|x| <= NORMAL_TAIL_THRESH) keeps your existing fast_Phi (Abramowitz-Stegun). Its absolute
+//  Body (|x| <= NORMAL_TAIL_THRESH) keeps the existing fast_Phi (Abramowitz-Stegun). Its absolute
 //  error 7.5e-8 is a relative error of 1.2e-5 at the threshold and smaller inside; the tail side is
-//  exact, so the join is continuous to ~1e-5 in log Phi. The remaining tail error is your fast_log's
-//  (~1e-8); swap in the double-precision log constant if you want machine precision.
+//  exact, so the join is continuous to ~1e-5 in log Phi. The remaining tail error is the fast_log's
+//  (~1e-8); swap in the double-precision log constant if machine precision is required.
 // ---------------------------------------------------------------------------------------------
 
 static constexpr double NORMAL_TAIL_THRESH  = 2.5;
@@ -156,7 +156,7 @@ inline double fast_dlog_Phi_dx(const double x) {                      // phi(x)/
 
 
 
-// AS241 rationals (identical constants to your AVX code)
+// AS241 rationals (identical constants to the AVX code)
 inline double fast_inv_Phi_case_1(const double q) {                   // |q| <= 0.425
   
       const double r = 0.180625 - q * q;
@@ -445,7 +445,7 @@ inline double raw_C_to_C_log_det_J_lp( const Eigen::Matrix<double, -1, 1> &raw_C
 
 //// ---------------------------------------------------------------------------------------
 //// Induced-Dirichlet ("ind_dir") log-density function:
-//// NOTE: You can use this for both ind_dir PRIORS and ind_dir MODELS:
+//// NOTE: This can be used for both ind_dir PRIORS and ind_dir MODELS:
 //// NOTE: adapted from: Betancourt et al (see: https://betanalpha.github.io/assets/case_studies/ordinal_regression.html),
 //// HOWEVER my version has a (much) more computationally efficient (lower-trianglar) Jacobian computation, which is 
 //// mathematically still valid. 
@@ -2059,3 +2059,12 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Re
  
  
  
+
+
+
+
+
+
+
+
+

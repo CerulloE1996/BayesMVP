@@ -238,3 +238,19 @@ inline auto fn_EIGEN_double(  const Eigen::ArrayBase<Derived> &x,
   
   
   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

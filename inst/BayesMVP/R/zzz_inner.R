@@ -193,3 +193,20 @@ R_fn_stop_if_several_TBB_copies_loaded <- function(package_name) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

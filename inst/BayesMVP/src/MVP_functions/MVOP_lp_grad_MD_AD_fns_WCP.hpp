@@ -1432,3 +1432,13 @@ inline Eigen::Matrix<double, -1, 1> fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD( 
 
 
   
+
+
+
+
+
+
+
+
+
+

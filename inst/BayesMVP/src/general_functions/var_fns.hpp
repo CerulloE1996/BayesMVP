@@ -106,7 +106,7 @@ inline  stan::math::var raw_C_to_C_log_det_J_lp_var( Eigen::Matrix<stan::math::v
 
 //// ---------------------------------------------------------------------------------------
 //// Induced-Dirichlet ("ind_dir") log-density function:
-//// NOTE: You can use this for both ind_dir PRIORS and ind_dir MODELS:
+//// NOTE: This can be used for both ind_dir PRIORS and ind_dir MODELS:
 //// NOTE: adapted from: Betancourt et al (see: https://betanalpha.github.io/assets/case_studies/ordinal_regression.html),
 //// HOWEVER my version has a (much) more computationally efficient (lower-trianglar) Jacobian computation, which is 
 //// mathematically still valid. 
@@ -582,7 +582,7 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
 // =============================================================================
 // Scalar lb_ub_lp: unconstrained y -> bounded [lb, ub] via tanh
 // Returns 2-vector: (0) = log Jacobian contribution, (1) = bounded value
-// These should match your existing lb_ub_lp_dbl / lb_ub_lp functions.
+// These should match the existing lb_ub_lp_dbl / lb_ub_lp functions.
 // Included here for self-containedness; remove if already defined.
 // =============================================================================
 inline  Eigen::Matrix<double, -1, 1> lb_ub_lp_cvine_dbl( double y, 
@@ -2515,3 +2515,5 @@ inline Eigen::Matrix<stan::math::var, -1, 1  >   log_sum_exp_2d_Stan_var(   Eige
  
  
  
+
+

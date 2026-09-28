@@ -493,7 +493,7 @@ struct WarmUp : public RcppParallel::Worker {
   }
 };
 
-// Call this before starting your main function
+// Call this before starting the main function
 void warmUpThreads(std::size_t nThreads) {
   WarmUp warmUpTask;
   RcppParallel::parallelFor(0, nThreads, warmUpTask);

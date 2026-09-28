@@ -91,8 +91,8 @@ fn_Rcpp_wrapper_update_M_diag_Hessian <- function(M_main_vec, M_inv_main_vec, sh
     .Call(`_BayesMVP_fn_Rcpp_wrapper_update_M_diag_Hessian`, M_main_vec, M_inv_main_vec, shrinkage_factor, ratio_Hess_main, interval_width, num_diff_e, Model_type, force_autodiff, force_PartialLog, multi_attempts, theta_main_vec, theta_us_vec, y, Model_args_as_Rcpp_List, ii, n_burnin, metric_type)
 }
 
-fn_find_initial_eps_main_and_us <- function(theta_main_vec_initial_ref, theta_us_vec_initial_ref, partitioned_HMC, seed, Model_type, force_autodiff, force_PartialLog, multi_attempts, y_ref, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List) {
-    .Call(`_BayesMVP_fn_find_initial_eps_main_and_us`, theta_main_vec_initial_ref, theta_us_vec_initial_ref, partitioned_HMC, seed, Model_type, force_autodiff, force_PartialLog, multi_attempts, y_ref, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List)
+fn_find_initial_eps_main_and_us <- function(theta_main_vec_initial_ref, theta_us_vec_initial_ref, partitioned_HMC, seed, Model_type, force_autodiff, force_PartialLog, multi_attempts, y_ref, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads = 1L) {
+    .Call(`_BayesMVP_fn_find_initial_eps_main_and_us`, theta_main_vec_initial_ref, theta_us_vec_initial_ref, partitioned_HMC, seed, Model_type, force_autodiff, force_PartialLog, multi_attempts, y_ref, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads)
 }
 
 fn_Rcpp_wrapper_adapt_eps_ADAM <- function(eps, eps_m_adam, eps_v_adam, iter, n_burnin, LR, p_jump, adapt_delta, beta1_adam, beta2_adam, eps_adam) {
@@ -181,6 +181,102 @@ fn_persistent_burnin_run_one_iter <- function(worker_ptr, seed_R, current_iter_R
 
 fn_persistent_burnin_run_one_iter_profiled <- function(worker_ptr, seed_R, current_iter_R) {
     .Call(`_BayesMVP_fn_persistent_burnin_run_one_iter_profiled`, worker_ptr, seed_R, current_iter_R)
+}
+
+fn_persistent_burnin_resident_api_version <- function() {
+    .Call(`_BayesMVP_fn_persistent_burnin_resident_api_version`)
+}
+
+fn_persistent_burnin_run_one_iter_main_only <- function(worker_ptr, seed_R, current_iter_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_run_one_iter_main_only`, worker_ptr, seed_R, current_iter_R)
+}
+
+fn_persistent_burnin_run_one_iter_main_only_profiled <- function(worker_ptr, seed_R, current_iter_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_run_one_iter_main_only_profiled`, worker_ptr, seed_R, current_iter_R)
+}
+
+fn_persistent_burnin_get_main_outputs <- function(worker_ptr) {
+    .Call(`_BayesMVP_fn_persistent_burnin_get_main_outputs`, worker_ptr)
+}
+
+fn_persistent_burnin_update_adaptation_main_only <- function(worker_ptr, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, push_nuisance_metric_R, push_nuisance_centre_R) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_update_adaptation_main_only`, worker_ptr, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, push_nuisance_metric_R, push_nuisance_centre_R))
+}
+
+fn_persistent_burnin_init_resident_statistics <- function(worker_ptr, snaper_m_vec_us, snaper_s_vec_us_empirical, snaper_m_prop_vec_us, var_draws_us) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_init_resident_statistics`, worker_ptr, snaper_m_vec_us, snaper_s_vec_us_empirical, snaper_m_prop_vec_us, var_draws_us))
+}
+
+fn_persistent_burnin_get_resident_statistic <- function(worker_ptr, statistic_name_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_get_resident_statistic`, worker_ptr, statistic_name_R)
+}
+
+fn_persistent_burnin_set_resident_statistic <- function(worker_ptr, statistic_name_R, value) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_set_resident_statistic`, worker_ptr, statistic_name_R, value))
+}
+
+fn_persistent_burnin_get_state <- function(worker_ptr, state_name_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_get_state`, worker_ptr, state_name_R)
+}
+
+fn_persistent_burnin_fill_state <- function(worker_ptr, state_name_R, buffer_env_R) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_fill_state`, worker_ptr, state_name_R, buffer_env_R))
+}
+
+fn_persistent_burnin_set_state <- function(worker_ptr, state_name_R, values) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_set_state`, worker_ptr, state_name_R, values))
+}
+
+fn_persistent_burnin_state_row_means_resident <- function(worker_ptr, state_name_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_state_row_means_resident`, worker_ptr, state_name_R)
+}
+
+fn_persistent_burnin_pooled_welford_nuisance_resident <- function(worker_ptr, wf_n_R, reset_R, wf_min_draws_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_pooled_welford_nuisance_resident`, worker_ptr, wf_n_R, reset_R, wf_min_draws_R)
+}
+
+fn_persistent_burnin_update_snaper_m_and_s_resident <- function(worker_ptr, snaper_m_vec_main, snaper_s_vec_main_empirical, theta_vec_current_mean_main, ii_R, joint_layout_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_update_snaper_m_and_s_resident`, worker_ptr, snaper_m_vec_main, snaper_s_vec_main_empirical, theta_vec_current_mean_main, ii_R, joint_layout_R)
+}
+
+fn_persistent_burnin_update_snaper_m_prop_resident <- function(worker_ptr, snaper_m_prop_vec_main, theta_vec_current_mean_main, ii_R, use_weighted_proposal_mean_R, acceptance_probabilities, divergences) {
+    .Call(`_BayesMVP_fn_persistent_burnin_update_snaper_m_prop_resident`, worker_ptr, snaper_m_prop_vec_main, theta_vec_current_mean_main, ii_R, use_weighted_proposal_mean_R, acceptance_probabilities, divergences)
+}
+
+fn_persistent_burnin_set_nuisance_centre_resident <- function(worker_ptr, centre_R) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_set_nuisance_centre_resident`, worker_ptr, centre_R))
+}
+
+fn_persistent_burnin_get_adaptation <- function(worker_ptr, chain_index_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_get_adaptation`, worker_ptr, chain_index_R)
+}
+
+fn_persistent_burnin_resident_joint_api_version <- function() {
+    .Call(`_BayesMVP_fn_persistent_burnin_resident_joint_api_version`)
+}
+
+fn_persistent_burnin_joint_direction_set <- function(worker_ptr, direction) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_joint_direction_set`, worker_ptr, direction))
+}
+
+fn_persistent_burnin_joint_direction_get <- function(worker_ptr, main_rows_only_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_joint_direction_get`, worker_ptr, main_rows_only_R)
+}
+
+fn_persistent_burnin_joint_direction_transport_resident <- function(worker_ptr, transported_main, previous_factor_us, new_factor_us, us_factor_unchanged_R) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_joint_direction_transport_resident`, worker_ptr, transported_main, previous_factor_us, new_factor_us, us_factor_unchanged_R))
+}
+
+fn_persistent_burnin_joint_direction_update_snaper_resident <- function(worker_ptr, X_main_metric, factor_us, eta_w_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_joint_direction_update_snaper_resident`, worker_ptr, X_main_metric, factor_us, eta_w_R)
+}
+
+fn_persistent_burnin_joint_position_reductions_resident <- function(worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, factor_us) {
+    .Call(`_BayesMVP_fn_persistent_burnin_joint_position_reductions_resident`, worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, factor_us)
+}
+
+fn_persistent_burnin_joint_kinetic_energy_sums_us_resident <- function(worker_ptr, use_proposed_velocity_R, mass_us_vec) {
+    .Call(`_BayesMVP_fn_persistent_burnin_joint_kinetic_energy_sums_us_resident`, worker_ptr, use_proposed_velocity_R, mass_us_vec)
 }
 
 Rcpp_fn_OpenMP_EHMC_sampling <- function(n_threads_R, seed_R, n_iter_R, iter_one_by_one, partitioned_HMC_R, diffusion_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads_WCP) {

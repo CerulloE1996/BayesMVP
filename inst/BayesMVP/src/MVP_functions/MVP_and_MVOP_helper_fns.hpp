@@ -7,6 +7,7 @@
 
 
 #include <Eigen/Dense>
+#include <optional>
  
 #include <unsupported/Eigen/SpecialFunctions>
 
@@ -119,7 +120,7 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_AD( const Eigen::Ref<const Eigen::Matri
                                              Eigen::Matrix<double, -1, 1> &grad_prev_raw
 ) {
   
-         stan::math::start_nested();
+         std::optional<stan::math::nested_rev_autodiff> nested_guard(std::in_place);
          
          stan::math::var target_AD_prev = 0.0;
          
@@ -164,7 +165,7 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_AD( const Eigen::Ref<const Eigen::Matri
          }
          
          stan::math::set_zero_all_adjoints_nested();
-         stan::math::recover_memory_nested();
+         nested_guard.reset();
    
 }
  
@@ -285,8 +286,8 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double,
  // 6. Convenience: single-population backward-compatible wrapper
  // ============================================================================
  //
- // If n_pops == 1 and you want the old interface, this wraps the multi-pop
- // functions. But you should just use n_pops = 1 with the multi-pop code.
+ // If n_pops == 1 and the aim is to the old interface, this wraps the multi-pop
+ // functions. But use n_pops = 1 with the multi-pop code.
  //
  
  
@@ -379,7 +380,7 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double,
  //    out_mat.segment(prev_start, n_pops) += prev_unc_grad;
  //    ```
  //
- // 8. CUTPOINT OFFSET: everywhere you see `(n_class - 1)` as the offset
+ // 8. CUTPOINT OFFSET: everywhere appears `(n_class - 1)` as the offset
  //    past the coefficients, replace with `n_pops`:
  //    ```
  //    // Old: int i = n_corrs + n_covariates_total + (n_class - 1);
@@ -398,3 +399,23 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double,
  // ============================================================================
  
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -259,7 +259,7 @@ run_BayesMVP_admin_install <- function(source_root = NULL,
 
     message(paste0("BayesMVP installation completed in: ", lib))
     if (package_was_loaded) {
-        message("Restart R when you are ready to use the new build; the current session still has its previous package loaded.")
+        message("Restart R when ready to use the new build; the current session still has its previous package loaded.")
     }
 
     invisible(lib)
@@ -298,3 +298,25 @@ run_BayesMVP_admin_install <- function(source_root = NULL,
 if (isTRUE(getOption("BayesMVP.admin.autorun", TRUE))) {
     run_BayesMVP_admin_install()
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

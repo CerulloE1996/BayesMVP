@@ -3,11 +3,11 @@
 ////
 //// Templated (<Vec vec>) versions of everything in MVP_log_scale_grad_calc_fns.hpp, plus the
 //// three signed log-sum-exp utilities those functions need. Every function here ends in _T and
-//// takes NO Model_fn_args_struct / vect_type strings; your originals are untouched.
+//// takes NO Model_fn_args_struct / vect_type strings; the originals are untouched.
 ////
 //// Requires: fn_dispatch_templated.hpp, MVP_helpers_migrated.hpp (KernelChoice, apply_*).
 ////
-//// Maths is identical to your originals. Only the element-wise calls changed:
+//// Maths is identical to the originals. Only the element-wise calls changed:
 ////   fn_EIGEN_double(x, "log", vt)  ->  apply_inplace<vec, Fn::log>(x)      (in place)
 ////   log_abs_sum_exp_general_v2(A, S, vt, vt, out_log, out_sign, mx, sm) -> log_abs_sum_exp_general_v2_T<vec>(A, S, out_log, out_sign, mx, sm)
 ////   log_sum_vec_signed_v1(la, sg, vt)  ->  log_sum_vec_signed_T<vec>(la, sg)
@@ -742,10 +742,10 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
                 sign_terms.col(j).array() = -sign_z_grad_term.col(j).array() * stan::math::sign(L_Omega_double(t + ii, t + j - 1));
               }
               //// leftCols(ii + 1), was leftCols(ii). Columns 0..ii are filled just above (the positive
-              //// L(t + ii, t - 1) term and the ii negative terms j = 1..ii), matching Enzo's natural-scale recursion in
+              //// L(t + ii, t - 1) term and the ii negative terms j = 1..ii), matching the natural-scale recursion in
               //// fn_MVP_compute_nuisance_grad_v2 (zg0 * L(t + ii, t - 1) - zg[1..ii] . L(t + ii, t..t + ii - 1)). leftCols(ii) dropped the
               //// j = ii term, so every problem row of the nuisance columns 0..n_tests - 4 was wrong for n_tests >= 4 (the 3-test fixtures
-              //// never reach this loop). The same line is in Enzo's original fn_MVP_compute_nuisance_grad_log_scale (fixed there too).
+              //// never reach this loop). The same line is in the original fn_MVP_compute_nuisance_grad_log_scale (fixed there too).
               log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(ii + 1), sign_terms.leftCols(ii + 1), log_abs_prod, sign_prod, container_max_logs, container_sum_exp_signed);
               log_abs_grad_prob.col(ii).array() = log_abs_ys.col(t + ii)(idx).array() + log_abs_prod.array();
               sign_grad_prob.col(ii).array()    = sign_ys.col(t + ii)(idx).array() * sign_prod.array();
@@ -1090,6 +1090,25 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
         resize_all(chunk_size);
   
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

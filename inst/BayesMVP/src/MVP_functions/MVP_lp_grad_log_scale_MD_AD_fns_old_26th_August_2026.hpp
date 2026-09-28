@@ -1675,14 +1675,14 @@ inline  void                             fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD
 
 //// MVP_lp_grad_log_scale_MD_AD_fns_T.hpp  — drop-in replacement for MVP_lp_grad_log_scale_MD_AD_fns.hpp
 ////
-//// Keeps the SAME entry-point name and signature that your InPlace wrappers call:
+//// Keeps the SAME entry-point name and signature that the InPlace wrappers call:
 ////   fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(...)
 //// so the three fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace(...) overloads and
-//// fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD(...) at the bottom of your file stay exactly as they are.
-//// Delete your old ..._process_chunk and ..._InPlace_process, keep the wrappers, include this file.
+//// fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD(...) at the bottom of this file stay exactly as they are.
+//// Delete the old ..._process_chunk and ..._InPlace_process functions, keep the wrappers, include this file.
 ////
 //// Requires: MVP_log_scale_grad_calc_fns_T.hpp (which pulls in MVP_helpers_migrated.hpp and
-//// fn_dispatch_templated.hpp), your fn_MVP_compute_lp_GHK_cols<vec>, and the unchanged
+//// fn_dispatch_templated.hpp), the fn_MVP_compute_lp_GHK_cols<vec> implementation, and the unchanged
 //// fn_MVP_compute_nuisance_grad_v2 / fn_MVP_compute_coefficients_grad_v2 / fn_MVP_compute_L_Omega_grad_v2.
 
 // #pragma once
@@ -2322,7 +2322,7 @@ inline  void                             fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD
 // 
 // 
 // //// -------------------------------------------------------------------------------------
-// //// Entry point with the ORIGINAL name/signature: your InPlace wrappers call this unchanged.
+// //// Entry point with the ORIGINAL name/signature: the InPlace wrappers call this unchanged.
 // //// -------------------------------------------------------------------------------------
 // inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(   Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat,
 //                                                                               const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
@@ -2478,7 +2478,6 @@ inline Eigen::Matrix<double, -1, 1>    fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_a
       return out_mat;
   
 }
-
 
 
 

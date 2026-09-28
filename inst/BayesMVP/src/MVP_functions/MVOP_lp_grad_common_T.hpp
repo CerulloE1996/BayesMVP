@@ -3,12 +3,12 @@
 //// MVOP_lp_grad_common_T.hpp
 ////
 //// Everything the three MVOP drivers (NoLog serial, NoLog WCP, PartialLog serial) do BEFORE and
-//// AFTER the chunk loop, factored into one place. The three copies in your files were identical
+//// AFTER the chunk loop, factored into one place. The three copies in the files were identical
 //// except for two discrepancies in the WCP copy (the double-side std_normal_lpdf(C) and the
 //// var-side Phi(C) were missing "- anchor"); the serial version (anchored in both, value and
 //// gradient consistent) is used here.
 ////
-//// Requires: MVP_helpers_migrated.hpp (KernelChoice), your Pinkney_corr_master(_dbl), vec_of_mats*,
+//// Requires: MVP_helpers_migrated.hpp (KernelChoice), the Pinkney_corr_master(_dbl), vec_of_mats*,
 //// fn_MVP_prev_multi_pop_AD, chain_rule_C_to_C_raw, calculate_chunk_sizes.
 
 #pragma once
@@ -342,6 +342,25 @@ inline void fn_MVOP_assemble(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat,
             out_mat(i++) += -((P.beta_double_array[c](k, t) - pm[c](k, t)) / ps[c](k, t)) * (1.0 / ps[c](k, t));
         }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

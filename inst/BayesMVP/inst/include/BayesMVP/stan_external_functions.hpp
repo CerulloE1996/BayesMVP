@@ -438,3 +438,25 @@ inline bmvp_stan_ext::VecVar fast_inv_Phi(const T& input, std::ostream* /*pstrea
 
 // ---- diagnostic: which kernel path this build took. Declare in Stan as   real bmvp_simd_lanes();
 inline double bmvp_simd_lanes(std::ostream* /*pstream__*/) { return static_cast<double>(BMVP_LANES); }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

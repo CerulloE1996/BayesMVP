@@ -20,10 +20,10 @@
 
 //// MVOP_lp_grad_MD_AD_fns_T.hpp — replaces MVOP_lp_grad_MD_AD_fns.hpp AND the _WCP impl in MVOP_lp_grad_MD_AD_fns_WCP.hpp
 ////
-//// Keep in your files: fn_MVOP_resize_ws_for_chunk (reused here), fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process
+//// Keep in the files: fn_MVOP_resize_ws_for_chunk (reused here), fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process
 //// and the InPlace wrappers. They call the two non-template functions at the bottom of this file
 //// (original names/signatures): ..._Inplace_process_serial and ..._Inplace_process_WCP.
-//// Delete your old fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk, ..._process_serial and ..._process_WCP bodies.
+//// Delete the old fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk, ..._process_serial and ..._process_WCP bodies.
 ////
 //// Requires: MVOP_lp_grad_common_T.hpp, migration_MVOP_helpers_and_MVP_driver.hpp (fn_MVOP_compute_lp_GHK_cols_T),
 //// and the unchanged fn_MVOP_grad_prep / fn_MVOP_compute_cutpoint_grad / fn_MOVP_compute_L_Omega_grad_v3.
@@ -339,7 +339,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T(  Eigen
 
 
 
-//// ---- original names / signatures, called by your unchanged _Inplace_process dispatcher ----
+//// ---- original names / signatures, called by the unchanged _Inplace_process dispatcher ----
 inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat,
                                                                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
                                                                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
@@ -368,6 +368,21 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_WCP(  Eig
         DISPATCH_VEC(vec, fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T,
                      out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct, LC_MVP_ws_structs, n_threads_WCP);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

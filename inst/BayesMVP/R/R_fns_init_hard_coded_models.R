@@ -2,12 +2,12 @@
 ## R_fns_init_hard_coded_models.R
 
 
-# json <- jsonlite::fromJSON("path/to/stan_data/data_<hash>.json")
+# json <- jsonlite::fromJSON("/home/enzocerullo/R/R-4.3.3/lib/R/library/BayesMVP/stan_data/data_6e479c5a0b94fe3f633a31e26aa5dbcc_1000.json")
 # json$n_thr_per_ord_test
 # json$n_cat_per_ord_test
 # json$n_ordinal_tests
 # 
-# file.remove("path/to/stan_data/data_<hash>.json")
+# file.remove("/home/enzocerullo/R/R-4.3.3/lib/R/library/BayesMVP/stan_data/data_6e479c5a0b94fe3f633a31e26aa5dbcc_1000.json")
 
 
 #### =====================================================================================================================================
@@ -49,7 +49,7 @@ fn_get_compiled_SIMD_level_of_BayesMVP <-  function() {
 #' fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled
 #'
 #' Stops with a clear message if the installed BayesMVP binary predates the SIMD dispatch change (both kernel sets on
-#' AVX-512 builds, src/Rcpp_SIMD_dispatch_info.cpp). Enzo sources the R files without reinstalling, and C++ changes need a rebuild.
+#' AVX-512 builds, src/Rcpp_SIMD_dispatch_info.cpp). The R files can be sourced without reinstalling; C++ changes need a rebuild.
 #' @noRd
 fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled <-  function() {
 
@@ -59,7 +59,7 @@ fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled <-  function() {
         for (required_cpp_export_name in c("Rcpp_BayesMVP_compiled_SIMD_levels", "Rcpp_BayesMVP_SIMD_lane_width_for_vect_type")) {
               if (!exists(required_cpp_export_name, envir = BayesMVP_namespace, inherits = FALSE)) {
                     stop(paste0("The installed BayesMVP binary has no ", required_cpp_export_name, "() (added with the ",
-                                "AVX2 + AVX-512 SIMD dispatch). The R code you sourced needs the matching C++ build: reinstall ",
+                                "AVX2 + AVX-512 SIMD dispatch). The R code that was sourced needs the matching C++ build: reinstall ",
                                 "NicoStan, then BayesMVP."))
               }
         }
@@ -184,7 +184,7 @@ R_fn_BayesMVP_SIMD_lane_width_for_vect_type <-  function(vect_type) {
 #'
 #' Returns ALL SIMD kernel sets compiled into the INSTALLED BayesMVP binary, highest first: c("AVX512", "AVX2") on an
 #' AVX-512 build (which compiles the AVX2 kernels too, so vect_type = "AVX2" runs them),
-#' "AVX2" on an AVX2-only build (e.g. Enzo's laptop), character(0) if neither. It asks the C++ export
+#' "AVX2" on an AVX2-only build (e.g. the AVX2-only machine), character(0) if neither. It asks the C++ export
 #' Rcpp_BayesMVP_compiled_SIMD_levels() (src/Rcpp_SIMD_dispatch_info.cpp), and stops if its highest level disagrees
 #' with fn_get_compiled_SIMD_level_of_BayesMVP() (main.cpp's detect_vectorization_support()), since the two translation
 #' units must describe the same build.
@@ -230,7 +230,7 @@ fn_get_compiled_SIMD_levels_of_BayesMVP <-  function() {
 #'     An AVX-512 build compiles BOTH kernel sets, so "AVX512" (8-lane kernels) and "AVX2" (genuine
 #'     4-lane kernels) are both accepted there; an AVX2-only build (e.g. the laptop) accepts "AVX2" and STOPS on "AVX512".
 #'     (History: previously the build compiled only one level, so "AVX2" on an AVX-512 build was first returned
-#'     UNCHANGED and then, after the fallback fix, stopped here.) Strings the dispatch does not know (e.g. "AVX",
+#'     UNCHANGED (audit item D3) and then, after the D3 fix, stopped here.) Strings the dispatch does not know (e.g. "AVX",
 #'     which R_fn_detect_vectorisation_support() returns on AVX-only CPUs) stop too.
 #'     Self-check: for every accepted string, BayesMVP:::Rcpp_BayesMVP_SIMD_lane_width_for_vect_type() - the same C++
 #'     resolver the dispatchers switch on - must report the expected kernel width (AVX512 = 8, AVX2 = 4, Stan / Loop = 1),
@@ -1832,3 +1832,25 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
 
 # 
 # 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

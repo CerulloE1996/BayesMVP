@@ -10,16 +10,16 @@
 ////   fn_MVP_nuisance_deriv_of_log_det_J  -> fn_MVP_nuisance_deriv_of_log_det_J_T<vec>
 ////   log_sum_exp_general                 -> log_sum_exp_general_T<vec>
 ////
-//// UNCHANGED (they never called fn_EIGEN_double — keep your existing versions as they are):
+//// UNCHANGED (they never called fn_EIGEN_double — keep the existing versions as they are):
 ////   fn_MVP_grad_prep, compute_rowwise_products, compute_latent_class_terms, compute_final_terms,
 ////   fn_MVP_compute_nuisance_grad_v2, fn_MVP_compute_coefficients_grad_v2/v3,
 ////   fn_MVP_compute_L_Omega_grad_v2/v3.
 ////   (Optional tidy: delete the dead `const std::string vect_type = ...` line at the top of each;
 ////    it is a string copy per call and is never used.)
 ////
-//// The nuisance-transform functions are written from the formulas, not from your source (you
+//// The nuisance-transform functions are written from the formulas, not from the source (the
 //// didn't paste it). They cover nuisance_transformation = "Phi", "Phi_approx", "inv_logit", "tanh".
-//// RUN check_nuisance_migration() BELOW against your old functions before deleting the old ones.
+//// RUN check_nuisance_migration() BELOW against the old functions before deleting the old ones.
 
 #pragma once
 //#include "fn_dispatch_templated.hpp"
@@ -288,6 +288,24 @@ inline void log_sum_exp_general_T(  Eigen::Matrix<double, -1, -1> &lp_array,
   apply_inplace<vec, Fn::log>(log_sum_result);
   log_sum_result.array() += container_max_logs.array();
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

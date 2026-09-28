@@ -2,9 +2,9 @@
 //// MVP_lp_grad_MD_AD_fns.hpp  — MIGRATED (complete replacement for the serial NoLog driver)
 ////
 //// Requires: fn_dispatch_templated.hpp, MVP_helpers_migrated.hpp, and fn_MVP_compute_lp_GHK_cols_T<vec>
-//// (the version you already have in MVP_manual_grad_calc_fns.hpp).
+//// (the version already present in MVP_manual_grad_calc_fns.hpp).
 ////
-//// What changed vs your version:
+//// What changed vs the version:
 ////   - one chunk loop over n_total_chunks; the remainder is just the last iteration with a smaller
 ////     chunk_size and a workspace resize. The 500-line duplicated "LAST CHUNK" block is gone.
 ////   - no Model_args_last_chunk, no "Stan" overrides, no vt_* strings: every element-wise call is
@@ -19,6 +19,7 @@
 
 #include <Eigen/Dense>
 #include <unsupported/Eigen/SpecialFunctions>
+#include <optional>
 
 // #include "MVP_helpers_migrated.hpp"
 
@@ -240,7 +241,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
         double log_det_J_prev_from_AD = 0.0;
 
         {    ///////////   -------------------  AD block  ----------------------------------------------------------------------------------------------------------
-          stan::math::start_nested();
+          std::optional<stan::math::nested_rev_autodiff> nested_guard(std::in_place);
           stan::math::var target_AD = 0.0;
 
           Eigen::Matrix<stan::math::var, -1, 1> Omega_raw_vec_var = stan::math::to_var(Omega_raw_vec_double);
@@ -332,7 +333,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
             }
           }
 
-          stan::math::recover_memory_nested();
+          nested_guard.reset();
         }    //////////////////////////  end of AD block ------------------------------------------------------------------------------------------------------------
 
         /////////////  prev (multi-pop)
@@ -660,6 +661,25 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
         DISPATCH_VEC(vec, fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_impl_T,
                      out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct, LC_MVP_ws_structs);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

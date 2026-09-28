@@ -366,3 +366,19 @@ ALWAYS_INLINE   Eigen::Matrix<double, -1, 1>   log_sum_exp_2d_Stan_double( const
   
   
   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

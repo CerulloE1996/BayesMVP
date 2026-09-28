@@ -2,3 +2,25 @@
 ## Capture namespace startup output so stdout contains only the path consumed by make.
 invisible(capture.output(build_dependency_path <- NicoStan::cmdstanr_path()))
 cat(build_dependency_path)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

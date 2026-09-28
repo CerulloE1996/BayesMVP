@@ -274,13 +274,15 @@ Model_type <- "Stan"
     n_chains_burnin <- 8 
     init_lists_per_chain <- rep(list(Stan_init_list), n_chains_burnin) 
     
-    ## set Stan model file path for your Stan model (replace with your path)
+    ## set Stan model file path for the Stan model (replace with the path)
     Stan_model_file_path <- system.file("stan_models/LC_MVP_bin_PartialLog_v5.stan", package = "BayesMVP")
     #### Stan_model_file_path <- system.file("stan_models/PO_LC_MVP_bin.stan", package = "BayesMVP")
     
     ## Stan_model_file_path <- file.path(getwd(), "stan_models/LC_MVP_bin_PartialLog_v5.stan")
     
+    #### cmdstanr::cmdstan_model("/home/enzo/Documents/Work/PhD_work/R_packages/BayesMVP/inst/BayesMVP/inst/stan_models/PO_LC_MVP_bin.stan")
     
+   ## mod <- cmdstanr::cmdstan_model("/home/enzo/Documents/Work/PhD_work/R_packages/BayesMVP/inst/BayesMVP/inst/stan_models/PO_LC_MVP_bin.stan")
     
    ## mod
     
@@ -389,7 +391,7 @@ Model_type <- "Stan"
     trace_plots <- model_fit$plot_traces(params = c("beta", "Omega", "p"), 
                                          batch_size = 12)
     
-    # you can extract parameters by doing: "trace$param_name()". 
+    # parameters can be extracted using: "trace$param_name()". 
     # For example:
     # display each panel for beta and Omega ("batch_size" controls the # of plots per panel. Default = 9)
     trace_plots$beta[[1]] # 1st (and only) panel
@@ -411,7 +413,7 @@ Model_type <- "Stan"
                                               batch_size = 12)
     
     
-    # you can extract parameters by doing: "trace$param_name()". 
+    # parameters can be extracted using: "trace$param_name()". 
     # For example:
     # display each panel for beta and Omega ("batch_size" controls the # of plots per panel. Default = 9)
     density_plots$Se[[1]] # Se - 1st (and only) panel
@@ -435,28 +437,28 @@ Model_type <- "Stan"
     ## For example:
     # let's say we want to compute something not included in the default
     # "$summary()" method of BayesMVP, such as tail-ESS.
-    # We can just use the posterior R package to compute this:
+    # The code can use the posterior R package to compute this:
     require(posterior)  
     ## first extract the trace array object (note: already in a posterior-compatible format!)
     posterior_draws <- model_fit$get_posterior_draws()
     ## then compute tail-ESS using posterior::ess_tail:
     posterior::ess_tail(posterior_draws[,,"Se_bin[1]"])
     
-    ## You can also get the traces as tibbles (stored in seperate tibbles for main params, 
+    ## The traces can also be returned as tibbles (stored in seperate tibbles for main params, 
     ## transformed params, and generates quantities) using the "$get_posterior_draws_as_tibbles()" method:
     tibble_traces  <- model_fit$get_posterior_draws_as_tibbles()
     tibble_trace_main <- tibble_traces$trace_as_tibble_main_params
     tibble_trace_transformed_params <- tibble_traces$trace_as_tibble_transformed_params
     tibble_trace_generated_quantities <- tibble_traces$trace_as_tibble_generated_quantities
     
-    ## You can also easily extract model run time / efficiency information using the "$get_efficiency_metrics()" method:
+    ## Model run time / efficiency information can also be extracted using the "$get_efficiency_metrics()" method:
     model_efficiency_metrics <- model_fit$get_efficiency_metrics()
     time_burnin <- model_efficiency_metrics$time_burnin  ; time_burnin
     time_sampling <- model_efficiency_metrics$time_sampling ; time_sampling
     time_total_MCMC <- model_efficiency_metrics$time_total_MCMC  ; time_total_MCMC
     time_total_inc_summaries <- model_efficiency_metrics$time_total_inc_summaries ; time_total_inc_summaries # note this includes time to compute R-hat, etc 
     
-    # We can also extract some more specific efficiency info, again using the "$get_efficiency_metrics()" method:
+    # The code can also extract some more specific efficiency info, again using the "$get_efficiency_metrics()" method:
     Min_ESS_main_params <- model_efficiency_metrics$Min_ESS_main   ; Min_ESS_main_params
     Min_ESS_per_sec_sampling <- model_efficiency_metrics$Min_ESS_per_sec_samp ; Min_ESS_per_sec_sampling
     Min_ESS_per_sec_overall <- model_efficiency_metrics$Min_ESS_per_sec_total ; Min_ESS_per_sec_overall
@@ -465,20 +467,20 @@ Model_type <- "Stan"
     grad_evals_per_sec <- model_efficiency_metrics$grad_evals_per_sec ; grad_evals_per_sec
     
     ## extract the "time to X ESS" - these are very useful for knowing how long to
-    #  run your model for. 
+    #  run the model for. 
     est_time_to_100_ESS <- model_efficiency_metrics$est_time_to_100_ESS_inc_summaries ; est_time_to_100_ESS
     est_time_to_1000_ESS <- model_efficiency_metrics$est_time_to_1000_ESS_inc_summaries ; est_time_to_1000_ESS
     est_time_to_10000_ESS <- model_efficiency_metrics$est_time_to_10000_ESS_inc_summaries; est_time_to_10000_ESS
     
-    ##  You can also use the "model_samples$time_to_ESS()" method to estimate 
+    ##  The "model_samples$time_to_ESS()" method can also estimate 
     ## "time to X ESS" for general X:
     ##  For example let's say we determined our target (min) ESS to be ~5000:
     est_time_5000_ESS <- model_fit$time_to_target_ESS(target_ESS = 5000) ; est_time_5000_ESS
     est_time_5000_ESS
     
-    ### You can also extract the log_lik trace (note: for Stan models this will only work if "log_lik" transformed parameter is defined in Stan model)
+    ### The log_lik trace can also be extracted (note: for Stan models this will only work if "log_lik" transformed parameter is defined in Stan model)
     log_lik_trace <- model_fit$get_log_lik_trace()
-    str(log_lik_trace) # will be NULL unless you specify  "save_log_lik_trace = TRUE" in the "$summary()" method
+    str(log_lik_trace) # will be NULL unless "save_log_lik_trace = TRUE" is specified in the "$summary()" method
     ## can then use log_lik_trace e.g. to compute LOO-IC using the loo package 
     
     
@@ -498,3 +500,7 @@ Model_type <- "Stan"
   
   
   
+
+
+
+

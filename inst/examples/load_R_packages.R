@@ -42,7 +42,7 @@
   #### Load bridgestan:
   require(bridgestan)
   # # # # # # Install the cmdstanr package from CRAN
-  # # we recommend running this in a fresh R session or restarting your current session
+  # # we recommend running this in a fresh R session or restarting the current session
   # install.packages("cmdstanr", repos = c('https://stan-dev.r-universe.dev', getOption("repos")))  ## latest BETA release
   # remotes::install_github("stan-dev/cmdstanr") ## Latest DEVELOPMENT version (i.e. may be less stable than beta release)
   #  remotes::install_github("stan-dev/cmdstanr",force = TRUE)
@@ -94,7 +94,7 @@ install.packages("githubinstall")
 
 
 
-# Create a list of your installed packages
+# Create a list of the installed packages
 pkgs <- installed.packages()[,"Package"]
 # Save this list to a file
 write(pkgs, "my_r_packages.txt")
@@ -105,3 +105,25 @@ install.packages(c("rlang", "usethis", "devtools"))
 library(rlang)  # Load the new version first
 library(usethis)
 library(devtools)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

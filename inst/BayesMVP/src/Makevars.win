@@ -362,6 +362,8 @@ override SHLIB_LD = $(CXX_COMPILER_TYPE)
 ## ---------------------  Initial link paths and libraries (PKG_LIBS) ------
 ## PKG_LIBS+=-L"$(LLVM_MINGW_LIB_PATH)" -lc++abi # libc++abi.a is static
 override PKG_LIBS=-L"$(RTOOLS_COMPILER_LIB_PATH)" -lR -lc++ -lpthread $(OMP_LIB_FLAGS)
+## BLAS library (dgemv_ in burnin_exact_R_arithmetic_fns.hpp) and Fortran runtime, as required by Writing R Extensions (section 1.2.1)
+override PKG_LIBS += $(BLAS_LIBS) $(FLIBS)
 ##
 ## ---------------------  Linker settings (LDFLAGS) ------------------------
 override LDFLAGS+=-L"$(RTOOLS_COMPILER_LIB_PATH)" -fuse-ld=lld -stdlib=libc++ ## -nostdlib++

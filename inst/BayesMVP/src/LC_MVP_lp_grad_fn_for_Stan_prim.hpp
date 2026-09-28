@@ -405,3 +405,21 @@ double                           Stan_wrapper_lp_fn_LC_MVP_var(                 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -52,3 +52,25 @@ run_native_example <-  function( Model_type = c("MVP", "LC_MVP", "MVOP", "LC_MVO
         model$summary(save_log_lik_trace = FALSE, compute_nested_rhat = FALSE)
         model
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

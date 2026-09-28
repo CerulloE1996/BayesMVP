@@ -793,3 +793,14 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
 
 
 
+
+
+
+
+
+
+
+
+
+
+

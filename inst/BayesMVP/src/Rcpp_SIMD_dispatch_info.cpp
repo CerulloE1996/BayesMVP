@@ -55,3 +55,24 @@ Rcpp::CharacterVector Rcpp_BayesMVP_compiled_SIMD_levels() {
 
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -417,3 +417,22 @@ ALWAYS_INLINE  void       fn_process_Ref_double_AVX(         Eigen::Ref<T> x_Ref
 
   
   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -10,3 +10,4 @@
 ^inst/stan_data$
 ^inst/BayesMVP/inst/stan_data$
 ^inst/BayesMVP/src/.*/(old_or_backup|backups_or_temp_or_future|backup|debug_old_backup)$
+^backups_

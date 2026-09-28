@@ -319,7 +319,7 @@ $(info BRIDGESTAN_SRC is: $(BRIDGESTAN_SRC))
 ##
 ##### RNG paths: ---------------------------------------------------------------------------------------------------------------
 #### ## BOOKMARK:
-#### override RNG_PATH=/path/to/pcg_lib/include
+#### override RNG_PATH=/home/enzocerullo/pcg_lib/include
 #### ##
 ####### PKG_CPPFLAGS / PKG_CXXFLAGS / CPPFLAGS / CXXFLAGS -----------------------------------------------------------------------
 override PKG_CPPFLAGS = $(BASE_FLAGS) \
@@ -412,6 +412,8 @@ override CXX23PICFLAGS = -fpic
 ## ---------------------  Initial link paths and libraries (PKG_LIBS) --------------
 override TBB_SO = $(TBB_PATH)/libtbb.so
 override PKG_LIBS = $(TBB_SO) -Wl,-rpath,$(TBB_PATH) $(OMP_LIB_FLAGS)
+## BLAS library (dgemv_ in burnin_exact_R_arithmetic_fns.hpp) and Fortran runtime, as required by Writing R Extensions (section 1.2.1)
+override PKG_LIBS += $(BLAS_LIBS) $(FLIBS)
 ####override PKG_LIBS = -L$(TBB_PATH) -ltbb -Wl,-rpath,$(TBB_PATH) $(OMP_LIB_FLAGS)
 ##
 ## Custom user-supplied flags (if supplied) - here its "+=" as NOT over-writing PKG_LIBS or may not compile

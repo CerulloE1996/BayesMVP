@@ -466,3 +466,18 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
  
  
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

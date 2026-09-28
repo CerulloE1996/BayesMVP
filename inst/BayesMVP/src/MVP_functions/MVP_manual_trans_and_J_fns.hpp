@@ -277,14 +277,14 @@ ALWAYS_INLINE void  fn_MVP_nuisance_deriv_of_log_det_J(   Eigen::Matrix<double, 
 //// ---- Phi_type / inv_Phi_type handling shared by the four autodiff (stan::math::var) reference copies:
 ////
 //// Used by MVP_lp_grad_AD_fns.hpp (LC_MVP), std_MVP_lp_grad_AD_fns.hpp (MVP),
-//// MVOP_lp_grad_AD_fns.hpp (MVOP and LC_MVOP) and LC_LT_lp_grad_AD_fns.hpp (latent_trait). Previously:
+//// MVOP_lp_grad_AD_fns.hpp (MVOP and LC_MVOP) and LC_LT_lp_grad_AD_fns.hpp (latent_trait). Before this date:
 ////   - the autodiff copies of MVP, MVOP and LC_MVOP computed the standard-scale (interior) GHK step with the EXACT Phi / inv_Phi
-////     whatever Phi_type was, so Phi_type = "Phi_approx" only reached their tails;
+////     whatever Phi_type was, so Phi_type = "Phi_approx" only reached their tails (audit item D6);
 ////   - every autodiff copy tied the inverse CDF to Phi_type and ignored inv_Phi_type, whereas the manual-gradient paths choose the
 ////     CDF from Phi_type and the inverse from inv_Phi_type independently (KernelChoice, MVP_helpers_migrated.hpp);
 ////   - an unknown Phi_type string was not rejected: in the LC_MVP and latent_trait copies it matched no branch, so the likelihood
 ////     was silently left out of lp; in the MVP and MVOP copies it was treated as "Phi_approx" in the tails and as "Phi" elsewhere.
-//// (The missing "inv_logit" nuisance branch of the same copies, is fixed inline in each copy.)
+//// (The missing "inv_logit" nuisance branch of the same copies, audit item D4, is fixed inline in each copy.)
 //// The string rules here are the ones kernel_choice_from_args applies to the manual paths, so manual and autodiff agree:
 ////   Phi_type:     "Phi" -> exact CDF;  "Phi_approx" or "Phi_approx_2" -> Phi_approx(x) = inv_logit(0.07056 x^3 + 1.5976 x)
 ////                 (Bowling et al., 2009);
@@ -364,7 +364,7 @@ inline stan::math::var fn_AD_inv_Phi_from_log_probs_var(  const stan::math::var 
 ////
 //// This check accompanies the try/catch around attempts 1 and 2 of fn_lp_grad_MVP_multi_attempts_InPlace_process,
 //// fn_lp_grad_MVOP_multi_attempts_InPlace_process (MVP_lp_grad_multi_attempts.hpp) and attempt 1 of fn_lp_grad_LT_LC_multi_attempts_InPlace_process
-//// (LT_LC_lp_grad_multi_attempts.hpp). Those try/catch blocks catch std::exception, like the existing attempt 3, so that a
+//// (LT_LC_lp_grad_multi_attempts.hpp), audit item D5. Those try/catch blocks catch std::exception, like the existing attempt 3, so that a
 //// numerical exception (Stan math's "Phi: x is nan", inv_Phi out of range, fast_inv_Phi_approx's out-of-range argument, ...) moves on to
 //// the next attempt. A mistyped SETTING must not be swallowed that way, so it is checked here, before any attempt runs:
 ////   nuisance_transformation: Phi, Phi_approx, tanh, inv_logit, and Phi_approx_rough only where the manual path accepts it
@@ -393,3 +393,25 @@ inline void fn_check_settings_strings_before_multi_attempts(  const Model_fn_arg
                                        caller_name);
   
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -38,6 +38,16 @@
                           dll_paths <- c(TBB_STAN_1, 
                                          TBB_CMDSTAN_SO,
                                          DUMMY_MODEL_SO_1)
+                ##
+                ## RcppParallel (loaded first by .onLoad) already provides a TBB library, and the compiled BayesMVP package refuses
+                ## to load when a second copy of TBB is mapped in the process (R_fn_stop_if_several_TBB_copies_loaded); hence, the TBB
+                ## libraries above are skipped when a TBB library is already mapped, and only the dummy model library is loaded:
+                if (file.exists("/proc/self/maps")) {
+                      mapped_file_paths <- sub("^.* ", "", readLines("/proc/self/maps", warn = FALSE))
+                      if (any(grepl("/libtbb\\.so(\\.[0-9]+)*$", mapped_file_paths))) {
+                            dll_paths <- DUMMY_MODEL_SO_1
+                      }
+                }
               
             }
                       # Attempt to load each DLL / SO
@@ -120,3 +130,11 @@
 
 
  
+
+
+
+
+
+
+
+

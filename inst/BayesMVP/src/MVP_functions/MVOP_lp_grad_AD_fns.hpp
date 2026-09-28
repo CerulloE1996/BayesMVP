@@ -96,7 +96,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         const std::string &nuisance_transformation =   Model_args_as_cpp_struct.Model_args_strings(12);
         
         //// Phi_type and inv_Phi_type are validated here (unknown strings throw) and honoured independently,
-        //// as the manual paths do (see fn_AD_Phi_setting_from_strings in MVP_manual_trans_and_J_fns.hpp). Previously,
+        //// as the manual paths do (see fn_AD_Phi_setting_from_strings in MVP_manual_trans_and_J_fns.hpp). Audit item D6: before this date
         //// the standard-scale step below used the exact Phi / inv_Phi whatever Phi_type was, so Phi_type = "Phi_approx" was silently
         //// ignored except in the tails.
         const AD_Phi_setting_struct AD_Phi_setting = fn_AD_Phi_setting_from_strings(  Phi_type,

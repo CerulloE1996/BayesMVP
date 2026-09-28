@@ -178,3 +178,20 @@ inline Eigen::Matrix<double, -1, 1  >   fast_log_sum_exp_2d_double(   const Eige
   
   
   
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

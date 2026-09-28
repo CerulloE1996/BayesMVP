@@ -94,10 +94,13 @@ R_fn_sample_model(
   num_chunks_burnin = NULL,
   num_chunks_sampling = NULL,
   diffusion_HMC_integrator = "kick_flow_kick",
-  debug_burnin_timing = FALSE
+  debug_burnin_timing = FALSE,
+  run_in_fresh_R_process = TRUE
 )
 }
 \arguments{
+\item{run_in_fresh_R_process}{TRUE (default) runs the complete burn-in/sampling fit in a fresh R process, releasing its native worker memory when it exits. Draws and diagnostics are returned normally. FALSE runs in the calling session.}
+
 \item{randomize_tau_burnin}{Whether to randomise burn-in trajectory lengths. Default FALSE. Adaptation may still change the length between iterations.}
 \item{randomize_tau_sampling}{Whether to randomise post-burn-in lengths uniformly from zero to twice the adapted scale, with at least one integration step. Default TRUE.}
 

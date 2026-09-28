@@ -21,3 +21,24 @@ typedef double (*FuncDouble)(const double);
 
 #endif
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

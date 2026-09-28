@@ -5,7 +5,7 @@
 ## Uses simulated data.
 ## Running * VIA STAN (i.e. NOT via the BayesMVP R package) * but using MANUAL GRADIENTS 
 ## (i.e. custom user-supplied .cpp files - which uses functions from BayesMVP!).
-## NOTE: you can run this example without installing BayesMVP. However, you need to download the necessary files to run this. 
+## NOTE: this example can be run without installing BayesMVP. However, the necessary files must be downloaded before running this example. 
 
 
 # 
@@ -276,8 +276,8 @@ N <- 500
     CXX_STD <- "CXX17"
     CPU_BASE_FLAGS <- "-O3  -march=native  -mtune=native"
     FMA_FLAGS <- "-mfma"
-    AVX_FLAGS <- "-mavx512f -mavx512vl -mavx512dq" ## for AVX-512 - ONLY USE IF YOUR PC SUPPORTS AVX-512 (MANY DONT!) - ELSE COMMENT OUT!
-    ## AVX_FLAGS <- "-mavx2" ## for AVX2 - ONLY USE IF YOUR PC SUPPORTS AVX2 - ELSE COMMENT OUT!
+    AVX_FLAGS <- "-mavx512f -mavx512vl -mavx512dq" ## for AVX-512 - ONLY USE IF THE COMPUTER SUPPORTS AVX-512 (MANY DONT!) - ELSE COMMENT OUT!
+    ## AVX_FLAGS <- "-mavx2" ## for AVX2 - ONLY USE IF THE COMPUTER SUPPORTS AVX2 - ELSE COMMENT OUT!
     CPU_FLAGS <- paste(CPU_BASE_FLAGS, FMA_FLAGS, AVX_FLAGS)
     MATH_FLAGS <- "-fno-math-errno  -fno-signed-zeros  -fno-trapping-math"
     ##

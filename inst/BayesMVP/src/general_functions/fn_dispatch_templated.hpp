@@ -135,8 +135,8 @@ template <> ALWAYS_INLINE __m512d kernel_AVX512<Fn::tanh, false>(__m512d x) { re
 
 
 //// =====================================================================================
-//// 3. AVX2 kernels (4 doubles). Same names as the AVX512 ones with _AVX2 — if any of your
-////    AVX2 kernels is named differently, edit that ONE line; the compiler will tell you which.
+//// 3. AVX2 kernels (4 doubles). Same names as the AVX512 ones with _AVX2 — if any of the
+////    AVX2 kernels is named differently, edit that ONE line; the compiler will identify it.
 //// =====================================================================================
 #if BMVP_HAS_AVX2
 template <Fn fn, bool checks> ALWAYS_INLINE __m256d kernel_AVX2(__m256d x);
@@ -344,6 +344,25 @@ inline void dispatch_self_test() {
   apply_inplace<Vec::AVX512, Fn::exp>(x);  apply_inplace<Vec::Scalar, Fn::exp>(s);
   std::cout << "tail (n=13)    " << (x - s).cwiseAbs().maxCoeff() << "\n";
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1567,3 +1567,20 @@ ALWAYS_INLINE __m256d fast_dZ_dv_from_log_p_AVX2 VECTORCALL( const __m256d Z,
  
  
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

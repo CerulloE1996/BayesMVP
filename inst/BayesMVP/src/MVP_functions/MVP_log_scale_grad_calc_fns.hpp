@@ -1788,3 +1788,22 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
   
 
  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

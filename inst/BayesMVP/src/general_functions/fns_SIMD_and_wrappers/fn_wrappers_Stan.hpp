@@ -131,3 +131,16 @@ ALWAYS_INLINE      void          fn_void_Ref_double_Stan(   Eigen::Ref<T> x,
  
  
  
+
+
+
+
+
+
+
+
+
+
+
+
+

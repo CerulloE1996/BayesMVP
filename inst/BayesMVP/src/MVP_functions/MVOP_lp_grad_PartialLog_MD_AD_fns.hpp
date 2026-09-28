@@ -49,11 +49,11 @@
 
 //// MVOP_lp_grad_PartialLog_MD_AD_fns_T.hpp — replaces the process_chunk + _process_serial in MVOP_lp_grad_PartialLog_MD_AD_fns.hpp
 ////
-//// Keep in your file: fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process (the dispatcher)
+//// Keep in the file: fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process (the dispatcher)
 //// and the InPlace wrappers. They call the non-template ..._Inplace_process_serial at the bottom.
 ////
 //// Requires: MVOP_lp_grad_common_T.hpp, MVP_log_scale_grad_calc_fns_T.hpp (binary log-scale fix-ups _T),
-//// migration_MVOP_helpers_and_MVP_driver.hpp (fn_MVOP_compute_lp_GHK_cols_T), and your unchanged
+//// migration_MVOP_helpers_and_MVP_driver.hpp (fn_MVOP_compute_lp_GHK_cols_T), and the unchanged
 //// MVOP_PartialLog_helper_fns.hpp (fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal, fn_MVOP_row_grads_log_scale,
 //// both of which take the scalar flag S; here S = (vec == Vec::Scalar)).
 
@@ -296,7 +296,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_seri
 
 
 
-//// ---- original name / signature, called by your unchanged _Inplace_process dispatcher ----
+//// ---- original name / signature, called by the unchanged _Inplace_process dispatcher ----
 inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_serial(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat,
                                                                                      const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
                                                                                      const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
@@ -454,6 +454,21 @@ inline Eigen::Matrix<double, -1, 1>    fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_
       return out_mat;
   
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

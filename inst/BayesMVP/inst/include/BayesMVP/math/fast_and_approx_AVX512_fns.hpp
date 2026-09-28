@@ -1564,14 +1564,14 @@ ALWAYS_INLINE __m512d fast_mills_ratio_tail_AVX512(const __m512d x) {           
 //
 //  R(x) is evaluated with the Laplace continued fraction  R(x) = 1/(x + 1/(x + 2/(x + 3/(x + ...))))
 //  by backward recurrence of depth MILLS_CF_DEPTH. Depth 40 is full double precision for x >= 2.5
-//  (run normal_tail_self_test() once; lower the depth after benchmarking if you like — the tail
+//  (run normal_tail_self_test() once; lower the depth after benchmarking if desired — the tail
 //  path is only taken for |x| > NORMAL_TAIL_THRESH, and a rational minimax in 1/x can replace the
 //  fraction later; the self-test validates any replacement).
 //
-//  Body (|x| <= NORMAL_TAIL_THRESH) keeps your existing fast_Phi (Abramowitz-Stegun). Its absolute
+//  Body (|x| <= NORMAL_TAIL_THRESH) keeps the existing fast_Phi (Abramowitz-Stegun). Its absolute
 //  error 7.5e-8 is a relative error of 1.2e-5 at the threshold and smaller inside; the tail side is
-//  exact, so the join is continuous to ~1e-5 in log Phi. The remaining tail error is your fast_log's
-//  (~1e-8); swap in the double-precision log constant if you want machine precision.
+//  exact, so the join is continuous to ~1e-5 in log Phi. The remaining tail error is the fast_log's
+//  (~1e-8); swap in the double-precision log constant if machine precision is required.
 // ---------------------------------------------------------------------------------------------
 
 
@@ -1672,3 +1672,25 @@ ALWAYS_INLINE __m512d fast_dZ_dv_from_log_p_AVX512( const __m512d Z,
  
  
 #endif
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

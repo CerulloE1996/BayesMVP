@@ -124,3 +124,24 @@ inline int fn_BayesMVP_SIMD_lane_width_for_vect_type(const std::string &vect_typ
 
 #endif
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

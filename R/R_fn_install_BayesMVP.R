@@ -323,3 +323,25 @@ install_BayesMVP <- function(CUSTOM_FLAGS = NULL,
 
     invisible(lib)
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

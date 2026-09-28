@@ -100,3 +100,17 @@ writeLines(as.character(as.integer(has_AVX2)))
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+

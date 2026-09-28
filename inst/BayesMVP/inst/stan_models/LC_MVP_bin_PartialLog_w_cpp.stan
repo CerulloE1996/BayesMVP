@@ -236,7 +236,7 @@ functions {
       //// Phi_type == 1 and Phi_type == 2 never call these functions (their targets are unchanged by this block).
       //// Phi_type == 1 now ALSO calls these scalar routines, in its tail branches and per-subject loop; its vectorised
       //// ordinary branches use Phi_exact_binary_Z_and_log_lik_vectorised / Phi_exact_interval_Z_and_log_lik_vectorised below. Phi_type == 2
-      //// never calls them.
+      //// never calls them.]
       ////
       real log_Phi_stable(real x) {
                 //// Differentiate the SAME expression used for the log-CDF value. This avoids

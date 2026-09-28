@@ -2,9 +2,9 @@
 
 //// migration_MVOP_helpers_and_MVP_driver.hpp
 ////
-//// How to apply fn_dispatch_templated.hpp to the code you pasted.
+//// How to apply fn_dispatch_templated.hpp to the supplied code.
 ////
-//// RULE: only functions that CALL fn_EIGEN_double change. In what you pasted that is:
+//// RULE: only functions that CALL fn_EIGEN_double change. In the supplied code that is:
 ////   - fn_MVOP_compute_lp_GHK_cols          (rewritten below, complete)
 ////   - fn_MVOP_compute_phi_Bound_Z_cols      (rewritten below, complete)
 ////   - fn_MVP_compute_lp_GHK_cols            (the MVP one, rewritten below, complete)
@@ -15,7 +15,7 @@
 ////   fn_MVOP_grad_prep, fn_MVOP_compute_cutpoint_grad, fn_MOVP_compute_L_Omega_grad_v3,
 ////   chain_rule_C_to_C_raw, and all the fn_MVP_compute_*_grad_* functions.
 ////
-//// Helpers you did not paste but which the driver calls and which DO call fn_EIGEN_double
+//// Helpers not shown above but which the driver calls and which DO call fn_EIGEN_double
 //// (same recipe as PART A/B, one at a time):
 ////   fn_MVP_compute_phi_Z_recip_cols, fn_MVP_compute_phi_Bound_Z_cols, fn_MVP_grad_prep (if it does),
 ////   fn_MVP_compute_nuisance, fn_MVP_compute_nuisance_log_jac_u, fn_MVP_nuisance_first_deriv,
@@ -249,11 +249,11 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 //// =====================================================================================
 //// PART D: the driver. Exact edits to
 ////   fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_impl
-//// (numbered so you can do them in order and build after each).
+//// (numbered so for sequential implementation and builds).
 //// =====================================================================================
 ////
 //// D1. Make it a template and add a non-template wrapper that does the ONE runtime dispatch.
-////     Rename your existing function to ..._serial_impl_T and put `template <Vec vec>` in
+////     Rename the existing function to ..._serial_impl_T and put `template <Vec vec>` in
 ////     front of it:
 ////
 ////       template <Vec vec>
@@ -312,7 +312,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////       apply_inplace<vec, Fn::exp>(prob_n);
 ////
 ////     log_sum_exp_general(lp_array, vt_exp, vt_log, log_sum_result, container_max_logs)
-////     becomes (once you have migrated log_sum_exp_general to the same pattern)
+////     becomes (once log_sum_exp_general has been migrated to the same pattern)
 ////       log_sum_exp_general<vec>(lp_array, log_sum_result, container_max_logs);
 ////     until then leave it and keep ONE `const std::string vt_exp/vt_log` pair for it.
 ////
@@ -324,7 +324,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////     runs the SAME instantiation as the full chunks, so the entire
 ////       "// LAST CHUNK (remainder) — processed serially with fallback SIMD" block
 ////     (the Model_args_last_chunk copy, the nine "Stan" string overrides, the duplicated
-////     class/test/grad loops) is deleted. What remains is the workspace resize, which you
+////     class/test/grad loops) is deleted. What remains is the workspace resize, which the driver
 ////     fold into the main loop by iterating to n_total_chunks instead of n_full_chunks:
 ////
 ////       for (int nc = 0; nc < n_total_chunks; nc++) {
@@ -335,7 +335,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////
 ////         if (is_last) {
 ////           //// resize the workspace ONCE for the remainder (this is the block of ws.*.resize(...)
-////           //// calls you already have; keep it verbatim, it just moves here).
+////           //// calls already present; keep it verbatim, it just moves here).
 ////           ws.resize_to(last_chunk_size, n_tests, n_class);     //// or the inline resize list
 ////         }
 ////
@@ -347,7 +347,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////     Model_args_as_cpp_struct is passed to the un-migrated helpers for ALL chunks now —
 ////     which is correct, because the masked tail means the AVX path handles any length.
 ////
-////     (If you prefer not to touch the loop structure yet: keep the last-chunk block but
+////     (If the loop structure should remain unchanged: keep the last-chunk block but
 ////     delete the Model_args_last_chunk copy and the "Stan" overrides, and pass
 ////     Model_args_as_cpp_struct + kchoice instead. Same result, more code left behind.)
 ////
@@ -363,4 +363,25 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////   4. Migrate the remaining helpers one by one (phi_Z_recip, phi_Bound_Z, nuisance, jac_u,
 ////      first_deriv, log_det_J, log_sum_exp_general), building after each.
 ////   5. Same for the MVOP driver with PART A/B.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

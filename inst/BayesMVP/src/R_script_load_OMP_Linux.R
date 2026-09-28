@@ -41,3 +41,24 @@ get_OMP()
 
 ## writeLines(as.character(Sys.getenv("LD_LIBRARY_PATH")))
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

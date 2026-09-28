@@ -205,17 +205,17 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
         big_warning_banner(
               title = "this only has been tested to work and/or be beneficial for multivariate probit-based models",
               body = c("'reorder_cols_MVP = TRUE' with Model_type = 'Stan' reorders the columns of the",
-                       "outcome matrix 'y' in your Stan data (Dissmann pair-first ordering of the",
+                       "outcome matrix 'y' in the Stan data (Dissmann pair-first ordering of the",
                        "estimated correlation matrix), then re-initialises and fits the model on the",
                        "permuted data.",
                        "",
-                       "It requires your Stan model to: (i) take the outcome matrix as data named 'y',",
+                       "It requires the Stan model to: (i) take the outcome matrix as data named 'y',",
                        "with one COLUMN per test/outcome; and (ii) expose a correlation matrix named",
                        "'Omega' (parameter, transformed parameter or generated quantity).",
                        "",
                        "NOTE: test-indexed OUTPUTS are NOT un-permuted for external Stan models (there is",
-                       "no way to know which of your parameters are test-indexed): slot j of any",
-                       "test-indexed parameter corresponds to your ORIGINAL test test_perm[j]. The",
+                       "no way to know which of the parameters are test-indexed): slot j of any",
+                       "test-indexed parameter corresponds to the ORIGINAL test test_perm[j]. The",
                        "permutation used is returned as 'test_perm' (and its inverse as 'test_inv_perm').",
                        "Any user-supplied test-indexed INITIAL VALUES are likewise left un-permuted."),
               warn = FALSE)
@@ -226,13 +226,13 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
               big_warning_banner(
                     title = "y must be supplied",
                     body = c("'reorder_cols_MVP = TRUE' was requested with Model_type = 'Stan', but there is",
-                             "NO variable called 'y' in your Stan data list / data file.",
+                             "NO variable called 'y' in the Stan data list / data file.",
                              "",
                              "Column reordering for external Stan models permutes the columns of 'y' and",
                              "nothing else, so without it there is nothing to reorder.",
                              "",
                              "==> reorder_cols_MVP has been DISABLED for this run; sampling continues with",
-                             "    your data in its original column order."))
+                             "    the data in its original column order."))
               return(FALSE)
         }
         ##
@@ -240,7 +240,7 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
               big_warning_banner(
                     title = "y must be supplied",
                     body = c("'reorder_cols_MVP = TRUE' was requested with Model_type = 'Stan', and a variable",
-                             "called 'y' WAS found in your Stan data - but it is not an N x n_tests matrix",
+                             "called 'y' WAS found in the Stan data - but it is not an N x n_tests matrix",
                              "with at least 2 columns.",
                              paste0("    found: class = ", paste(class(y), collapse = "/"),
                                     ", dim = ", paste(if (is.null(dim(y))) length(y) else dim(y), collapse = " x ")),
@@ -248,7 +248,7 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
                              "Column reordering needs the outcome matrix with one COLUMN per test/outcome.",
                              "",
                              "==> reorder_cols_MVP has been DISABLED for this run; sampling continues with",
-                             "    your data in its original column order."))
+                             "    the data in its original column order."))
               return(FALSE)
         }
         ##
@@ -297,7 +297,7 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
               ##
               big_warning_banner(
                     title = "reorder_cols_MVP: other test-indexed data would be left behind",
-                    body = c( paste0("Reordering permutes the columns of 'y' and NOTHING ELSE. Your Stan data has ",
+                    body = c( paste0("Reordering permutes the columns of 'y' and NOTHING ELSE. The Stan data has ",
                                      length(x = candidate_names), " other"),
                               paste0("entries shaped like n_tests = ", n_tests,
                                      ", any of which may be indexed by test:"),
@@ -309,7 +309,7 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
                               "fit would be wrong rather than merely un-reordered.",
                               "",
                               "==> reorder_cols_MVP has been DISABLED for this run; sampling continues with",
-                              "    your data in its original column order.",
+                              "    the data in its original column order.",
                               "",
                               "Column reordering of an external Stan model is only safe when 'y' is the ONLY",
                               "test-indexed thing in the data. (The built-in LC_MVP model permutes all of its",
@@ -354,7 +354,7 @@ extract_Omega_via_bridgestan <- function(bs_model,
 
         if (sum(omega_mask) == 0) {
           stop("No parameter named exactly 'Omega' found in BridgeStan param_names(). ",
-               "Check your skeleton Stan model's transformed parameters block.")
+               "Check the skeleton Stan model's transformed parameters block.")
         }
         
         omega_names <- pnames[omega_mask]
@@ -498,7 +498,7 @@ zero_omega_in_theta <- function(theta_main_vectors,
         
         if (sum(omega_raw_mask) == 0) {
           warning("Could not identify Omega unconstrained params by name. ",
-                  "Zeroing nothing. You may need to adapt this function to your ",
+                  "Zeroing nothing. This function may need to be adapted to the ",
                   "Stan model's parameter naming convention.")
           return(theta_main_vectors)
         }
@@ -600,7 +600,7 @@ validate_y_tests_ordinal <- function(y) {
               }
               
               if (0 %in% vals) {
-                stop(sprintf("Column %d contains 0. Ordinal outcomes must be coded 1, 2, ..., K (not 0-indexed).", t))
+                stop(paste0("Column ", t, " contains 0. Ordinal outcomes must be coded 1, 2, ..., K (not 0-indexed)."))
               }
               
               K <- max(vals)
@@ -610,10 +610,10 @@ validate_y_tests_ordinal <- function(y) {
               } else if (K == 2) {
                 is_binary[t] <- TRUE
               } else {
-                stop(sprintf("Column %d has only one unique value (%d). Need at least 2 categories.", t, K))
+                stop(paste0("Column ", t, " has only one unique value (", K, "). Need at least 2 categories."))
               }
               
-              # ## From here on, ordinal — no zeros allowed
+              # ## From here on, ordinal - no zeros allowed
               # if (0 %in% vals) {
               #   stop(sprintf("Column %d contains 0. Ordinal outcomes must be coded 1, 2, ..., K (not 0-indexed).", t))
               # }
@@ -642,8 +642,7 @@ validate_y_tests_ordinal <- function(y) {
               first_ordinal <- min(which(is_ordinal))
               if (first_ordinal < last_binary) {
                 stop("Binary tests must come before ordinal tests in y. ",
-                     sprintf("Found ordinal test in column %d but binary test in column %d.", 
-                             first_ordinal, last_binary))
+                     paste0("Found ordinal test in column ", first_ordinal, " but binary test in column ", last_binary, "."))
               }
           
         }
@@ -968,3 +967,25 @@ convert_X_to_padded_for_Stan <- function(X,
         }
   
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

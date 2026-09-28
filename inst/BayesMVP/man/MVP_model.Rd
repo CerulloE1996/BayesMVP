@@ -429,7 +429,8 @@ Sample from the model
   burnin_TBB_pool_equals_n_chains = NULL,
   store_log_lik_trace = NULL,
   use_disk_path = "/tmp/hmc_traces",
-  test_perm_override = NULL
+  test_perm_override = NULL,
+  run_in_fresh_R_process = TRUE
 )}\if{html}{\out{</div>}}
 }
 
@@ -575,6 +576,8 @@ automatically from the model's unconstrained dimension; \code{0} never stores it
 buffer is grown to the full length on the first write, so e.g. 1 would cost exactly as much as keeping everything).}
 
 \item{\code{diffusion_HMC_integrator}}{Joint diffusion integrator: "kick_flow_kick" (default) or "flow_kick_flow".}
+
+\item{\code{run_in_fresh_R_process}}{TRUE (default) runs the complete burn-in/sampling fit in a fresh R process and returns the usual draws/diagnostics. Native worker memory is released when it exits. FALSE uses the calling session.}
 
 \item{\code{debug_burnin_timing}}{Collect burn-in timing and per-chain integrator step diagnostics. Default FALSE.}
 
