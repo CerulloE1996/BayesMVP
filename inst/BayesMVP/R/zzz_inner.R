@@ -18,9 +18,7 @@ setup_env_post_install <- function() {
           library(RcppParallel)
           
           # R installs the inner package's inst files into its package root.
-          package_root <- system.file(package = "BayesMVP") else { 
-            package_root <- file.path(Sys.getenv("HOME"), "BayesMVP_development_2026_09_21")
-          }
+          package_root <- system.file(package = "BayesMVP")
           
           
           if (.Platform$OS.type == "windows") {
