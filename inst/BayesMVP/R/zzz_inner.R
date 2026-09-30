@@ -17,10 +17,9 @@ setup_env_post_install <- function() {
           library(Rcpp)
           library(RcppParallel)
           
-          if (.Platform$OS.type == "windows") {
-            mvp_user_dir <- file.path(Sys.getenv("USERPROFILE"), "BayesMVP_development_2026_09_21")
-          } else { 
-            mvp_user_dir <- file.path(Sys.getenv("HOME"), "BayesMVP_development_2026_09_21")
+          # R installs the inner package's inst files into its package root.
+          package_root <- system.file(package = "BayesMVP") else { 
+            package_root <- file.path(Sys.getenv("HOME"), "BayesMVP_development_2026_09_21")
           }
           
           
@@ -31,10 +30,10 @@ setup_env_post_install <- function() {
                     cat("Setting up BayesMVP Environment for Windows:\n")
                     
                     cat("Preloading critical .DLLs / .SOs for BayesMVP package\n")
-                    try({   TBB_STAN_DLL <- file.path(mvp_user_dir, "tbb.dll") })
+                    try({   TBB_STAN_DLL <- file.path(package_root, "tbb_stan", "tbb.dll") })
                     ## try({   TBB_CMDSTAN_DLL <- file.path(cmdstan_dir, "stan", "lib", "stan_math", "lib", "tbb", "tbb.dll") }) # prioritise user's installed tbb dll/so
-                    try({   DUMMY_MODEL_SO <- file.path(mvp_user_dir, "dummy_stan_modeL_win_model.so") })
-                    try({   DUMMY_MODEL_DLL <- file.path(mvp_user_dir, "dummy_stan_modeL_win_model.dll") })
+                    try({   DUMMY_MODEL_SO <- file.path(package_root, "dummy_stan_model_win_model.so") })
+                    try({   DUMMY_MODEL_DLL <- file.path(package_root, "dummy_stan_model_win_model.dll") })
                     
                     dll_paths <- c(TBB_STAN_DLL,
                                    ## TBB_CMDSTAN_DLL,
@@ -66,9 +65,9 @@ setup_env_post_install <- function() {
                     # cat("Setting up BayesMVP Environment for Linux / Mac OS:\n")
                     # 
                     # cat("Preloading critical .DLLs / .SOs for BayesMVP package\n")
-                    # try({  TBB_STAN_SO <- file.path(mvp_user_dir, "libtbb.so.2") })
+                    # try({  TBB_STAN_SO <- file.path(package_root, "libtbb.so.2") })
                     # ## try({  TBB_CMDSTAN_SO <- file.path(cmdstan_dir, "stan", "lib", "stan_math", "lib", "tbb", "libtbb.so.2") })  # prioritise user's installed tbb dll/so
-                    # try({  DUMMY_MODEL_SO <- file.path(mvp_user_dir, "dummy_stan_model_model.so") })
+                    # try({  DUMMY_MODEL_SO <- file.path(package_root, "dummy_stan_model_model.so") })
                     # 
                     # dll_paths <- c(TBB_STAN_SO,
                     #                ## TBB_CMDSTAN_SO,
