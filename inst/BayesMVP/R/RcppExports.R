@@ -195,6 +195,10 @@ fn_persistent_burnin_run_one_iter_main_only_profiled <- function(worker_ptr, see
     .Call(`_BayesMVP_fn_persistent_burnin_run_one_iter_main_only_profiled`, worker_ptr, seed_R, current_iter_R)
 }
 
+fn_persistent_burnin_run_one_iter_tau_jitter <- function(worker_ptr, seed_R, current_iter_R, tau_main_ii_R, tau_us_ii_R, main_only_R, profile_burnin_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_run_one_iter_tau_jitter`, worker_ptr, seed_R, current_iter_R, tau_main_ii_R, tau_us_ii_R, main_only_R, profile_burnin_R)
+}
+
 fn_persistent_burnin_get_main_outputs <- function(worker_ptr) {
     .Call(`_BayesMVP_fn_persistent_burnin_get_main_outputs`, worker_ptr)
 }
@@ -275,8 +279,28 @@ fn_persistent_burnin_joint_position_reductions_resident <- function(worker_ptr, 
     .Call(`_BayesMVP_fn_persistent_burnin_joint_position_reductions_resident`, worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, factor_us)
 }
 
+fn_persistent_burnin_joint_position_two_ended_reductions_resident <- function(worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, velocity_initial_main, factor_us) {
+    .Call(`_BayesMVP_fn_persistent_burnin_joint_position_two_ended_reductions_resident`, worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, velocity_initial_main, factor_us)
+}
+
 fn_persistent_burnin_joint_kinetic_energy_sums_us_resident <- function(worker_ptr, use_proposed_velocity_R, mass_us_vec) {
     .Call(`_BayesMVP_fn_persistent_burnin_joint_kinetic_energy_sums_us_resident`, worker_ptr, use_proposed_velocity_R, mass_us_vec)
+}
+
+fn_persistent_burnin_tau_initial_api_version <- function() {
+    .Call(`_BayesMVP_fn_persistent_burnin_tau_initial_api_version`)
+}
+
+fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident <- function(worker_ptr, positions) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident`, worker_ptr, positions))
+}
+
+fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident <- function(worker_ptr, centre_R, scale_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident`, worker_ptr, centre_R, scale_R)
+}
+
+fn_persistent_burnin_tau_initial_nuisance_moments_get_resident <- function(worker_ptr) {
+    .Call(`_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_get_resident`, worker_ptr)
 }
 
 Rcpp_fn_OpenMP_EHMC_sampling <- function(n_threads_R, seed_R, n_iter_R, iter_one_by_one, partitioned_HMC_R, diffusion_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads_WCP) {

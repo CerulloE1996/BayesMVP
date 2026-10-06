@@ -52,7 +52,8 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                 const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
-                                const Model_fn_args_struct &A
+                                const Model_fn_args_struct &A,
+                                const int n_chunks_multiplier = 1
 ) {
         MVOP_prep P;
         out_mat.setZero();
@@ -112,7 +113,12 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
 
         //// ---- chunking ----
         int vec_size; if (vect_type == "AVX512") vec_size = 8; else if (vect_type == "AVX2") vec_size = 4; else if (vect_type == "AVX") vec_size = 2; else vec_size = 1;
-        ChunkSizeInfo csi = calculate_chunk_sizes(N, vec_size, n_chunks);
+        //// n_chunks_multiplier is 1 except for the PartialLog fallback (attempt 2 in MVP_lp_grad_multi_attempts.hpp), which uses
+        //// more chunks so that each (larger-per-individual) PartialLog chunk stays about the same size in memory as a NoLog chunk.
+        //// Capped at N / vec_size chunks (so no chunk is smaller than one SIMD vector, which would otherwise make calculate_chunk_sizes
+        //// fall back to ONE chunk of ~N rows), and never fewer chunks than n_chunks:
+        const int n_chunks_used = std::min(n_chunks * std::max(1, n_chunks_multiplier), std::max(n_chunks, N / vec_size));
+        ChunkSizeInfo csi = calculate_chunk_sizes(N, vec_size, n_chunks_used);
         P.chunk_size_orig = csi.chunk_size_orig; P.normal_chunk_size = csi.normal_chunk_size; P.last_chunk_size = csi.last_chunk_size;
         P.n_total_chunks = csi.n_total_chunks; P.n_full_chunks = csi.n_full_chunks;
 

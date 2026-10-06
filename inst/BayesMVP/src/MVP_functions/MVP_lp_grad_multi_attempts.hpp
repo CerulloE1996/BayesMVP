@@ -85,6 +85,18 @@ using three_layer_std_vec_of_EigenMats_int = std::vector<std::vector<std::vector
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///// Number-of-chunks multiplier for the PartialLog (log-scale) fallback (attempt 2 below).
+///// The PartialLog gradient allocates roughly 3 times more memory per individual than the NoLog gradient
+///// (about 6,250 vs. 1,964 bytes per individual, measured as allocated memory), so evaluating the fallback with
+///// 3 times as many chunks keeps each PartialLog chunk about the same size in memory as a NoLog chunk (i.e., it still
+///// fits in the same cache). The multiplier applies only to the fallback evaluation itself; the next gradient
+///// evaluation (attempt 1) uses the normal number of chunks again. A value of 1 gives the previous behaviour.
+constexpr int PartialLog_fallback_n_chunks_multiplier = 3;
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///// This model ccan be either the "standard" MVP model or the latent class MVP model (w/ 2 classes) for analysis of test accuracy data. 
 inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat,
                                                            const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
@@ -151,7 +163,8 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
                                                                                      grad_option,
                                                                                      Model_args_as_cpp_struct,
                                                                                      LC_MVP_ws_structs,
-                                                                                     n_threads_WCP);
+                                                                                     n_threads_WCP,
+                                                                                     PartialLog_fallback_n_chunks_multiplier);
 
                     if (is_NaN_or_Inf_Eigen(out_mat)) {
                       NaN_or_Inf_indicator = 1;
@@ -287,7 +300,8 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
                                                                                        grad_option,
                                                                                        Model_args_as_cpp_struct,
                                                                                        LC_MVP_ws_structs,
-                                                                                       n_threads_WCP);
+                                                                                       n_threads_WCP,
+                                                                                       PartialLog_fallback_n_chunks_multiplier);
 
                     if (is_NaN_or_Inf_Eigen(out_mat)) {
                       NaN_or_Inf_indicator = 1;

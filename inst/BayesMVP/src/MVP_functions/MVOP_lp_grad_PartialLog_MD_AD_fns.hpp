@@ -277,9 +277,10 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_seri
                                                                                        const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                                                                        const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                        const std::string &grad_option,
-                                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct
+                                                                                       const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                                       const int n_chunks_multiplier = 1
 ) {
-        const MVOP_prep P = fn_MVOP_prep(out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, Model_args_as_cpp_struct);
+        const MVOP_prep P = fn_MVOP_prep(out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, Model_args_as_cpp_struct, n_chunks_multiplier);
         std::vector<Eigen::Matrix<double, -1, -1>> beta_grad_array = vec_of_mats<double>(P.n_covariates_max, P.n_tests, P.n_class);
         std::vector<Eigen::Matrix<double, -1, -1>> U_Omega_grad_array = vec_of_mats<double>(P.n_tests, P.n_tests, P.n_class);
         std::vector<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array = vec_of_mats<double>(P.n_cutpoints_max, P.n_ordinal_tests, P.n_class);
@@ -303,12 +304,13 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_seri
                                                                                      const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                      const std::string &grad_option,
                                                                                      const Model_fn_args_struct &Model_args_as_cpp_struct,
-                                                                                     std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs
+                                                                                     std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
+                                                                                     const int n_chunks_multiplier = 1
 ) {
         (void)LC_MVP_ws_structs;
         const Vec vec = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
         DISPATCH_VEC(vec, fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_serial_T,
-                     out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+                     out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct, n_chunks_multiplier);
 }
 
 
@@ -324,7 +326,8 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process(    
                                                                                 const std::string &grad_option,
                                                                                 const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                                 std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
-                                                                                const int n_threads_WCP
+                                                                                const int n_threads_WCP,
+                                                                                const int n_chunks_multiplier = 1
 ) {
   
       (void) n_threads_WCP; //// WCP PartialLog variant: TODO
@@ -335,7 +338,8 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process(    
                                                                                 y_ref,
                                                                                 grad_option,
                                                                                 Model_args_as_cpp_struct,
-                                                                                LC_MVP_ws_structs);
+                                                                                LC_MVP_ws_structs,
+                                                                                n_chunks_multiplier);
   
 }
 

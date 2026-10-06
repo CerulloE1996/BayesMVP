@@ -491,7 +491,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
                                                                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                                                                 const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                 const std::string &grad_option,
-                                                                                const Model_fn_args_struct &Model_args_as_cpp_struct
+                                                                                const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                                const int n_chunks_multiplier = 1
 ) {
   
         out_mat.setZero();
@@ -549,7 +550,12 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
         else if (vect_type == "AVX2")   vec_size = 4;
         else if (vect_type == "AVX")    vec_size = 2;
         else                            vec_size = 1;
-        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks);
+        //// n_chunks_multiplier is 1 except for the PartialLog fallback (attempt 2 in MVP_lp_grad_multi_attempts.hpp), which uses
+        //// more chunks so that each (larger-per-individual) PartialLog chunk stays about the same size in memory as a NoLog chunk.
+        //// Capped at N / vec_size chunks (so no chunk is smaller than one SIMD vector, which would otherwise make calculate_chunk_sizes
+        //// fall back to ONE chunk of ~N rows), and never fewer chunks than n_chunks:
+        const int n_chunks_used = std::min(n_chunks * std::max(1, n_chunks_multiplier), std::max(n_chunks, N / vec_size));
+        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks_used);
         const int chunk_size_orig   = chunk_size_info.chunk_size_orig;
         const int normal_chunk_size = chunk_size_info.normal_chunk_size;
         const int last_chunk_size   = chunk_size_info.last_chunk_size;
@@ -793,7 +799,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
                                                                                                     const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                                     const std::string &grad_option,
                                                                                                     const Model_fn_args_struct &Model_args_as_cpp_struct,
-                                                                                                    const int n_threads_serial_order
+                                                                                                    const int n_threads_serial_order,
+                                                                                                    const int n_chunks_multiplier = 1
 ) {
   
         out_mat.setZero();
@@ -851,7 +858,12 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
         else if (vect_type == "AVX2")   vec_size = 4;
         else if (vect_type == "AVX")    vec_size = 2;
         else                            vec_size = 1;
-        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks);
+        //// n_chunks_multiplier is 1 except for the PartialLog fallback (attempt 2 in MVP_lp_grad_multi_attempts.hpp), which uses
+        //// more chunks so that each (larger-per-individual) PartialLog chunk stays about the same size in memory as a NoLog chunk.
+        //// Capped at N / vec_size chunks (so no chunk is smaller than one SIMD vector, which would otherwise make calculate_chunk_sizes
+        //// fall back to ONE chunk of ~N rows), and never fewer chunks than n_chunks:
+        const int n_chunks_used = std::min(n_chunks * std::max(1, n_chunks_multiplier), std::max(n_chunks, N / vec_size));
+        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks_used);
         const int chunk_size_orig   = chunk_size_info.chunk_size_orig;
         const int normal_chunk_size = chunk_size_info.normal_chunk_size;
         const int last_chunk_size   = chunk_size_info.last_chunk_size;
@@ -1061,7 +1073,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
           for (int nc = 0; nc < n_total_chunks; nc++) {
             if (chunk_threw[nc] != 0) {
                   fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T<vec>(out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref,
-                                                                                        grad_option, Model_args_as_cpp_struct);
+                                                                                        grad_option, Model_args_as_cpp_struct, n_chunks_multiplier);
                   return;
             }
           }
@@ -1134,7 +1146,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(   Ei
                                                                               const std::string grad_option,
                                                                               const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                               std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
-                                                                              const int n_threads_WCP
+                                                                              const int n_threads_WCP,
+                                                                              const int n_chunks_multiplier = 1
 ) {
         (void)LC_MVP_ws_structs; (void)n_threads_WCP;
         const Vec vec = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
@@ -1144,12 +1157,12 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(   Ei
         if (g_n_threads_serial_order_lp_grad > 1) {
               DISPATCH_VEC(vec, fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_serial_order_parallel_T,
                            out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct,
-                           g_n_threads_serial_order_lp_grad);
+                           g_n_threads_serial_order_lp_grad, n_chunks_multiplier);
               return;
         }
 #endif
         DISPATCH_VEC(vec, fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T,
-                     out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+                     out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct, n_chunks_multiplier);
 }
 
 
