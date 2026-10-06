@@ -24,6 +24,17 @@ functions {
             return lb +  (ub - lb) *  0.5 * (1 + tanh_y) ; 
     
       } 
+      ////
+      //// Nuisance transform u = Phi(u_raw), as BayesMVP's C++ with nuisance_transformation = "Phi" (the default;
+      //// fn_MVP_compute_nuisance_T in MVP_helpers_migrated.hpp), with its log-Jacobian
+      //// sum(log phi(u_raw)) = -0.5 * sum(u_raw^2) - n * 0.5 * log(2 pi) (fn_MVP_compute_nuisance_log_jac_u_T).
+      //// Phi is Stan's (= stan::math::Phi, the C++ scalar kernel; erfc-based below -5, so the lower tail keeps
+      //// full relative accuracy); its derivative is the exact phi(u_raw).
+      ////
+      vector Phi_of_u_raw_adding_log_phi_of_u_raw_to_target_lp(vector u_raw_vec) {
+            target += -0.5 * dot_self(u_raw_vec) - num_elements(u_raw_vec) * 0.5 * log(2.0 * pi());
+            return Phi(u_raw_vec);
+      }
   
       matrix cholesky_corr_constrain_outer_lp( // matrix Omega_raw,
                                            vector col_one_raw, 
@@ -493,7 +504,9 @@ transformed parameters {
                        matrix[N, n_tests] y1;
 
                     for (t in 1:n_tests) {
-                        u[1:N, t] = lb_ub_lp(u_raw[1:N, t], 0.0, 1.0);
+                        // u[1:N, t] = lb_ub_lp(u_raw[1:N, t], 0.0, 1.0);
+
+                        u[1:N, t] = Phi_of_u_raw_adding_log_phi_of_u_raw_to_target_lp(u_raw[1:N, t]);
                     }
 
             // Parameters for likelihood function. Based on code upladed by Ben Goodrich which uses the
@@ -764,7 +777,10 @@ transformed parameters {
                         for (n in 1 : N) {
                           
                             matrix[n_class, n_tests] Xbeta_n;
-                            vector[n_tests] u = lb_ub_lp(to_vector(u_raw[n,]), 0.0, 1.0);
+                            // vector[n_tests] u = lb_ub_lp(to_vector(u_raw[n,]), 0.0, 1.0);
+
+                            vector[n_tests] u =
+                                  Phi_of_u_raw_adding_log_phi_of_u_raw_to_target_lp(to_vector(u_raw[n,]));
                             vector[n_class] lp;
   
                             for (t in 1:n_tests) {

@@ -404,40 +404,66 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
                  
                      dphi_over_L.col(t).array() = (phi_Bound_Z.col(t).array() - phi_Upper_Bound_Z.col(t).array()) * L_Omega_recip_double(t, t);
                      
-                     for (int n = 0; n < chunk_size; ++n) {
+                  // for (int n = 0; n < chunk_size; ++n) {
                        
-                           double lbz = Bound_Z(n, t);
-                           double ubz = Upper_Bound_Z(n, t);
+                        // double lbz = Bound_Z(n, t);
+                        // double ubz = Upper_Bound_Z(n, t);
                            
-                           // dZ_dmu_neg
-                           double numer = (1.0 - u_array(n, t)) * phi_Bound_Z(n, t) + u_array(n, t) * phi_Upper_Bound_Z(n, t);
-                           // dZ_dmu_neg(n, t) = (numer == 0.0) ? 0.0 :
-                           //                    numer * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
-                           //// 0 for an exact zero term only when 1 / phi(Z) is finite (0 x Inf is a failed
-                           //// evaluation, which must reach the multi-attempt fallback):
-                           dZ_dmu_neg(n, t) = ((numer == 0.0) && std::isfinite(phi_Z_recip(n, t))) ? 0.0 :
-                                              numer * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                        // // dZ_dmu_neg
+                        // double numer = (1.0 - u_array(n, t)) * phi_Bound_Z(n, t) + u_array(n, t) * phi_Upper_Bound_Z(n, t);
+                        // // dZ_dmu_neg(n, t) = (numer == 0.0) ? 0.0 :
+                        // //                    numer * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                        // //// 0 for an exact zero term only when 1 / phi(Z) is finite (0 x Inf is a failed
+                        // //// evaluation, which must reach the multi-attempt fallback):
+                        // dZ_dmu_neg(n, t) = ((numer == 0.0) && std::isfinite(phi_Z_recip(n, t))) ? 0.0 :
+                                           // numer * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
                            
-                           // dphi_times_bz = (phi(lbz)*lbz - phi(ubz)*ubz) / L
-                           // with guards: x*phi(x) -> 0 as x -> +-Inf
-                           double phi_lbz_lbz = std::isinf(lbz) ? 0.0 : phi_Bound_Z(n, t) * lbz;
-                           double phi_ubz_ubz = std::isinf(ubz) ? 0.0 : phi_Upper_Bound_Z(n, t) * ubz;
-                           dphi_times_bz(n, t) = (phi_lbz_lbz - phi_ubz_ubz) * L_Omega_recip_double(t, t);
+                        // // dphi_times_bz = (phi(lbz)*lbz - phi(ubz)*ubz) / L
+                        // // with guards: x*phi(x) -> 0 as x -> +-Inf
+                        // double phi_lbz_lbz = std::isinf(lbz) ? 0.0 : phi_Bound_Z(n, t) * lbz;
+                        // double phi_ubz_ubz = std::isinf(ubz) ? 0.0 : phi_Upper_Bound_Z(n, t) * ubz;
+                        // dphi_times_bz(n, t) = (phi_lbz_lbz - phi_ubz_ubz) * L_Omega_recip_double(t, t);
                            
-                           // // dZ_times_bz = dZ_dmu_neg * lbz, guard on lbz
-                           // dZ_times_bz(n, t) = std::isinf(lbz) ? 0.0 : dZ_dmu_neg(n, t) * lbz;
+                        // // // dZ_times_bz = dZ_dmu_neg * lbz, guard on lbz
+                        // // dZ_times_bz(n, t) = std::isinf(lbz) ? 0.0 : dZ_dmu_neg(n, t) * lbz;
                            
-                           // dZ_times_bz for ordinal: correct formula
-                           // double phi_lbz_lbz = std::isinf(lbz) ? 0.0 : phi_Bound_Z(n, t) * lbz;
-                           // double phi_ubz_ubz = std::isinf(ubz) ? 0.0 : phi_Upper_Bound_Z(n, t) * ubz;
-                           double numer_bz = (1.0 - u_array(n, t)) * phi_lbz_lbz + u_array(n, t) * phi_ubz_ubz;
-                           // dZ_times_bz(n, t) = (numer_bz == 0.0) ? 0.0 :
-                           //                     numer_bz * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
-                           //// (as above)
-                           dZ_times_bz(n, t) = ((numer_bz == 0.0) && std::isfinite(phi_Z_recip(n, t))) ? 0.0 :
-                                               numer_bz * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                        // // dZ_times_bz for ordinal: correct formula
+                        // // double phi_lbz_lbz = std::isinf(lbz) ? 0.0 : phi_Bound_Z(n, t) * lbz;
+                        // // double phi_ubz_ubz = std::isinf(ubz) ? 0.0 : phi_Upper_Bound_Z(n, t) * ubz;
+                        // double numer_bz = (1.0 - u_array(n, t)) * phi_lbz_lbz + u_array(n, t) * phi_ubz_ubz;
+                        // // dZ_times_bz(n, t) = (numer_bz == 0.0) ? 0.0 :
+                        // //                     numer_bz * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                        // //// (as above)
+                        // dZ_times_bz(n, t) = ((numer_bz == 0.0) && std::isfinite(phi_Z_recip(n, t))) ? 0.0 :
+                                            // numer_bz * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
                        
-                     }
+                  // }
+                     
+                     //// the per-row loop above (now a comment) as column-wise Eigen array expressions: the same
+                     //// formulas, the same guards (x phi(x) -> 0 for an infinite bound) and the same exact-zero
+                     //// rule (0 only for an exact zero numerator with a finite 1 / phi(Z), so that 0 x Inf still
+                     //// reaches the multi-attempt fallback as a failed evaluation):
+                     const double L_tt_recip = L_Omega_recip_double(t, t);
+                     const auto u_col                = u_array.col(t).array();
+                     const auto phi_lower_bound_col  = phi_Bound_Z.col(t).array();
+                     const auto phi_upper_bound_col  = phi_Upper_Bound_Z.col(t).array();
+                     const auto phi_Z_recip_col      = phi_Z_recip.col(t).array();
+                     const auto lower_bound_col      = Bound_Z.col(t).array();
+                     const auto upper_bound_col      = Upper_Bound_Z.col(t).array();
+                     //// dZ_dmu_neg:
+                     const auto numer = (1.0 - u_col) * phi_lower_bound_col + u_col * phi_upper_bound_col;
+                     dZ_dmu_neg.col(t).array() = ((numer == 0.0) && phi_Z_recip_col.isFinite())
+                                                 .select(0.0, numer * phi_Z_recip_col * L_tt_recip);
+                     //// dphi_times_bz = (phi(lbz) lbz - phi(ubz) ubz) / L:
+                     const auto phi_lbz_lbz = lower_bound_col.isInf()
+                                              .select(0.0, phi_lower_bound_col * lower_bound_col);
+                     const auto phi_ubz_ubz = upper_bound_col.isInf()
+                                              .select(0.0, phi_upper_bound_col * upper_bound_col);
+                     dphi_times_bz.col(t).array() = (phi_lbz_lbz - phi_ubz_ubz) * L_tt_recip;
+                     //// dZ_times_bz:
+                     const auto numer_bz = (1.0 - u_col) * phi_lbz_lbz + u_col * phi_ubz_ubz;
+                     dZ_times_bz.col(t).array() = ((numer_bz == 0.0) && phi_Z_recip_col.isFinite())
+                                                  .select(0.0, numer_bz * phi_Z_recip_col * L_tt_recip);
                  
                }
            
@@ -494,31 +520,286 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
 //   - dphi_direct_Cj / dZ_direct_Cj are real vectors (not aliases to workspace)
 //   - Inf guard on phi_Z_recip
 // ============================================================================
-ALWAYS_INLINE void fn_MVOP_compute_cutpoint_grad(  const int c,
-                                                   Eigen::Ref<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array,
-                                                   const int t,
-                                                   const int t_ord,
-                                                   const int K_t,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> common_grad_term_1,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> L_Omega_double,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prob,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prob_recip,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prop_rowwise_prod_temp,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Bound_Z,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Upper_Bound_Z,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Z_recip,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> y_chunk,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dphi_over_L,
-                                                   const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dZ_dmu_neg,
-                                                   Eigen::Ref<Eigen::Matrix<double, -1, -1>> z_grad_term,
-                                                   Eigen::Ref<Eigen::Matrix<double, -1, -1>> grad_prob,
-                                                   Eigen::Ref<Eigen::Matrix<double, -1, 1>> prod_container,
-                                                   Eigen::Ref<Eigen::Matrix<double, -1, 1>> derivs_chain_container_vec,
-                                                   Eigen::Ref<Eigen::Matrix<double, -1, 1>> dphi_direct_Cj, //// ---- ordinal-only + NEW
-                                                   Eigen::Ref<Eigen::Matrix<double, -1, 1>> dZ_direct_Cj, //// ---- ordinal-only + NEW
-                                                   const bool compute_final_scalar_grad,
-                                                   const Model_fn_args_struct &Model_args_as_cpp_struct
+// ALWAYS_INLINE void fn_MVOP_compute_cutpoint_grad(  const int c,
+                                                // Eigen::Ref<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array,
+                                                // const int t,
+                                                // const int t_ord,
+                                                // const int K_t,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> common_grad_term_1,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> L_Omega_double,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prob,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prob_recip,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prop_rowwise_prod_temp,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Bound_Z,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Upper_Bound_Z,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Z_recip,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> y_chunk,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dphi_over_L,
+                                                // const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dZ_dmu_neg,
+                                                // Eigen::Ref<Eigen::Matrix<double, -1, -1>> z_grad_term,
+                                                // Eigen::Ref<Eigen::Matrix<double, -1, -1>> grad_prob,
+                                                // Eigen::Ref<Eigen::Matrix<double, -1, 1>> prod_container,
+                                                // Eigen::Ref<Eigen::Matrix<double, -1, 1>> derivs_chain_container_vec,
+                                                // Eigen::Ref<Eigen::Matrix<double, -1, 1>> dphi_direct_Cj, //// ---- ordinal-only + NEW
+                                                // Eigen::Ref<Eigen::Matrix<double, -1, 1>> dZ_direct_Cj, //// ---- ordinal-only + NEW
+                                                // const bool compute_final_scalar_grad,
+                                                // const Model_fn_args_struct &Model_args_as_cpp_struct
+// ) {
+  
+     // const int n_class    = Model_args_as_cpp_struct.Model_args_ints(1);
+     // const int chunk_size = y_chunk.rows();
+     // const int n_tests    = y_chunk.cols();
+     // const int n_thr_t    = K_t - 1;
+     // const double L_tt     = L_Omega_double(t, t);
+     // const double L_tt_inv = 1.0 / L_tt;
+     // const int n_future   = n_tests - t - 1;
+        
+     // grad_prob.setZero(); // .array()   = 0.0;
+     // z_grad_term.setZero(); // .array() = 0.0;
+        
+     // // // ---- Actual vectors, NOT aliases into workspace (avoids clobbering) ----
+     // // Eigen::Matrix<double, -1, 1> dphi_direct_Cj(chunk_size);
+     // // Eigen::Matrix<double, -1, 1> dZ_direct_Cj(chunk_size);
+        
+     // // ====================================================================
+     // // Loop over each cutpoint j
+     // // ====================================================================
+     // for (int j = 0; j < n_thr_t; ++j) {
+          
+           // dphi_direct_Cj.setZero();
+           // dZ_direct_Cj.setZero();
+              
+           // // ================================================================
+           // // Step 1: Compute per-observation seeds for cutpoint C_j
+           // // ================================================================
+           // for (int i = 0; i < chunk_size; ++i) {
+            
+                 // const int y_i = static_cast<int>(y_chunk(i, t));
+                 // const double pzr = phi_Z_recip(i, t);
+                 // const bool pzr_ok = std::isfinite(pzr);
+                    
+                 // if (y_i == j + 1 && y_i < K_t) {
+                      
+                       // // C_j is UPPER bound for this observation
+                       // dphi_direct_Cj(i) = phi_Upper_Bound_Z(i, t) * L_tt_inv;
+                       // double uph = u_array(i, t) * phi_Upper_Bound_Z(i, t);
+                       // // dZ_direct_Cj(i) = (uph == 0.0 || !pzr_ok) ? 0.0 : uph * pzr * L_tt_inv;
+                       // //// 0 only for an exact zero term; a non-finite 1 / phi(Z) (phi(Z) underflowed) makes
+                       // //// the term non-finite, so that the failed evaluation reaches the multi-attempt
+                       // //// fallback:
+                       // dZ_direct_Cj(i) = (uph == 0.0 && pzr_ok) ? 0.0 : uph * pzr * L_tt_inv;
+                      
+                 // } else if (y_i == j + 2) {
+                      
+                       // // C_j is LOWER bound for this observation
+                       // dphi_direct_Cj(i) = -phi_Bound_Z(i, t) * L_tt_inv;
+                       // double omup = (1.0 - u_array(i, t)) * phi_Bound_Z(i, t);
+                       // // dZ_direct_Cj(i) = (omup == 0.0 || !pzr_ok) ? 0.0 : omup * pzr * L_tt_inv;
+                       // dZ_direct_Cj(i) = (omup == 0.0 && pzr_ok) ? 0.0 : omup * pzr * L_tt_inv;   //// as above
+                      
+                 // }
+                 // // else: C_j doesn't affect this observation -> stays zero
+                
+           // }
+           // // ================================================================
+           // // Step 2: Propagation + accumulation
+           // // ================================================================
+           // if (n_future == 0) {
+                
+                 // // ---- Last test: no chain-rule propagation needed ----
+                 // if (compute_final_scalar_grad) {
+                          
+                       // if (n_class != 1) {
+                            
+                             // // FIXED: use prop_rowwise_prod_temp * prob_recip (matching general case)
+                             // cutpoint_grad_array(j, t_ord) += (common_grad_term_1.col(t).array() * dphi_direct_Cj.array() * prop_rowwise_prod_temp.col(t).array() 
+                                                              // * prob_recip.col(t).array()).sum();
+                            
+                       // } else {
+                            
+                             // cutpoint_grad_array(j, t_ord) += (dphi_direct_Cj.array() * prob_recip.col(t).array()).sum();
+                       // }
+                          
+                 // }
+                  
+           // } else {
+                  
+                 // // ---- n_future >= 1: propagation through future tests ----
+                 // grad_prob.col(0).array()   = dphi_direct_Cj.array();
+                 // z_grad_term.col(0).array() = dZ_direct_Cj.array();
+                    
+                 // // First future test effect
+                 // grad_prob.col(1).array() = dphi_over_L.col(t + 1).array() * (L_Omega_double(t + 1, t) * z_grad_term.col(0).array());
+                    
+                 // // Remaining future tests (only runs if n_future > 1)
+                 // for (int ii = 1; ii < n_future; ++ii) {
+                      
+                       // if (ii == 1) {
+                         // prod_container = z_grad_term.leftCols(ii) * L_Omega_double.row(t + (ii - 1) + 1).segment(t, ii).transpose();
+                       // }
+                          
+                       // z_grad_term.col(ii).array() = -dZ_dmu_neg.col(t + ii).array() * prod_container.array();
+                          
+                       // prod_container = z_grad_term.leftCols(ii + 1) * L_Omega_double.row(t + ii + 1).segment(t, ii + 1).transpose();
+                          
+                       // grad_prob.col(ii + 1).array() = dphi_over_L.col(t + ii + 1).array() * prod_container.array();
+                      
+                 // }
+                    
+                 // // ---- Accumulation (same formula for ALL n_future >= 1) ----
+                 // if (compute_final_scalar_grad) {
+                          
+                       // if (n_class != 1) {
+                            
+                             // // FIXED: use prop_rowwise_prod_temp * prob_recip (matching general case + coeff grad)
+                             // derivs_chain_container_vec.setZero();
+                             // for (int ii = 0; ii < n_future + 1; ++ii) {
+                               // derivs_chain_container_vec.array() += grad_prob.col(ii).array() * prop_rowwise_prod_temp.col(t).array() * prob_recip.col(t + ii).array();
+                             // }
+                             // cutpoint_grad_array(j, t_ord) += (common_grad_term_1.col(t).array() * derivs_chain_container_vec.array()).sum();
+                            
+                       // } else {
+                             // derivs_chain_container_vec.setZero();
+                             // for (int ii = 0; ii < n_future + 1; ++ii) {
+                               // derivs_chain_container_vec.array() += grad_prob.col(ii).array() * prob_recip.col(t + ii).array();
+                             // }
+                             // cutpoint_grad_array(j, t_ord) += derivs_chain_container_vec.sum();
+                       // }
+                      
+                 // }
+                
+           // }
+              
+     // }  // end loop over cutpoints j
+  
+// }
+
+
+
+
+// ============================================================================
+// fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate
+//
+// For the ordinal test t (with at least one later test): the propagation and the accumulation of the old
+// fn_MVOP_compute_cutpoint_grad (above, now a comment) for a dphi seed of 0 and the SAME dZ seed
+// (dZ_seed_value_in_every_row) in every row:
+//   derivs_chain_container_vec = sum_{ii = first_term_accumulated .. n_future} grad_prob(ii) x
+//                                [prop_rowwise_prod_temp(t), n_class != 1 only] x prob_recip(t + ii).
+// dZ seed 1 with first_term_accumulated = 1: the weight of the dZ seed of each row (the term ii = 0 belongs to
+// the dphi seed). dZ seed 0 with first_term_accumulated = 0: exactly what a row that touches no cutpoint added
+// to every cutpoint in the old loop (0, or NaN when a factor of that row is not finite).
+// ============================================================================
+ALWAYS_INLINE void
+fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate(
+          const int t,
+          const double dZ_seed_value_in_every_row,
+          const int first_term_accumulated,
+          const int n_class,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> L_Omega_double,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prob_recip,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prop_rowwise_prod_temp,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dphi_over_L,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dZ_dmu_neg,
+          Eigen::Ref<Eigen::Matrix<double, -1, -1>> z_grad_term,
+          Eigen::Ref<Eigen::Matrix<double, -1, -1>> grad_prob,
+          Eigen::Ref<Eigen::Matrix<double, -1, 1>> prod_container,
+          Eigen::Ref<Eigen::Matrix<double, -1, 1>> derivs_chain_container_vec
+) {
+  
+        const int n_tests  = dphi_over_L.cols();
+        const int n_future = n_tests - t - 1;
+        
+        grad_prob.col(0).setZero();
+        z_grad_term.col(0).setConstant(dZ_seed_value_in_every_row);
+        
+        // First future test effect
+        grad_prob.col(1).array() = dphi_over_L.col(t + 1).array()
+                                   * (L_Omega_double(t + 1, t) * z_grad_term.col(0).array());
+        
+        // Remaining future tests (only runs if n_future > 1)
+        for (int ii = 1; ii < n_future; ++ii) {
+          
+              if (ii == 1) {
+                prod_container = z_grad_term.leftCols(ii)
+                                 * L_Omega_double.row(t + (ii - 1) + 1).segment(t, ii).transpose();
+              }
+              
+              z_grad_term.col(ii).array() = -dZ_dmu_neg.col(t + ii).array() * prod_container.array();
+              
+              prod_container = z_grad_term.leftCols(ii + 1)
+                               * L_Omega_double.row(t + ii + 1).segment(t, ii + 1).transpose();
+              
+              grad_prob.col(ii + 1).array() = dphi_over_L.col(t + ii + 1).array() * prod_container.array();
+          
+        }
+        
+        derivs_chain_container_vec.setZero();
+        if (n_class != 1) {
+              for (int ii = first_term_accumulated; ii < n_future + 1; ++ii) {
+                derivs_chain_container_vec.array() += grad_prob.col(ii).array()
+                                                      * prop_rowwise_prod_temp.col(t).array()
+                                                      * prob_recip.col(t + ii).array();
+              }
+        } else {
+              for (int ii = first_term_accumulated; ii < n_future + 1; ++ii) {
+                derivs_chain_container_vec.array() += grad_prob.col(ii).array() * prob_recip.col(t + ii).array();
+              }
+        }
+  
+}
+
+
+
+
+// ============================================================================
+// fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter
+//
+// The gradient w.r.t. the ordered cutpoints C of ONE ordinal test, as the old fn_MVOP_compute_cutpoint_grad
+// (above, now a comment; same arguments), with one propagation through the later tests per test instead of one
+// per cutpoint (K_t - 1 passes over the chunk, each with a scalar loop over the rows):
+//   - each row touches at most 2 cutpoints of its own test: C_{y-1} as its UPPER bound (y < K_t) and C_{y-2}
+//     as its LOWER bound (y >= 2), with the dphi / dZ seeds of the old loop;
+//   - the propagation and the accumulation are row-wise and linear in the dZ seed, so the contribution of row i
+//     to such a cutpoint is  weight_on_dphi_seed(i) x dphi seed(i) + weight_on_dZ_seed(i) x dZ seed(i),  and the
+//     two weights do not depend on the cutpoint: weight_on_dZ_seed comes from ONE propagation of a unit dZ seed;
+//   - the contributions are added into the (at most 2) cutpoints of each row, and the per-cutpoint sums of the
+//     chunk are added into cutpoint_grad_array once per cutpoint (as before).
+// A row that touches no C_j added 0 to C_j in the old loop, or NaN when a factor of that row was not finite: the
+// zero-seed propagation reproduces it, and NaN is added to every C_j with such a row that does not touch it, so
+// that a failed evaluation still reaches the multi-attempt fallback (no failure is masked).
+// Equal to the old loop up to rounding: the products are associated differently, and the per-cutpoint sums are
+// accumulated row by row instead of by Eigen's sum() over the whole chunk.
+// The workspace vectors dphi_direct_Cj / dZ_direct_Cj hold the two weights, derivs_chain_container_vec the
+// zero-seed contribution, and the columns z_grad_term.col(0) / grad_prob.col(0) the row contributions.
+// ============================================================================
+ALWAYS_INLINE void
+fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter(
+          const int c,
+          Eigen::Ref<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array,
+          const int t,
+          const int t_ord,
+          const int K_t,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> common_grad_term_1,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> L_Omega_double,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prob,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prob_recip,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> prop_rowwise_prod_temp,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Bound_Z,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Upper_Bound_Z,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> phi_Z_recip,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> y_chunk,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dphi_over_L,
+          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> dZ_dmu_neg,
+          Eigen::Ref<Eigen::Matrix<double, -1, -1>> z_grad_term,
+          Eigen::Ref<Eigen::Matrix<double, -1, -1>> grad_prob,
+          Eigen::Ref<Eigen::Matrix<double, -1, 1>> prod_container,
+          Eigen::Ref<Eigen::Matrix<double, -1, 1>> derivs_chain_container_vec,
+          Eigen::Ref<Eigen::Matrix<double, -1, 1>> dphi_direct_Cj,
+          Eigen::Ref<Eigen::Matrix<double, -1, 1>> dZ_direct_Cj,
+          const bool compute_final_scalar_grad,
+          const Model_fn_args_struct &Model_args_as_cpp_struct
 ) {
   
         const int n_class    = Model_args_as_cpp_struct.Model_args_ints(1);
@@ -529,123 +810,110 @@ ALWAYS_INLINE void fn_MVOP_compute_cutpoint_grad(  const int c,
         const double L_tt_inv = 1.0 / L_tt;
         const int n_future   = n_tests - t - 1;
         
-        grad_prob.setZero(); // .array()   = 0.0;
-        z_grad_term.setZero(); // .array() = 0.0;
+        //// ---- the weights of the two seeds of each row (they do not depend on the cutpoint):
+        auto weight_on_dphi_seed = dphi_direct_Cj.array();
+        auto weight_on_dZ_seed   = dZ_direct_Cj.array();
+        //// ---- what a row that touches no cutpoint added to every cutpoint in the old loop (0 or NaN):
+        auto contribution_of_row_touching_no_cutpoint = derivs_chain_container_vec.array();
         
-        // // ---- Actual vectors, NOT aliases into workspace (avoids clobbering) ----
-        // Eigen::Matrix<double, -1, 1> dphi_direct_Cj(chunk_size);
-        // Eigen::Matrix<double, -1, 1> dZ_direct_Cj(chunk_size);
+        if (n_class != 1) {
+              weight_on_dphi_seed = common_grad_term_1.col(t).array() * prop_rowwise_prod_temp.col(t).array()
+                                    * prob_recip.col(t).array();
+        } else {
+              weight_on_dphi_seed = prob_recip.col(t).array();
+        }
         
-        // ====================================================================
-        // Loop over each cutpoint j
-        // ====================================================================
-        for (int j = 0; j < n_thr_t; ++j) {
+        if (n_future >= 1) {
           
-              dphi_direct_Cj.setZero();
-              dZ_direct_Cj.setZero();
+              //// one propagation of a unit dZ seed (the terms of the later tests):
+              fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate(
+          t, 1.0, 1, n_class, L_Omega_double, prob_recip, prop_rowwise_prod_temp,
+          dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container,
+          derivs_chain_container_vec);
+              if (n_class != 1) weight_on_dZ_seed = common_grad_term_1.col(t).array()
+                                                    * derivs_chain_container_vec.array();
+              else              weight_on_dZ_seed = derivs_chain_container_vec.array();
               
-              // ================================================================
-              // Step 1: Compute per-observation seeds for cutpoint C_j
-              // ================================================================
-              for (int i = 0; i < chunk_size; ++i) {
-            
-                    const int y_i = static_cast<int>(y_chunk(i, t));
-                    const double pzr = phi_Z_recip(i, t);
-                    const bool pzr_ok = std::isfinite(pzr);
-                    
-                    if (y_i == j + 1 && y_i < K_t) {
-                      
-                          // C_j is UPPER bound for this observation
-                          dphi_direct_Cj(i) = phi_Upper_Bound_Z(i, t) * L_tt_inv;
-                          double uph = u_array(i, t) * phi_Upper_Bound_Z(i, t);
-                          // dZ_direct_Cj(i) = (uph == 0.0 || !pzr_ok) ? 0.0 : uph * pzr * L_tt_inv;
-                          //// 0 only for an exact zero term; a non-finite 1 / phi(Z) (phi(Z) underflowed) makes
-                          //// the term non-finite, so that the failed evaluation reaches the multi-attempt
-                          //// fallback:
-                          dZ_direct_Cj(i) = (uph == 0.0 && pzr_ok) ? 0.0 : uph * pzr * L_tt_inv;
-                      
-                    } else if (y_i == j + 2) {
-                      
-                          // C_j is LOWER bound for this observation
-                          dphi_direct_Cj(i) = -phi_Bound_Z(i, t) * L_tt_inv;
-                          double omup = (1.0 - u_array(i, t)) * phi_Bound_Z(i, t);
-                          // dZ_direct_Cj(i) = (omup == 0.0 || !pzr_ok) ? 0.0 : omup * pzr * L_tt_inv;
-                          dZ_direct_Cj(i) = (omup == 0.0 && pzr_ok) ? 0.0 : omup * pzr * L_tt_inv;   //// as above
-                      
-                    }
-                    // else: C_j doesn't affect this observation -> stays zero
-                
+              //// zero seeds, every term (the old loop for a row that touches no cutpoint):
+              fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate(
+          t, 0.0, 0, n_class, L_Omega_double, prob_recip, prop_rowwise_prod_temp,
+          dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container,
+          derivs_chain_container_vec);
+              if (n_class != 1) {
+                    contribution_of_row_touching_no_cutpoint = common_grad_term_1.col(t).array()
+                                                               * derivs_chain_container_vec.array();
               }
-              // ================================================================
-              // Step 2: Propagation + accumulation
-              // ================================================================
-              if (n_future == 0) {
-                
-                    // ---- Last test: no chain-rule propagation needed ----
-                    if (compute_final_scalar_grad) {
-                          
-                          if (n_class != 1) {
-                            
-                                // FIXED: use prop_rowwise_prod_temp * prob_recip (matching general case)
-                                cutpoint_grad_array(j, t_ord) += (common_grad_term_1.col(t).array() * dphi_direct_Cj.array() * prop_rowwise_prod_temp.col(t).array() 
-                                                                 * prob_recip.col(t).array()).sum();
-                            
-                          } else {
-                            
-                                cutpoint_grad_array(j, t_ord) += (dphi_direct_Cj.array() * prob_recip.col(t).array()).sum();
-                          }
-                          
-                    }
-                  
+          
+        } else {
+          
+              //// last test: no propagation, and the dZ seed is not used (as in the old loop):
+              weight_on_dZ_seed.setZero();
+              if (n_class != 1) {
+                    contribution_of_row_touching_no_cutpoint = common_grad_term_1.col(t).array() * 0.0
+                                                               * prop_rowwise_prod_temp.col(t).array()
+                                                               * prob_recip.col(t).array();
               } else {
-                  
-                    // ---- n_future >= 1: propagation through future tests ----
-                    grad_prob.col(0).array()   = dphi_direct_Cj.array();
-                    z_grad_term.col(0).array() = dZ_direct_Cj.array();
-                    
-                    // First future test effect
-                    grad_prob.col(1).array() = dphi_over_L.col(t + 1).array() * (L_Omega_double(t + 1, t) * z_grad_term.col(0).array());
-                    
-                    // Remaining future tests (only runs if n_future > 1)
-                    for (int ii = 1; ii < n_future; ++ii) {
-                      
-                          if (ii == 1) {
-                            prod_container = z_grad_term.leftCols(ii) * L_Omega_double.row(t + (ii - 1) + 1).segment(t, ii).transpose();
-                          }
-                          
-                          z_grad_term.col(ii).array() = -dZ_dmu_neg.col(t + ii).array() * prod_container.array();
-                          
-                          prod_container = z_grad_term.leftCols(ii + 1) * L_Omega_double.row(t + ii + 1).segment(t, ii + 1).transpose();
-                          
-                          grad_prob.col(ii + 1).array() = dphi_over_L.col(t + ii + 1).array() * prod_container.array();
-                      
-                    }
-                    
-                    // ---- Accumulation (same formula for ALL n_future >= 1) ----
-                    if (compute_final_scalar_grad) {
-                          
-                          if (n_class != 1) {
-                            
-                                // FIXED: use prop_rowwise_prod_temp * prob_recip (matching general case + coeff grad)
-                                derivs_chain_container_vec.setZero();
-                                for (int ii = 0; ii < n_future + 1; ++ii) {
-                                  derivs_chain_container_vec.array() += grad_prob.col(ii).array() * prop_rowwise_prod_temp.col(t).array() * prob_recip.col(t + ii).array();
-                                }
-                                cutpoint_grad_array(j, t_ord) += (common_grad_term_1.col(t).array() * derivs_chain_container_vec.array()).sum();
-                            
-                          } else {
-                                derivs_chain_container_vec.setZero();
-                                for (int ii = 0; ii < n_future + 1; ++ii) {
-                                  derivs_chain_container_vec.array() += grad_prob.col(ii).array() * prob_recip.col(t + ii).array();
-                                }
-                                cutpoint_grad_array(j, t_ord) += derivs_chain_container_vec.sum();
-                          }
-                      
-                    }
-                
+                    contribution_of_row_touching_no_cutpoint = 0.0 * prob_recip.col(t).array();
               }
-              
-        }  // end loop over cutpoints j
+          
+        }
+        
+        if (!compute_final_scalar_grad) return;
+        
+        //// ---- the contribution of each row to the cutpoint that is its UPPER bound (C_{y-1}) and to the one
+        ////      that is its LOWER bound (C_{y-2}), with the seeds of the old loop:
+        ////        upper: dphi = phi(ubz) / L(t,t),   dZ = u phi(ubz) / (phi(Z) L(t,t))
+        ////        lower: dphi = -phi(lbz) / L(t,t),  dZ = (1 - u) phi(lbz) / (phi(Z) L(t,t))
+        ////      with dZ = 0 only for an exact zero numerator and a finite 1 / phi(Z) (as in the old loop):
+        auto contribution_as_upper_bound = z_grad_term.col(0).array();
+        auto contribution_as_lower_bound = grad_prob.col(0).array();
+        const auto u_col               = u_array.col(t).array();
+        const auto phi_lower_bound_col = phi_Bound_Z.col(t).array();
+        const auto phi_upper_bound_col = phi_Upper_Bound_Z.col(t).array();
+        const auto phi_Z_recip_col     = phi_Z_recip.col(t).array();
+        const auto uph  = u_col * phi_upper_bound_col;
+        const auto omup = (1.0 - u_col) * phi_lower_bound_col;
+        
+        if (n_future >= 1) {
+              contribution_as_upper_bound = weight_on_dphi_seed * (phi_upper_bound_col * L_tt_inv)
+                                            + weight_on_dZ_seed * ((uph == 0.0) && phi_Z_recip_col.isFinite())
+                                                                  .select(0.0, uph * phi_Z_recip_col * L_tt_inv);
+              contribution_as_lower_bound = weight_on_dphi_seed * (-phi_lower_bound_col * L_tt_inv)
+                                            + weight_on_dZ_seed * ((omup == 0.0) && phi_Z_recip_col.isFinite())
+                                                                  .select(0.0, omup * phi_Z_recip_col * L_tt_inv);
+        } else {
+              contribution_as_upper_bound = weight_on_dphi_seed * (phi_upper_bound_col * L_tt_inv);
+              contribution_as_lower_bound = weight_on_dphi_seed * (-phi_lower_bound_col * L_tt_inv);
+        }
+        
+        //// ---- category scatter: each row into the (at most 2) cutpoints it touches:
+        Eigen::Matrix<double, -1, 1> cutpoint_grad_this_chunk = Eigen::Matrix<double, -1, 1>::Zero(n_thr_t);
+        for (int i = 0; i < chunk_size; ++i) {
+              const int y_i = static_cast<int>(y_chunk(i, t));
+              if ((y_i >= 1) && (y_i < K_t))  cutpoint_grad_this_chunk(y_i - 1) += contribution_as_upper_bound(i);
+              if ((y_i >= 2) && (y_i <= K_t)) cutpoint_grad_this_chunk(y_i - 2) += contribution_as_lower_bound(i);
+        }
+        
+        //// ---- NaN from the rows that do not touch a cutpoint (as in the old loop; only when there is one):
+        if (std::isnan(contribution_of_row_touching_no_cutpoint.sum())) {
+              int n_rows_with_NaN = 0;
+              Eigen::Matrix<int, -1, 1> n_rows_with_NaN_touching_cutpoint =
+                    Eigen::Matrix<int, -1, 1>::Zero(n_thr_t);
+              for (int i = 0; i < chunk_size; ++i) {
+                    if (!std::isnan(contribution_of_row_touching_no_cutpoint(i))) continue;
+                    n_rows_with_NaN++;
+                    const int y_i = static_cast<int>(y_chunk(i, t));
+                    if ((y_i >= 1) && (y_i < K_t))  n_rows_with_NaN_touching_cutpoint(y_i - 1)++;
+                    if ((y_i >= 2) && (y_i <= K_t)) n_rows_with_NaN_touching_cutpoint(y_i - 2)++;
+              }
+              for (int j = 0; j < n_thr_t; ++j) {
+                    if (n_rows_with_NaN > n_rows_with_NaN_touching_cutpoint(j)) {
+                      cutpoint_grad_this_chunk(j) += std::numeric_limits<double>::quiet_NaN();
+                    }
+              }
+        }
+        
+        for (int j = 0; j < n_thr_t; ++j) cutpoint_grad_array(j, t_ord) += cutpoint_grad_this_chunk(j);
   
 }
 

@@ -419,10 +419,16 @@ functions {
 
             //// ---- u transform + Jacobian (plain-function equivalent of
             //// ---- lb_ub_lp(u_raw, 0, 1); Jacobian added to the return value):
-            matrix[M, n_tests] tanh_u;
-            for (m in 1:M)  tanh_u[m, ] = tanh(u_raw_slice[m]);
-            matrix[M, n_tests] u = 0.5 * (1.0 + tanh_u);
-            out += - M * n_tests * log2() + sum(log1m(square(tanh_u)));
+            // matrix[M, n_tests] tanh_u;
+            // for (m in 1:M)  tanh_u[m, ] = tanh(u_raw_slice[m]);
+            // matrix[M, n_tests] u = 0.5 * (1.0 + tanh_u);
+            // out += - M * n_tests * log2() + sum(log1m(square(tanh_u)));
+            //// ---- u = Phi(u_raw) and its log-Jacobian -0.5 * u_raw^2 - 0.5 * log(2 pi) per element, as
+            //// ---- BayesMVP's C++ with nuisance_transformation = "Phi" (tanh transform above kept as comments):
+            matrix[M, n_tests] u_raw_slice_matrix;
+            for (m in 1:M)  u_raw_slice_matrix[m, ] = u_raw_slice[m];
+            matrix[M, n_tests] u = Phi(u_raw_slice_matrix);
+            out += -0.5 * dot_self(to_vector(u_raw_slice_matrix)) - M * n_tests * 0.5 * log(2.0 * pi());
 
             //// ---- slice-local copies of data (data -> no autodiff cost):
             matrix[M, n_tests] y_s = y[start:end, ];

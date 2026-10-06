@@ -395,6 +395,54 @@ functions {
                 Z_and_log_lik[, 2] = log(Phi_b - Phi_a);
                 return Z_and_log_lik;
       }
+      ////
+      //// The same interval step as Phi_exact_interval_Z_and_log_lik_vectorised above, with the reflected rows
+      //// (Bound_Z_lo > 0) and the non-reflected rows split by index instead of combined with 0 / 1 weight
+      //// vectors (fewer autodiff operations per row). Same maths, same values:
+      ////   non-reflected rows: Z = inv_Phi((1 - u) Phi(lo) + u Phi(hi)),   log-lik = log(Phi(hi) - Phi(lo));
+      ////   reflected rows:     Z = -inv_Phi(u Phi(-hi) + (1 - u) Phi(-lo)), log-lik = log(Phi(-lo) - Phi(-hi)).
+      ////
+      matrix Phi_exact_interval_Z_and_log_lik_vectorised_split_reflected_rows_by_index(vector Bound_Z_lo,
+                                                                                      vector Bound_Z_hi,
+                                                                                      vector u_vec) {
+                int n_obs = num_elements(Bound_Z_lo);
+                int n_reflected = 0;
+                for (obs_index in 1:n_obs) n_reflected += (Bound_Z_lo[obs_index] > 0);
+                int n_kept = n_obs - n_reflected;
+                array[n_kept] int kept_index;
+                array[n_reflected] int reflected_index;
+                {
+                    int kept_counter = 1;
+                    int reflected_counter = 1;
+                    for (obs_index in 1:n_obs) {
+                        if (Bound_Z_lo[obs_index] > 0) {
+                            reflected_index[reflected_counter] = obs_index;
+                            reflected_counter += 1;
+                        } else {
+                            kept_index[kept_counter] = obs_index;
+                            kept_counter += 1;
+                        }
+                    }
+                }
+                matrix[n_obs, 2] Z_and_log_lik;
+                if (n_kept > 0) {
+                    vector[n_kept] u_kept = u_vec[kept_index];
+                    vector[n_kept] Phi_lo = 0.5 * erfc(-Bound_Z_lo[kept_index] / sqrt(2.0));
+                    vector[n_kept] Phi_hi = 0.5 * erfc(-Bound_Z_hi[kept_index] / sqrt(2.0));
+                    Z_and_log_lik[kept_index, 1] = inv_Phi((1.0 - u_kept) .* Phi_lo + u_kept .* Phi_hi);
+                    Z_and_log_lik[kept_index, 2] = log(Phi_hi - Phi_lo);
+                }
+                if (n_reflected > 0) {
+                    vector[n_reflected] u_reflected = u_vec[reflected_index];
+                    //// Phi(-hi) = 0.5 * erfc(hi / sqrt(2)),  Phi(-lo) = 0.5 * erfc(lo / sqrt(2)):
+                    vector[n_reflected] Phi_minus_hi = 0.5 * erfc(Bound_Z_hi[reflected_index] / sqrt(2.0));
+                    vector[n_reflected] Phi_minus_lo = 0.5 * erfc(Bound_Z_lo[reflected_index] / sqrt(2.0));
+                    Z_and_log_lik[reflected_index, 1] = -inv_Phi(u_reflected .* Phi_minus_hi
+                                                                 + (1.0 - u_reflected) .* Phi_minus_lo);
+                    Z_and_log_lik[reflected_index, 2] = log(Phi_minus_lo - Phi_minus_hi);
+                }
+                return Z_and_log_lik;
+      }
 
       //////////////////////////////////////////////////////////////////////////
       //// ---- Stable Phi_approx (Phi_type == 2) GHK helpers:
@@ -599,10 +647,16 @@ functions {
             //// ---- u transform + Jacobian (plain-function equivalent of
             //// ---- lb_ub_jacobian(u_raw, 0, 1); Jacobian added to the return value):
             ////
-            matrix[M, n_tests] tanh_u;
-            for (m in 1:M)  tanh_u[m, ] = tanh(u_raw_slice[m]);
-            matrix[M, n_tests] u = 0.5 * (1.0 + tanh_u);
-            out += - M * n_tests * log2() + sum(log1m(square(tanh_u)));
+            // matrix[M, n_tests] tanh_u;
+            // for (m in 1:M)  tanh_u[m, ] = tanh(u_raw_slice[m]);
+            // matrix[M, n_tests] u = 0.5 * (1.0 + tanh_u);
+            // out += - M * n_tests * log2() + sum(log1m(square(tanh_u)));
+            //// ---- u = Phi(u_raw) and its log-Jacobian -0.5 * u_raw^2 - 0.5 * log(2 pi) per element, as
+            //// ---- BayesMVP's C++ with nuisance_transformation = "Phi" (tanh transform above kept as comments):
+            matrix[M, n_tests] u_raw_slice_matrix;
+            for (m in 1:M)  u_raw_slice_matrix[m, ] = u_raw_slice[m];
+            matrix[M, n_tests] u = Phi(u_raw_slice_matrix);
+            out += -0.5 * dot_self(to_vector(u_raw_slice_matrix)) - M * n_tests * 0.5 * log(2.0 * pi());
 
             ////
             //// ---- slice-local copies of data (data -> no autodiff cost):
@@ -868,7 +922,10 @@ functions {
                                      } else {
                                            //// Phi_type == 1 (BayesMVP's exact "Phi"): EXACT normal interval step, vectorised; Bound_Z_lo > 0 uses the reflected form, so neither
                                            //// Phi_hi - Phi_lo nor Phi_lo + prob_t * u is formed near 1; continuous with the exact tail branches: see Phi_exact_interval_Z_and_log_lik_vectorised.
-                                           matrix[M, 2] Phi_exact_Z_and_log_lik = Phi_exact_interval_Z_and_log_lik_vectorised(Bound_Z_lo, Bound_Z_hi, u[, t]);
+                                           // matrix[M, 2] Phi_exact_Z_and_log_lik = Phi_exact_interval_Z_and_log_lik_vectorised(Bound_Z_lo, Bound_Z_hi, u[, t]);
+                                           matrix[M, 2] Phi_exact_Z_and_log_lik =
+                  Phi_exact_interval_Z_and_log_lik_vectorised_split_reflected_rows_by_index(
+                        Bound_Z_lo, Bound_Z_hi, u[, t]);
                                            Z_std_norm[, t] = Phi_exact_Z_and_log_lik[, 1];
                                            y1[, t] = Phi_exact_Z_and_log_lik[, 2];
                                      }
@@ -932,7 +989,10 @@ functions {
                                                     } else {
                                                        //// Phi_type == 1 (BayesMVP's exact "Phi"): EXACT normal interval step, vectorised; Bound_Z_lo > 0 uses the reflected form, so neither
                                                        //// Phi_hi - Phi_lo nor Phi_lo + prob_t * u is formed near 1; continuous with the exact tail branches: see Phi_exact_interval_Z_and_log_lik_vectorised.
-                                                       matrix[local_size, 2] Phi_exact_Z_and_log_lik = Phi_exact_interval_Z_and_log_lik_vectorised(Bound_Z_lo[index], Bound_Z_hi[index], u[index, t]);
+                                                       // matrix[local_size, 2] Phi_exact_Z_and_log_lik = Phi_exact_interval_Z_and_log_lik_vectorised(Bound_Z_lo[index], Bound_Z_hi[index], u[index, t]);
+                                                       matrix[local_size, 2] Phi_exact_Z_and_log_lik =
+                  Phi_exact_interval_Z_and_log_lik_vectorised_split_reflected_rows_by_index(
+                        Bound_Z_lo[index], Bound_Z_hi[index], u[index, t]);
                                                        Z_std_norm[index, t] = Phi_exact_Z_and_log_lik[, 1];
                                                        y1[index, t] = Phi_exact_Z_and_log_lik[, 2];
                                                     }

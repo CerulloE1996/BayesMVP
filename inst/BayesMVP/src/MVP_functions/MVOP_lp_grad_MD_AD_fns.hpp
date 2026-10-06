@@ -223,7 +223,12 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
                 phi_Bound_Z.col(t).array() = -0.5 * Bound_Z[c].col(t).array().square();       apply_col_inplace<vec, Fn::exp>(phi_Bound_Z, t);       phi_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
                 phi_Upper_Bound_Z.col(t).array() = -0.5 * Upper_Bound_Z[c].col(t).array().square(); apply_col_inplace<vec, Fn::exp>(phi_Upper_Bound_Z, t); phi_Upper_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
               }
-              for (int i = 0; i < chunk_size; ++i) { if (std::isinf(Bound_Z[c](i, t))) phi_Bound_Z(i, t) = 0.0; if (std::isinf(Upper_Bound_Z[c](i, t))) phi_Upper_Bound_Z(i, t) = 0.0; }
+           // for (int i = 0; i < chunk_size; ++i) { if (std::isinf(Bound_Z[c](i, t))) phi_Bound_Z(i, t) = 0.0; if (std::isinf(Upper_Bound_Z[c](i, t))) phi_Upper_Bound_Z(i, t) = 0.0; }
+              //// the loop above (now a comment) as column-wise selects: phi(bound) = 0 for an infinite bound:
+              phi_Bound_Z.col(t).array() = Bound_Z[c].col(t).array().isInf()
+                                           .select(0.0, phi_Bound_Z.col(t).array());
+              phi_Upper_Bound_Z.col(t).array() = Upper_Bound_Z[c].col(t).array().isInf()
+                                                 .select(0.0, phi_Upper_Bound_Z.col(t).array());
             }
           }
           if (grad_option != "none") {
@@ -257,9 +262,16 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
           if ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "cutpoints_only")) {
             for (int t = 0; t < n_tests; ++t) {
               const int t_ord = ord_idx_of_test(t); if (t_ord < 0) continue;
-              fn_MVOP_compute_cutpoint_grad(c, cutpoint_grad_array[c], t, t_ord, n_thr_per_ord_test(t_ord) + 1, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp,
-                                            phi_Bound_Z, phi_Upper_Bound_Z, phi_Z_recip, u_array, y_chunk, dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container_or_inc_array,
-                                            derivs_chain_container_vec, dphi_direct_Cj, dZ_direct_Cj, true, Model_args_as_cpp_struct);
+           // fn_MVOP_compute_cutpoint_grad(c, cutpoint_grad_array[c], t, t_ord, n_thr_per_ord_test(t_ord) + 1, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp,
+                                         // phi_Bound_Z, phi_Upper_Bound_Z, phi_Z_recip, u_array, y_chunk, dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container_or_inc_array,
+                                         // derivs_chain_container_vec, dphi_direct_Cj, dZ_direct_Cj, true, Model_args_as_cpp_struct);
+              //// one propagation per test instead of one per cutpoint (the call above, now a comment):
+              fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter(
+                    c, cutpoint_grad_array[c], t, t_ord, n_thr_per_ord_test(t_ord) + 1, common_grad_term_1, L[c],
+                    prob[c], prob_recip, prob_rowwise_prod_temp, phi_Bound_Z, phi_Upper_Bound_Z, phi_Z_recip,
+                    u_array, y_chunk, dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob,
+                    prod_container_or_inc_array, derivs_chain_container_vec, dphi_direct_Cj, dZ_direct_Cj, true,
+                    Model_args_as_cpp_struct);
             }
           }
           if ((n_class > 1) && ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "prev_only"))) {
