@@ -178,6 +178,8 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
   double grad_prev_AD = 0.0;
   double log_jac_p_double = 0.0; 
   double prior_densities = 0.0;
+  //// with exclude_priors: the log Jacobian of the map from the raw b's to the b's (kept in the log density):
+  double log_jacobian_of_map_from_raw_b_to_b_kept_with_exclude_priors = 0.0;
   
   Eigen::Matrix<double, -1, 1  >  bs_raw_vec_double = theta_main_vec_ref.segment(0, n_bs_LT) ;
   Eigen::Matrix<double, -1, -1 >  bs_mat_double =    Eigen::Matrix<double, -1, -1 >::Zero(n_class, n_tests);
@@ -393,6 +395,8 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
 
         //
         ////////////////////// Weibull priors for  b's / corr
+        //// ---- priors: left out of the log density and of the gradient with exclude_priors (as for MVP / MVOP):
+        if (exclude_priors == false)
         for (int t = 0; t < n_tests; ++t) {
             if (LT_prior_corr_bs == "Weibull") {
               target_AD += stan::math::weibull_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = scale/sigma
@@ -418,6 +422,9 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
         // }
 
         /// priors and Jacobians for coeffs
+        //// ---- the prior on LT_theta and its LT_a -> LT_theta Jacobian (a term of that prior): left out with
+        ////      exclude_priors:
+        if (exclude_priors == false)
         for (int c = 0; c < n_class; ++c) {
           for (int t = 0; t < n_tests; ++t) {
             target_AD += stan::math::normal_lpdf(LT_theta(c, t), prior_coeffs_mean[c](0, t), prior_coeffs_sd[c](0, t)); //// Prior on theta
@@ -440,6 +447,9 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
             // Write to output (n_pops positions instead of 1)
             // int prev_start = 1 + n_us + n_corrs + n_covariates_total;
             int prev_start = 1 + n_us + n_bs_LT + n_coeffs;
+            //// ---- the prevalence prior: its gradient is left out with exclude_priors, as its density is
+            ////      (the Jacobian gradient is added after the likelihood):
+            if (exclude_priors == true) grad_prev_raw.setZero();
             out_mat.segment(prev_start, n_pops) = grad_prev_raw;
             
           }
@@ -493,6 +503,10 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
         // helper returns its beta-prior value separately; its transformation
         // Jacobian is added explicitly after the likelihood.
         prior_densities = target_AD.val() + prior_densities_prev_double;
+        //// ---- with exclude_priors target_AD holds only the log Jacobian of the raw b -> b map:
+        if (exclude_priors == true) {
+              log_jacobian_of_map_from_raw_b_to_b_kept_with_exclude_priors = target_AD.val();
+        }
 
         // ///////////////////////
         // target_AD.grad() ;   // differentiating this (i.e. NOT wrt this!! - this is the subject)
@@ -1017,6 +1031,8 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
     ////////////////////////  --------------------------------------------------------------------------
     double log_prob_out = out_mat.segment(1 + n_params, N).sum();
     if (exclude_priors == false)  log_prob_out += prior_densities;
+    //// ---- with exclude_priors the log Jacobian of the raw b -> b map is kept (it is in the gradient):
+    if (exclude_priors == true)  log_prob_out += log_jacobian_of_map_from_raw_b_to_b_kept_with_exclude_priors;
     log_prob_out +=  log_jac_u;
     log_prob_out += log_det_J_prev_double_total;
     // log_prob_out +=  log_jac_p_double;

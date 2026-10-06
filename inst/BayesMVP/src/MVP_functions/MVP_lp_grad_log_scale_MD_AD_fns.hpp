@@ -18,6 +18,8 @@
 #include <Eigen/Dense>
 #include <unsupported/Eigen/SpecialFunctions>
 
+#include "PartialLog_nuisance_chunk_relayout.hpp"
+
 // #include "MVP_log_scale_grad_calc_fns_T.hpp"
 
 
@@ -491,7 +493,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
                                                                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                                                                 const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                 const std::string &grad_option,
-                                                                                const Model_fn_args_struct &Model_args_as_cpp_struct
+                                                                                const Model_fn_args_struct &Model_args_as_cpp_struct,
+                                                                                const int n_chunks_multiplier = 1
 ) {
   
         out_mat.setZero();
@@ -506,6 +509,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
         const bool corr_force_positive = Model_args_as_cpp_struct.Model_args_bools(2);
         const bool corr_prior_beta     = Model_args_as_cpp_struct.Model_args_bools(3);
         const bool corr_prior_norm     = Model_args_as_cpp_struct.Model_args_bools(4);
+        fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
+                                                                 "MVP_lp_grad_log_scale_MD_AD_fns.hpp");
         const int n_class  = Model_args_as_cpp_struct.Model_args_ints(1);
         const int n_chunks = Model_args_as_cpp_struct.Model_args_ints(3);
         const double overflow_threshold  = Model_args_as_cpp_struct.Model_args_doubles(0);
@@ -549,7 +554,16 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
         else if (vect_type == "AVX2")   vec_size = 4;
         else if (vect_type == "AVX")    vec_size = 2;
         else                            vec_size = 1;
-        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks);
+        //// n_chunks_multiplier is 1 except in the PartialLog evaluations (the fallback, attempt 2 in
+        //// MVP_lp_grad_multi_attempts.hpp, and the forced ones), which use the sample() argument
+        //// n_chunks_multiplier_for_PartialLog_log_scale_evaluation (default 3) so that each
+        //// (larger-per-individual) PartialLog chunk stays about the same size in memory as a NoLog chunk;
+        //// the nuisance vector and its gradient are re-laid out between the stored chunk layout and this
+        //// one (PartialLog_nuisance_chunk_relayout.hpp).
+        //// Capped at N / vec_size chunks (so no chunk is smaller than one SIMD vector, which would otherwise make calculate_chunk_sizes
+        //// fall back to ONE chunk of ~N rows), and never fewer chunks than n_chunks:
+        const int n_chunks_used = std::min(n_chunks * std::max(1, n_chunks_multiplier), std::max(n_chunks, N / vec_size));
+        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks_used);
         const int chunk_size_orig   = chunk_size_info.chunk_size_orig;
         const int normal_chunk_size = chunk_size_info.normal_chunk_size;
         const int last_chunk_size   = chunk_size_info.last_chunk_size;
@@ -634,7 +648,10 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
               for (int i = 1; i < n_tests; ++i) for (int j = 0; j < i; ++j) {
                 if (known_values_indicator[c](i, j) == 1) {
                   stan::math::var kv = stan::math::normal_lpdf(Omega_var[c](i, j), 0.0, 10.0);
-                  target_AD += kv;
+                  //// target_AD += kv;
+                  //// ---- a prior: left out of the gradient with exclude_priors, as it is left out of the log
+                  ////      density:
+                  if (exclude_priors == false) target_AD += kv;
                   prior_densities_L_Omega_double += kv.val();
                 }
               }
@@ -646,21 +663,77 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
             for (int c = 0; c < n_class; ++c) {
               if (!corr_prior_beta && !corr_prior_norm) {
                 prior_densities_L_Omega += stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
+                //// ---- with known (fixed) correlations, the terms of the known pairs in the
+                ////      Jacobian that lkj_corr_cholesky_lpdf contains are removed (the prior is
+                ////      on the free correlations):
+                fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
+                      prior_densities_L_Omega, L_Omega_var[c], known_values_indicator[c]);
               } else if (corr_prior_beta && !corr_prior_norm) {
                 for (int i = 1; i < n_tests; i++) for (int j = 0; j < i; j++)
                   prior_densities_L_Omega += stan::math::beta_lpdf((Omega_var[c](i, j) + 1) / 2, prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
                 Eigen::Matrix<stan::math::var, -1, 1> jd(n_tests);
-                for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
-                prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                //// ---- log Jacobian of the map from the free entries of L_Omega to the off-diagonal
+                ////      entries of Omega: sum over i of (n_tests - 1 - i) * log(L_Omega(i, i)) for
+                ////      0-indexed i, i.e. prod_r L_rr^(K - r) for 1-indexed r. The exponent was
+                ////      n_tests + 1 - (i + 1): one power of L_Omega(i, i) too many, i.e. an extra
+                ////      det(Omega)^(1/2) factor that pulled the correlations towards 0.
+                //// for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) *
+                ////       stan::math::log(L_Omega_var[c](i, i));
+                //// ---- with known (fixed) correlations the map is to the FREE off-diagonal
+                ////      correlations only: the power of L_Omega(i, i) is the number of free
+                ////      correlations below the diagonal in column i (n_tests - 1 - i when no
+                ////      correlation is known):
+                //// for (int i = 0; i < n_tests; ++i) {
+                ////       jd(i) = (n_tests - 1 - i) *
+                ////             stan::math::log(L_Omega_var[c](i, i));
+                //// }
+                for (int i = 0; i < n_tests; ++i) {
+                      const int number_of_free_correlations_below_diagonal_in_column_i =
+                            fn_number_of_free_correlations_below_diagonal_in_column(
+                                  known_values_indicator[c], i);
+                      jd(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                             stan::math::log(L_Omega_var[c](i, i));
+                }
+                //// ---- constant: (rho + 1) / 2 ~ Beta(a, b) gives rho the density
+                ////      Beta((rho + 1) / 2 | a, b) / 2, i.e. -log(2) per correlation and
+                ////      n_tests * (n_tests - 1) / 2 of them per class (was + n_tests * log(2); a
+                ////      constant, so the draws do not change):
+                //// prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                prior_densities_L_Omega += (- 0.5 * n_tests * (n_tests - 1) * stan::math::log(2.0) + jd.sum());
               } else if (!corr_prior_beta && corr_prior_norm) {
                 for (int i = 1; i < n_tests; i++) for (int j = 0; j < i; j++)
                   prior_densities_L_Omega += stan::math::normal_lpdf(Omega_var[c](i, j), prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
                 Eigen::Matrix<stan::math::var, -1, 1> jd(n_tests);
-                for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
-                prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                //// ---- log Jacobian of the map from the free entries of L_Omega to the off-diagonal
+                ////      entries of Omega, as in the corr_prior_beta branch above (the exponent was
+                ////      n_tests + 1 - (i + 1), one power of L_Omega(i, i) too many):
+                //// for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) *
+                ////       stan::math::log(L_Omega_var[c](i, i));
+                //// ---- with known (fixed) correlations the map is to the FREE off-diagonal
+                ////      correlations only: the power of L_Omega(i, i) is the number of free
+                ////      correlations below the diagonal in column i (n_tests - 1 - i when no
+                ////      correlation is known):
+                //// for (int i = 0; i < n_tests; ++i) {
+                ////       jd(i) = (n_tests - 1 - i) *
+                ////             stan::math::log(L_Omega_var[c](i, i));
+                //// }
+                for (int i = 0; i < n_tests; ++i) {
+                      const int number_of_free_correlations_below_diagonal_in_column_i =
+                            fn_number_of_free_correlations_below_diagonal_in_column(
+                                  known_values_indicator[c], i);
+                      jd(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                             stan::math::log(L_Omega_var[c](i, i));
+                }
+                //// ---- constant: the normal prior is on rho itself, so there is no log(2) term
+                ////      (was + n_tests * log(2); a constant, so the draws do not change):
+                //// prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                prior_densities_L_Omega += jd.sum();
               }
             }
-            target_AD += prior_densities_L_Omega;
+            //// target_AD += prior_densities_L_Omega;
+            //// ---- the correlation prior: left out of the gradient with exclude_priors, as it is left out
+            ////      of the log density (prior_densities):
+            if (exclude_priors == false) target_AD += prior_densities_L_Omega;
             prior_densities_L_Omega_double += prior_densities_L_Omega.val();
             target_AD.grad();
             grad_Omega_raw_priors_and_log_det_J = Omega_raw_vec_var.adj();
@@ -669,6 +742,9 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
           }
           if (n_class > 1) {
             fn_MVP_prev_multi_pop_AD(u_prev_raw, prev_prior_a, prev_prior_b, n_pops, prior_densities_prev_double, log_det_J_prev_from_AD, grad_prev_raw);
+            //// ---- the prevalence prior is a prior: with exclude_priors its gradient is left out, as its
+            ////      density is left out of the log density (the Jacobian gradient is added below):
+            if (exclude_priors) grad_prev_raw.setZero();
             out_mat.segment(1 + n_us + n_corrs + n_covariates_total, n_pops) = grad_prev_raw;
           }
           if (J_grad_option == "autodiff") {
@@ -793,7 +869,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
                                                                                                     const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                                                                     const std::string &grad_option,
                                                                                                     const Model_fn_args_struct &Model_args_as_cpp_struct,
-                                                                                                    const int n_threads_serial_order
+                                                                                                    const int n_threads_serial_order,
+                                                                                                    const int n_chunks_multiplier = 1
 ) {
   
         out_mat.setZero();
@@ -808,6 +885,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
         const bool corr_force_positive = Model_args_as_cpp_struct.Model_args_bools(2);
         const bool corr_prior_beta     = Model_args_as_cpp_struct.Model_args_bools(3);
         const bool corr_prior_norm     = Model_args_as_cpp_struct.Model_args_bools(4);
+        fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
+                                                                 "MVP_lp_grad_log_scale_MD_AD_fns.hpp");
         const int n_class  = Model_args_as_cpp_struct.Model_args_ints(1);
         const int n_chunks = Model_args_as_cpp_struct.Model_args_ints(3);
         const double overflow_threshold  = Model_args_as_cpp_struct.Model_args_doubles(0);
@@ -851,7 +930,16 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
         else if (vect_type == "AVX2")   vec_size = 4;
         else if (vect_type == "AVX")    vec_size = 2;
         else                            vec_size = 1;
-        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks);
+        //// n_chunks_multiplier is 1 except in the PartialLog evaluations (the fallback, attempt 2 in
+        //// MVP_lp_grad_multi_attempts.hpp, and the forced ones), which use the sample() argument
+        //// n_chunks_multiplier_for_PartialLog_log_scale_evaluation (default 3) so that each
+        //// (larger-per-individual) PartialLog chunk stays about the same size in memory as a NoLog chunk;
+        //// the nuisance vector and its gradient are re-laid out between the stored chunk layout and this
+        //// one (PartialLog_nuisance_chunk_relayout.hpp).
+        //// Capped at N / vec_size chunks (so no chunk is smaller than one SIMD vector, which would otherwise make calculate_chunk_sizes
+        //// fall back to ONE chunk of ~N rows), and never fewer chunks than n_chunks:
+        const int n_chunks_used = std::min(n_chunks * std::max(1, n_chunks_multiplier), std::max(n_chunks, N / vec_size));
+        ChunkSizeInfo chunk_size_info = calculate_chunk_sizes(N, vec_size, n_chunks_used);
         const int chunk_size_orig   = chunk_size_info.chunk_size_orig;
         const int normal_chunk_size = chunk_size_info.normal_chunk_size;
         const int last_chunk_size   = chunk_size_info.last_chunk_size;
@@ -936,7 +1024,10 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
               for (int i = 1; i < n_tests; ++i) for (int j = 0; j < i; ++j) {
                 if (known_values_indicator[c](i, j) == 1) {
                   stan::math::var kv = stan::math::normal_lpdf(Omega_var[c](i, j), 0.0, 10.0);
-                  target_AD += kv;
+                  //// target_AD += kv;
+                  //// ---- a prior: left out of the gradient with exclude_priors, as it is left out of the log
+                  ////      density:
+                  if (exclude_priors == false) target_AD += kv;
                   prior_densities_L_Omega_double += kv.val();
                 }
               }
@@ -948,21 +1039,77 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
             for (int c = 0; c < n_class; ++c) {
               if (!corr_prior_beta && !corr_prior_norm) {
                 prior_densities_L_Omega += stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
+                //// ---- with known (fixed) correlations, the terms of the known pairs in the
+                ////      Jacobian that lkj_corr_cholesky_lpdf contains are removed (the prior is
+                ////      on the free correlations):
+                fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
+                      prior_densities_L_Omega, L_Omega_var[c], known_values_indicator[c]);
               } else if (corr_prior_beta && !corr_prior_norm) {
                 for (int i = 1; i < n_tests; i++) for (int j = 0; j < i; j++)
                   prior_densities_L_Omega += stan::math::beta_lpdf((Omega_var[c](i, j) + 1) / 2, prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
                 Eigen::Matrix<stan::math::var, -1, 1> jd(n_tests);
-                for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
-                prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                //// ---- log Jacobian of the map from the free entries of L_Omega to the off-diagonal
+                ////      entries of Omega: sum over i of (n_tests - 1 - i) * log(L_Omega(i, i)) for
+                ////      0-indexed i, i.e. prod_r L_rr^(K - r) for 1-indexed r. The exponent was
+                ////      n_tests + 1 - (i + 1): one power of L_Omega(i, i) too many, i.e. an extra
+                ////      det(Omega)^(1/2) factor that pulled the correlations towards 0.
+                //// for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) *
+                ////       stan::math::log(L_Omega_var[c](i, i));
+                //// ---- with known (fixed) correlations the map is to the FREE off-diagonal
+                ////      correlations only: the power of L_Omega(i, i) is the number of free
+                ////      correlations below the diagonal in column i (n_tests - 1 - i when no
+                ////      correlation is known):
+                //// for (int i = 0; i < n_tests; ++i) {
+                ////       jd(i) = (n_tests - 1 - i) *
+                ////             stan::math::log(L_Omega_var[c](i, i));
+                //// }
+                for (int i = 0; i < n_tests; ++i) {
+                      const int number_of_free_correlations_below_diagonal_in_column_i =
+                            fn_number_of_free_correlations_below_diagonal_in_column(
+                                  known_values_indicator[c], i);
+                      jd(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                             stan::math::log(L_Omega_var[c](i, i));
+                }
+                //// ---- constant: (rho + 1) / 2 ~ Beta(a, b) gives rho the density
+                ////      Beta((rho + 1) / 2 | a, b) / 2, i.e. -log(2) per correlation and
+                ////      n_tests * (n_tests - 1) / 2 of them per class (was + n_tests * log(2); a
+                ////      constant, so the draws do not change):
+                //// prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                prior_densities_L_Omega += (- 0.5 * n_tests * (n_tests - 1) * stan::math::log(2.0) + jd.sum());
               } else if (!corr_prior_beta && corr_prior_norm) {
                 for (int i = 1; i < n_tests; i++) for (int j = 0; j < i; j++)
                   prior_densities_L_Omega += stan::math::normal_lpdf(Omega_var[c](i, j), prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
                 Eigen::Matrix<stan::math::var, -1, 1> jd(n_tests);
-                for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
-                prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                //// ---- log Jacobian of the map from the free entries of L_Omega to the off-diagonal
+                ////      entries of Omega, as in the corr_prior_beta branch above (the exponent was
+                ////      n_tests + 1 - (i + 1), one power of L_Omega(i, i) too many):
+                //// for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) *
+                ////       stan::math::log(L_Omega_var[c](i, i));
+                //// ---- with known (fixed) correlations the map is to the FREE off-diagonal
+                ////      correlations only: the power of L_Omega(i, i) is the number of free
+                ////      correlations below the diagonal in column i (n_tests - 1 - i when no
+                ////      correlation is known):
+                //// for (int i = 0; i < n_tests; ++i) {
+                ////       jd(i) = (n_tests - 1 - i) *
+                ////             stan::math::log(L_Omega_var[c](i, i));
+                //// }
+                for (int i = 0; i < n_tests; ++i) {
+                      const int number_of_free_correlations_below_diagonal_in_column_i =
+                            fn_number_of_free_correlations_below_diagonal_in_column(
+                                  known_values_indicator[c], i);
+                      jd(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                             stan::math::log(L_Omega_var[c](i, i));
+                }
+                //// ---- constant: the normal prior is on rho itself, so there is no log(2) term
+                ////      (was + n_tests * log(2); a constant, so the draws do not change):
+                //// prior_densities_L_Omega += (n_tests * stan::math::log(2) + jd.sum());
+                prior_densities_L_Omega += jd.sum();
               }
             }
-            target_AD += prior_densities_L_Omega;
+            //// target_AD += prior_densities_L_Omega;
+            //// ---- the correlation prior: left out of the gradient with exclude_priors, as it is left out
+            ////      of the log density (prior_densities):
+            if (exclude_priors == false) target_AD += prior_densities_L_Omega;
             prior_densities_L_Omega_double += prior_densities_L_Omega.val();
             target_AD.grad();
             grad_Omega_raw_priors_and_log_det_J = Omega_raw_vec_var.adj();
@@ -971,6 +1118,9 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
           }
           if (n_class > 1) {
             fn_MVP_prev_multi_pop_AD(u_prev_raw, prev_prior_a, prev_prior_b, n_pops, prior_densities_prev_double, log_det_J_prev_from_AD, grad_prev_raw);
+            //// ---- the prevalence prior is a prior: with exclude_priors its gradient is left out, as its
+            ////      density is left out of the log density (the Jacobian gradient is added below):
+            if (exclude_priors) grad_prev_raw.setZero();
             out_mat.segment(1 + n_us + n_corrs + n_covariates_total, n_pops) = grad_prev_raw;
           }
           if (J_grad_option == "autodiff") {
@@ -1061,7 +1211,7 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
           for (int nc = 0; nc < n_total_chunks; nc++) {
             if (chunk_threw[nc] != 0) {
                   fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T<vec>(out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref,
-                                                                                        grad_option, Model_args_as_cpp_struct);
+                                                                                        grad_option, Model_args_as_cpp_struct, n_chunks_multiplier);
                   return;
             }
           }
@@ -1134,22 +1284,59 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(   Ei
                                                                               const std::string grad_option,
                                                                               const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                               std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
-                                                                              const int n_threads_WCP
+                                                                              const int n_threads_WCP,
+                                                                            // const int n_chunks_multiplier = 1
+                                                                              const int n_chunks_multiplier = -1
 ) {
         (void)LC_MVP_ws_structs; (void)n_threads_WCP;
         const Vec vec = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
+        ////
+        //// n_chunks_multiplier: the value set in R (sample() argument
+        //// n_chunks_multiplier_for_PartialLog_log_scale_evaluation, default 3, carried in
+        //// Model_args_as_cpp_struct.PartialLog_n_chunks_multiplier) unless a caller passes a positive value. The
+        //// evaluation reads the nuisance values in the chunk layout of its own number of chunks and the nuisance
+        //// gradient is laid back into the stored layout (PartialLog_nuisance_chunk_relayout.hpp):
+        ////
+        const int n_chunks_multiplier_used = (n_chunks_multiplier > 0) ? n_chunks_multiplier :
+                                             Model_args_as_cpp_struct.PartialLog_n_chunks_multiplier;
+        fn_PartialLog_evaluation_in_its_own_chunk_layout(
+              out_mat,
+              theta_us_vec_ref,
+              static_cast<int>(y_ref.rows()),
+              static_cast<int>(y_ref.cols()),
+              Model_args_as_cpp_struct.Model_args_ints(3),
+              fn_vec_size_of_vect_type(Model_args_as_cpp_struct.Model_args_strings(0)),
+              n_chunks_multiplier_used,
+              [&]( Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat_of_evaluation,
+                   const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_of_evaluation) {
 #ifdef NICOSTAN_SERIAL_ORDER_LP_GRAD
         //// inside a step-size search with n_threads > 1 (g_n_threads_serial_order_lp_grad, declared in native_api.cpp.in, which
         //// also defines NICOSTAN_SERIAL_ORDER_LP_GRAD): the serial-order parallel evaluation below, bitwise the same result
-        if (g_n_threads_serial_order_lp_grad > 1) {
-              DISPATCH_VEC(vec, fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_serial_order_parallel_T,
-                           out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct,
-                           g_n_threads_serial_order_lp_grad);
-              return;
-        }
+        // if (g_n_threads_serial_order_lp_grad > 1) {
+        //       DISPATCH_VEC(vec,
+        //             fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_serial_order_parallel_T,
+        //                    out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option,
+        //                    Model_args_as_cpp_struct,
+        //                    g_n_threads_serial_order_lp_grad, n_chunks_multiplier);
+        //       return;
+        // }
+                    if (g_n_threads_serial_order_lp_grad > 1) {
+                          DISPATCH_VEC( vec,
+                    fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_serial_order_parallel_T,
+                                        out_mat_of_evaluation, theta_main_vec_ref, theta_us_of_evaluation, y_ref,
+                                        grad_option, Model_args_as_cpp_struct, g_n_threads_serial_order_lp_grad,
+                                        n_chunks_multiplier_used);
+                          return;
+                    }
 #endif
-        DISPATCH_VEC(vec, fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T,
-                     out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+        // DISPATCH_VEC(vec, fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T,
+        //              out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option,
+        //              Model_args_as_cpp_struct, n_chunks_multiplier);
+                    DISPATCH_VEC( vec,
+                                  fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T,
+                                  out_mat_of_evaluation, theta_main_vec_ref, theta_us_of_evaluation, y_ref,
+                                  grad_option, Model_args_as_cpp_struct, n_chunks_multiplier_used);
+              });
 }
 
 

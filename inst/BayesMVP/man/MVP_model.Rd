@@ -407,7 +407,7 @@ Sample from the model
   n_threads_WCP_sampling = 1,
   num_chunks_burnin = NULL,
   num_chunks_sampling = NULL,
-  reorder_cols_MVP = FALSE,
+  reorder_cols_MVP = NULL,
   diffusion_HMC_integrator = "kick_flow_kick",
   debug_burnin_timing = FALSE,
   debug = FALSE,
@@ -430,6 +430,8 @@ Sample from the model
   store_log_lik_trace = NULL,
   use_disk_path = "/tmp/hmc_traces",
   test_perm_override = NULL,
+  test_order_rule_for_reorder_cols_MVP = NULL,
+  n_chunks_multiplier_for_PartialLog_log_scale_evaluation = 3,
   run_in_fresh_R_process = TRUE
 )}\if{html}{\out{</div>}}
 }
@@ -577,6 +579,21 @@ buffer is grown to the full length on the first write, so e.g. 1 would cost exac
 
 \item{\code{diffusion_HMC_integrator}}{Joint diffusion integrator: "kick_flow_kick" (default) or "flow_kick_flow".}
 
+\item{\code{test_order_rule_for_reorder_cols_MVP}}{The rule that sets the test order after
+the pre-burnin when reorder_cols_MVP = TRUE:
+"most_nearly_deterministic_test_last_then_greedy_correlation_order" (the most nearly
+deterministic test last, the greedy correlation order for the other tests) or
+"greedy_correlation_order" (the rule used before this option existed). NULL (default,
+not set): the first rule for LC_MVP, the greedy rule for external Stan models. See
+R_fn_sample_model(). "test_with_largest_tail_category_distance_from_latent_mean_last_then_
+greedy_correlation_order" (binary and ordinal tests) is the default for LC_MVOP.}
+
+\item{\code{n_chunks_multiplier_for_PartialLog_log_scale_evaluation}}{A positive whole
+number (default 3): every PartialLog (log-scale) evaluation of the built-in models
+(the multi_attempts fallback and force_PartialLog = TRUE) uses this many times the
+number of chunks of the fit, with the nuisance values re-laid out exactly. See
+R_fn_sample_model().}
+
 \item{\code{run_in_fresh_R_process}}{TRUE (default) runs the complete burn-in/sampling fit in a fresh R process and returns the usual draws/diagnostics. Native worker memory is released when it exits. FALSE uses the calling session.}
 
 \item{\code{debug_burnin_timing}}{Collect burn-in timing and per-chain integrator step diagnostics. Default FALSE.}
@@ -683,6 +700,13 @@ The objects of this class are cloneable with this method.
 }
 }
 
-\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{KE}, \code{ChEES}, \code{CHESSR}, \code{CHESSR_log}, or \code{SNAPER}. Historical \code{ChEESR}/\code{ChESSR} spellings select \code{CHESSR}. Both rate variants score the main parameters in mandatory mass-matrix coordinates. \code{CHESSR} uses the direct per-trajectory rate gradient; \code{CHESSR_log} uses the established smoothed log ratio of the expected numerator to mean trajectory length. These jitter-averaging conventions differ. \code{SNAPER} learns its direction in the same metric coordinates. Joint nuisance diffusion is supported. The existing warm-up schedule is retained; this is not a reproduction of every SGA-HMC adaptation rule in the 2022 paper. The frozen BayesMVPlegacy package retains the previous API and defaults.}
+\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{ChEES},
+\code{CHESSR}, \code{CHESSR_log}, or \code{SNAPER}. Historical \code{ChEESR}/\code{ChESSR} spellings select
+\code{CHESSR}. Both rate variants score the main parameters in mandatory mass-matrix coordinates.
+\code{CHESSR} uses the direct per-trajectory rate gradient; \code{CHESSR_log} uses the established smoothed
+log ratio of the expected numerator to mean trajectory length. These jitter-averaging conventions differ.
+\code{SNAPER} learns its direction in the same metric coordinates. Joint nuisance diffusion is supported. The
+existing warm-up schedule is retained; this is not a reproduction of every SGA-HMC adaptation rule in the 2022
+paper. The frozen BayesMVPlegacy package retains the previous API and defaults.}
 
 \details{Burn-in uses fixed trajectory lengths by default while sampling randomises them. Set \code{randomize_tau_burnin} and \code{randomize_tau_sampling} explicitly to override these phase-specific defaults.}

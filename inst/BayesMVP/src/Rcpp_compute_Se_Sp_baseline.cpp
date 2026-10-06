@@ -28,6 +28,14 @@ using namespace Eigen;
 //'     Se[k]   = Phi( X_d' * beta[2][, t]  - C_d[k] )
 //'     Sp[k]   = Phi( C_nd[k] - X_nd' * beta[1][, t] )
 //'
+//' Test order: the traces (beta, C), n_covs_nd / n_covs_d, n_thr_per_ord_test and
+//' n_cat_per_test_in_trace_order are in the TRACE layout, i.e. the order of the columns of y the model was
+//' fitted to; n_cat_per_test_in_trace_order[s] = 2 for a binary test and the number of categories for an
+//' ordinal test (NULL = the binary tests first, then the ordinal tests: the layout the two counts describe on
+//' their own). test_perm[s] = the ORIGINAL test held by trace slot s (the run's test_perm; NULL = identity).
+//' baseline_case_nd / baseline_case_d and every output (Se/Sp/Fp, AUC, AUC differences, threshold map) are in
+//' ORIGINAL test order, with the binary and ordinal tests in any positions.
+//'
 // [[Rcpp::export]]
 List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,       // Flattened 3D array [n_iter, n_chains, n_beta_params]
                                            IntegerVector beta_dims,             // c(n_iter, n_chains, n_beta_params)
@@ -42,7 +50,9 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
                                            int n_binary_tests,
                                            int n_ordinal_tests,
                                            IntegerVector n_thr_per_ord_test,    // Length n_ordinal_tests
-                                           std::string C_param_name = "C_vec"
+                                           std::string C_param_name = "C_vec",
+                                           Nullable<IntegerVector> n_cat_per_test_in_trace_order = R_NilValue,
+                                           Nullable<IntegerVector> test_perm = R_NilValue
 ) {
    
          const int n_iter     = beta_dims[0];
@@ -52,14 +62,81 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          const int n_tests    = n_binary_tests + n_ordinal_tests;
          const int n_samples  = n_iter * n_chains;
          
+         // ---- Slot maps. Every per-test read used to assume that the binary tests come first in the traces
+         //      (t < n_binary_tests; t_ord = t - n_binary_tests; ordinal test t = n_binary_tests + t_ord),
+         //      and the outputs were in trace order. Now: the type of each TRACE slot comes from
+         //      n_cat_per_test_in_trace_order, and the outputs are indexed by ORIGINAL test, whose trace slot is
+         //      trace_slot_of_original_test[t] (the inverse of test_perm):
+         //
+         std::vector<int> ordinal_slot_of_trace_slot(n_tests, -1);      // -1 = binary test
+         {
+               int n_ordinal_slots_found = 0;
+               if (n_cat_per_test_in_trace_order.isNotNull()) {
+                     IntegerVector n_cat_per_test_values(n_cat_per_test_in_trace_order.get());
+                     if (n_cat_per_test_values.size() != n_tests) {
+                           Rcpp::stop("n_cat_per_test_in_trace_order must have length "
+                                      "n_binary_tests + n_ordinal_tests.");
+                     }
+                     for (int trace_slot = 0; trace_slot < n_tests; trace_slot++) {
+                           if (n_cat_per_test_values[trace_slot] > 2) {
+                                 ordinal_slot_of_trace_slot[trace_slot] = n_ordinal_slots_found;
+                                 n_ordinal_slots_found++;
+                           }
+                     }
+               } else {
+                     for (int trace_slot = n_binary_tests; trace_slot < n_tests; trace_slot++) {
+                           ordinal_slot_of_trace_slot[trace_slot] = n_ordinal_slots_found;
+                           n_ordinal_slots_found++;
+                     }
+               }
+               if (n_ordinal_slots_found != n_ordinal_tests) {
+                     Rcpp::stop("n_cat_per_test_in_trace_order holds a different number of ordinal tests (> 2 "
+                                "categories) than n_ordinal_tests.");
+               }
+         }
+         std::vector<int> trace_slot_of_original_test(n_tests);
+         for (int t = 0; t < n_tests; t++) trace_slot_of_original_test[t] = t;
+         if (test_perm.isNotNull()) {
+               IntegerVector test_perm_values(test_perm.get());
+               if (test_perm_values.size() != n_tests) {
+                     Rcpp::stop("test_perm must have length n_binary_tests + n_ordinal_tests.");
+               }
+               std::vector<int> times_seen(n_tests, 0);
+               for (int trace_slot = 0; trace_slot < n_tests; trace_slot++) {
+                     const int original_test = test_perm_values[trace_slot] - 1;
+                     if ((original_test < 0) || (original_test >= n_tests) || (times_seen[original_test] > 0)) {
+                           Rcpp::stop("test_perm must be a permutation of 1, ..., "
+                                      "n_binary_tests + n_ordinal_tests.");
+                     }
+                     times_seen[original_test]++;
+                     trace_slot_of_original_test[original_test] = trace_slot;
+               }
+         }
+         // ---- the ORIGINAL tests that are ordinal, in original order (the AUC outputs follow this order):
+         std::vector<int> original_test_of_original_ordinal_index;
+         for (int t = 0; t < n_tests; t++) {
+               if (ordinal_slot_of_trace_slot[trace_slot_of_original_test[t]] >= 0) {
+                     original_test_of_original_ordinal_index.push_back(t);
+               }
+         }
+         
          // ---- Build unified n_thr vector ----
          Eigen::Matrix<int, -1, 1> n_thr(n_tests);
          int n_thr_max = 1;
-         for (int t = 0; t < n_binary_tests; t++) {
-           n_thr(t) = 1;
+         // for (int t = 0; t < n_binary_tests; t++) {
+         //   n_thr(t) = 1;
+         // }
+         // for (int t_ord = 0; t_ord < n_ordinal_tests; t_ord++) {
+         //   n_thr(n_binary_tests + t_ord) = n_thr_per_ord_test[t_ord];
+         //   if (n_thr_per_ord_test[t_ord] > n_thr_max)
+         //     n_thr_max = n_thr_per_ord_test[t_ord];
+         // }
+         //// n_thr per ORIGINAL test (1 for a binary test); n_thr_max over the ordinal tests, as before:
+         for (int t = 0; t < n_tests; t++) {
+           const int ordinal_slot = ordinal_slot_of_trace_slot[trace_slot_of_original_test[t]];
+           n_thr(t) = (ordinal_slot < 0) ? 1 : n_thr_per_ord_test[ordinal_slot];
          }
          for (int t_ord = 0; t_ord < n_ordinal_tests; t_ord++) {
-           n_thr(n_binary_tests + t_ord) = n_thr_per_ord_test[t_ord];
            if (n_thr_per_ord_test[t_ord] > n_thr_max)
              n_thr_max = n_thr_per_ord_test[t_ord];
          }
@@ -92,16 +169,21 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          
          // ---- Pre-resolve all parameter indices (avoid string lookups in hot loop) ----
          
-         // Beta: beta_idx_nd[t][j] = column in beta_mat for beta[1, j+1, t+1]
-         //       beta_idx_d[t][j]  = column in beta_mat for beta[2, j+1, t+1]
+         // Beta: beta_idx_nd[t][j] = column in beta_mat for beta[1, j+1, s+1]
+         //       beta_idx_d[t][j]  = column in beta_mat for beta[2, j+1, s+1]
+         //       for ORIGINAL test t held by trace slot s = trace_slot_of_original_test[t]
          std::vector<Eigen::Matrix<int, -1, 1>> beta_idx_nd(n_tests);
          std::vector<Eigen::Matrix<int, -1, 1>> beta_idx_d(n_tests);
          
          for (int t = 0; t < n_tests; t++) {
-           const int t1 = t + 1;
+           // const int t1 = t + 1;
+           const int trace_slot = trace_slot_of_original_test[t];
+           const int t1 = trace_slot + 1;
            
-           beta_idx_nd[t].resize(n_covs_nd[t]);
-           for (int j = 0; j < n_covs_nd[t]; j++) {
+           // beta_idx_nd[t].resize(n_covs_nd[t]);
+           // for (int j = 0; j < n_covs_nd[t]; j++) {
+           beta_idx_nd[t].resize(n_covs_nd[trace_slot]);
+           for (int j = 0; j < n_covs_nd[trace_slot]; j++) {
              std::string pname = "beta[1," + std::to_string(j + 1) + "," + std::to_string(t1) + "]";
              auto it = beta_map.find(pname);
              if (it != beta_map.end()) {
@@ -111,8 +193,10 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
              }
            }
            
-           beta_idx_d[t].resize(n_covs_d[t]);
-           for (int j = 0; j < n_covs_d[t]; j++) {
+           // beta_idx_d[t].resize(n_covs_d[t]);
+           // for (int j = 0; j < n_covs_d[t]; j++) {
+           beta_idx_d[t].resize(n_covs_d[trace_slot]);
+           for (int j = 0; j < n_covs_d[trace_slot]; j++) {
              std::string pname = "beta[2," + std::to_string(j + 1) + "," + std::to_string(t1) + "]";
              auto it = beta_map.find(pname);
              if (it != beta_map.end()) {
@@ -160,8 +244,11 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          for (int t = 0; t < n_tests; t++) {
            NumericVector rvec_nd = baseline_case_nd[t];
            NumericVector rvec_d  = baseline_case_d[t];
-           X_nd[t] = Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[t]);
-           X_d[t]  = Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[t]);
+           // X_nd[t] = Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[t]);
+           // X_d[t]  = Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[t]);
+           const int trace_slot = trace_slot_of_original_test[t];
+           X_nd[t] = Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[trace_slot]);
+           X_d[t]  = Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[trace_slot]);
          }
          
          // ---- Allocate output: [n_samples, n_total_slots] ----
@@ -172,17 +259,21 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          // ---- Vectorised computation per test ----
          for (int t = 0; t < n_tests; t++) {
            
-           const bool is_binary = (t < n_binary_tests);
+           // const bool is_binary = (t < n_binary_tests);
+           const int trace_slot = trace_slot_of_original_test[t];
+           const bool is_binary = (ordinal_slot_of_trace_slot[trace_slot] < 0);
            const int col_base = slot_offset(t);
            
            // Xbeta_nd[s] = sum_j X_nd[t](j) * beta_mat(s, beta_idx_nd[t](j))
            Eigen::Matrix<double, -1, 1> Xbeta_nd = Eigen::Matrix<double, -1, 1>::Zero(n_samples);
-           for (int j = 0; j < n_covs_nd[t]; j++) {
+           // for (int j = 0; j < n_covs_nd[t]; j++) {
+           for (int j = 0; j < n_covs_nd[trace_slot]; j++) {
              Xbeta_nd.noalias() += X_nd[t](j) * beta_mat.col(beta_idx_nd[t](j));
            }
            
            Eigen::Matrix<double, -1, 1> Xbeta_d = Eigen::Matrix<double, -1, 1>::Zero(n_samples);
-           for (int j = 0; j < n_covs_d[t]; j++) {
+           // for (int j = 0; j < n_covs_d[t]; j++) {
+           for (int j = 0; j < n_covs_d[trace_slot]; j++) {
              Xbeta_d.noalias() += X_d[t](j) * beta_mat.col(beta_idx_d[t](j));
            }
            
@@ -198,7 +289,8 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
              
            } else {
              
-                 const int t_ord = t - n_binary_tests;
+                 // const int t_ord = t - n_binary_tests;
+                 const int t_ord = ordinal_slot_of_trace_slot[trace_slot];   // cutpoint block in the trace
                  const int n_thr_t = n_thr_per_ord_test[t_ord];
                  
                  for (int k = 0; k < n_thr_t; k++) {
@@ -275,9 +367,12 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
                
                for (int t_ord = 0; t_ord < n_ordinal_tests; t_ord++) {
                      
-                     const int t = n_binary_tests + t_ord;
+                     // const int t = n_binary_tests + t_ord;
+                     // const int col_base = slot_offset(t);
+                     // const int n_thr_t = n_thr_per_ord_test[t_ord];
+                     const int t = original_test_of_original_ordinal_index[t_ord];
                      const int col_base = slot_offset(t);
-                     const int n_thr_t = n_thr_per_ord_test[t_ord];
+                     const int n_thr_t = n_thr(t);
                      
                      for (int s = 0; s < n_samples; s++) {
                        std::vector<std::pair<double, double>> pts;

@@ -107,6 +107,8 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
         const bool corr_force_positive = Model_args_as_cpp_struct.Model_args_bools(2);
         const bool corr_prior_beta     = Model_args_as_cpp_struct.Model_args_bools(3);
         const bool corr_prior_norm     = Model_args_as_cpp_struct.Model_args_bools(4);
+        fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
+                                                                 "MVP_lp_grad_MD_AD_fns.hpp");
         ////
         const int n_class  = Model_args_as_cpp_struct.Model_args_ints(1);
         const int n_chunks = Model_args_as_cpp_struct.Model_args_ints(3);
@@ -262,7 +264,10 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
                       for (int j = 0; j < i; ++j) {
                         if (known_values_indicator[c](i, j) == 1) {
                           stan::math::var known_val_prior_ij = stan::math::normal_lpdf(Omega_var[c](i, j), 0.0, 10.0);
-                          target_AD += known_val_prior_ij;
+                          //// target_AD += known_val_prior_ij;
+                          //// ---- a prior: left out of the gradient with exclude_priors, as it is left out of
+                          ////      the log density:
+                          if (exclude_priors == false) target_AD += known_val_prior_ij;
                           prior_densities_L_Omega_double += known_val_prior_ij.val();
                         }
                       }
@@ -276,23 +281,82 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
               for (int c = 0; c < n_class; ++c) {
                     if ((corr_prior_beta == false) && (corr_prior_norm == false)) {
                       prior_densities_L_Omega += stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
+                      //// ---- with known (fixed) correlations, the terms of the known pairs in the
+                      ////      Jacobian that lkj_corr_cholesky_lpdf contains are removed (the prior is
+                      ////      on the free correlations):
+                      fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
+                            prior_densities_L_Omega, L_Omega_var[c], known_values_indicator[c]);
                     } else if ((corr_prior_beta == true) && (corr_prior_norm == false)) {
                       for (int i = 1; i < n_tests; i++)
                         for (int j = 0; j < i; j++)
                           prior_densities_L_Omega += stan::math::beta_lpdf((Omega_var[c](i, j) + 1) / 2, prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
                       Eigen::Matrix<stan::math::var, -1, 1> jacobian_diag_elements(n_tests);
-                      for (int i = 0; i < n_tests; ++i) jacobian_diag_elements(i) = (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
-                      prior_densities_L_Omega += (n_tests * stan::math::log(2) + jacobian_diag_elements.sum());
+                      //// ---- log Jacobian of the map from the free entries of L_Omega to the off-diagonal
+                      ////      entries of Omega: sum over i of (n_tests - 1 - i) * log(L_Omega(i, i)) for
+                      ////      0-indexed i, i.e. prod_r L_rr^(K - r) for 1-indexed r. The exponent was
+                      ////      n_tests + 1 - (i + 1): one power of L_Omega(i, i) too many, i.e. an extra
+                      ////      det(Omega)^(1/2) factor that pulled the correlations towards 0.
+                      //// for (int i = 0; i < n_tests; ++i) jacobian_diag_elements(i) = (n_tests + 1 - (i + 1)) *
+                      ////       stan::math::log(L_Omega_var[c](i, i));
+                      //// ---- with known (fixed) correlations the map is to the FREE off-diagonal
+                      ////      correlations only: the power of L_Omega(i, i) is the number of free
+                      ////      correlations below the diagonal in column i (n_tests - 1 - i when no
+                      ////      correlation is known):
+                      //// for (int i = 0; i < n_tests; ++i) {
+                      ////       jacobian_diag_elements(i) = (n_tests - 1 - i) *
+                      ////             stan::math::log(L_Omega_var[c](i, i));
+                      //// }
+                      for (int i = 0; i < n_tests; ++i) {
+                            const int number_of_free_correlations_below_diagonal_in_column_i =
+                                  fn_number_of_free_correlations_below_diagonal_in_column(
+                                        known_values_indicator[c], i);
+                            jacobian_diag_elements(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                                   stan::math::log(L_Omega_var[c](i, i));
+                      }
+                      //// ---- constant: (rho + 1) / 2 ~ Beta(a, b) gives rho the density
+                      ////      Beta((rho + 1) / 2 | a, b) / 2, i.e. -log(2) per correlation and
+                      ////      n_tests * (n_tests - 1) / 2 of them per class (was + n_tests * log(2); a
+                      ////      constant, so the draws do not change):
+                      //// prior_densities_L_Omega += (n_tests * stan::math::log(2) +
+                      ////                             jacobian_diag_elements.sum());
+                      prior_densities_L_Omega += (- 0.5 * n_tests * (n_tests - 1) * stan::math::log(2.0) +
+                                                  jacobian_diag_elements.sum());
                     } else if ((corr_prior_beta == false) && (corr_prior_norm == true)) {
                       for (int i = 1; i < n_tests; i++)
                         for (int j = 0; j < i; j++)
                           prior_densities_L_Omega += stan::math::normal_lpdf(Omega_var[c](i, j), prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
                       Eigen::Matrix<stan::math::var, -1, 1> jacobian_diag_elements(n_tests);
-                      for (int i = 0; i < n_tests; ++i) jacobian_diag_elements(i) = (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
-                      prior_densities_L_Omega += (n_tests * stan::math::log(2) + jacobian_diag_elements.sum());
+                      //// ---- log Jacobian of the map from the free entries of L_Omega to the off-diagonal
+                      ////      entries of Omega, as in the corr_prior_beta branch above (the exponent was
+                      ////      n_tests + 1 - (i + 1), one power of L_Omega(i, i) too many):
+                      //// for (int i = 0; i < n_tests; ++i) jacobian_diag_elements(i) = (n_tests + 1 - (i + 1)) *
+                      ////       stan::math::log(L_Omega_var[c](i, i));
+                      //// ---- with known (fixed) correlations the map is to the FREE off-diagonal
+                      ////      correlations only: the power of L_Omega(i, i) is the number of free
+                      ////      correlations below the diagonal in column i (n_tests - 1 - i when no
+                      ////      correlation is known):
+                      //// for (int i = 0; i < n_tests; ++i) {
+                      ////       jacobian_diag_elements(i) = (n_tests - 1 - i) *
+                      ////             stan::math::log(L_Omega_var[c](i, i));
+                      //// }
+                      for (int i = 0; i < n_tests; ++i) {
+                            const int number_of_free_correlations_below_diagonal_in_column_i =
+                                  fn_number_of_free_correlations_below_diagonal_in_column(
+                                        known_values_indicator[c], i);
+                            jacobian_diag_elements(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                                   stan::math::log(L_Omega_var[c](i, i));
+                      }
+                      //// ---- constant: the normal prior is on rho itself, so there is no log(2) term
+                      ////      (was + n_tests * log(2); a constant, so the draws do not change):
+                      //// prior_densities_L_Omega += (n_tests * stan::math::log(2) +
+                      ////                             jacobian_diag_elements.sum());
+                      prior_densities_L_Omega += jacobian_diag_elements.sum();
                     }
               }
-              target_AD += prior_densities_L_Omega;
+              //// target_AD += prior_densities_L_Omega;
+              //// ---- the correlation prior: left out of the gradient with exclude_priors, as it is left out
+              ////      of the log density (prior_densities):
+              if (exclude_priors == false) target_AD += prior_densities_L_Omega;
               prior_densities_L_Omega_double += prior_densities_L_Omega.val();
 
               target_AD.grad();
@@ -303,6 +367,9 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
 
           if (n_class > 1) {
               fn_MVP_prev_multi_pop_AD(u_prev_raw, prev_prior_a, prev_prior_b, n_pops, prior_densities_prev_double, log_det_J_prev_from_AD, grad_prev_raw);
+              //// ---- the prevalence prior is a prior: with exclude_priors its gradient is left out, as its
+              ////      density is left out of the log density (the Jacobian gradient is added below):
+              if (exclude_priors) grad_prev_raw.setZero();
               const int prev_start = 1 + n_us + n_corrs + n_covariates_total;
               out_mat.segment(prev_start, n_pops) = grad_prev_raw;
           }

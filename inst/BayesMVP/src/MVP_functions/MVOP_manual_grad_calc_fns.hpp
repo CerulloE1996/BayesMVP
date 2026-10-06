@@ -411,7 +411,12 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
                            
                            // dZ_dmu_neg
                            double numer = (1.0 - u_array(n, t)) * phi_Bound_Z(n, t) + u_array(n, t) * phi_Upper_Bound_Z(n, t);
-                           dZ_dmu_neg(n, t) = (numer == 0.0) ? 0.0 : numer * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                           // dZ_dmu_neg(n, t) = (numer == 0.0) ? 0.0 :
+                           //                    numer * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                           //// 0 for an exact zero term only when 1 / phi(Z) is finite (0 x Inf is a failed
+                           //// evaluation, which must reach the multi-attempt fallback):
+                           dZ_dmu_neg(n, t) = ((numer == 0.0) && std::isfinite(phi_Z_recip(n, t))) ? 0.0 :
+                                              numer * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
                            
                            // dphi_times_bz = (phi(lbz)*lbz - phi(ubz)*ubz) / L
                            // with guards: x*phi(x) -> 0 as x -> +-Inf
@@ -426,7 +431,11 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
                            // double phi_lbz_lbz = std::isinf(lbz) ? 0.0 : phi_Bound_Z(n, t) * lbz;
                            // double phi_ubz_ubz = std::isinf(ubz) ? 0.0 : phi_Upper_Bound_Z(n, t) * ubz;
                            double numer_bz = (1.0 - u_array(n, t)) * phi_lbz_lbz + u_array(n, t) * phi_ubz_ubz;
-                           dZ_times_bz(n, t) = (numer_bz == 0.0) ? 0.0 : numer_bz * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                           // dZ_times_bz(n, t) = (numer_bz == 0.0) ? 0.0 :
+                           //                     numer_bz * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
+                           //// (as above)
+                           dZ_times_bz(n, t) = ((numer_bz == 0.0) && std::isfinite(phi_Z_recip(n, t))) ? 0.0 :
+                                               numer_bz * phi_Z_recip(n, t) * L_Omega_recip_double(t, t);
                        
                      }
                  
@@ -549,14 +558,19 @@ ALWAYS_INLINE void fn_MVOP_compute_cutpoint_grad(  const int c,
                           // C_j is UPPER bound for this observation
                           dphi_direct_Cj(i) = phi_Upper_Bound_Z(i, t) * L_tt_inv;
                           double uph = u_array(i, t) * phi_Upper_Bound_Z(i, t);
-                          dZ_direct_Cj(i) = (uph == 0.0 || !pzr_ok) ? 0.0 : uph * pzr * L_tt_inv;
+                          // dZ_direct_Cj(i) = (uph == 0.0 || !pzr_ok) ? 0.0 : uph * pzr * L_tt_inv;
+                          //// 0 only for an exact zero term; a non-finite 1 / phi(Z) (phi(Z) underflowed) makes
+                          //// the term non-finite, so that the failed evaluation reaches the multi-attempt
+                          //// fallback:
+                          dZ_direct_Cj(i) = (uph == 0.0 && pzr_ok) ? 0.0 : uph * pzr * L_tt_inv;
                       
                     } else if (y_i == j + 2) {
                       
                           // C_j is LOWER bound for this observation
                           dphi_direct_Cj(i) = -phi_Bound_Z(i, t) * L_tt_inv;
                           double omup = (1.0 - u_array(i, t)) * phi_Bound_Z(i, t);
-                          dZ_direct_Cj(i) = (omup == 0.0 || !pzr_ok) ? 0.0 : omup * pzr * L_tt_inv;
+                          // dZ_direct_Cj(i) = (omup == 0.0 || !pzr_ok) ? 0.0 : omup * pzr * L_tt_inv;
+                          dZ_direct_Cj(i) = (omup == 0.0 && pzr_ok) ? 0.0 : omup * pzr * L_tt_inv;   //// as above
                       
                     }
                     // else: C_j doesn't affect this observation -> stays zero
@@ -885,13 +899,16 @@ inline Eigen::Matrix<double, -1, 1> chain_rule_C_to_C_raw( const Eigen::Ref<cons
               double exp_val = std::exp(C_raw_vec(k));
               ////
               double result = exp_val * suffix_sum;
-              if ((std::isinf(result)) || (std::isnan(result))) { 
-                grad_wrt_C_raw(k) = 0.0;
-              } else { 
-                grad_wrt_C_raw(k) = result;
-              }
+              // if ((std::isinf(result)) || (std::isnan(result))) { 
+              //   grad_wrt_C_raw(k) = 0.0;
+              // } else { 
+              //   grad_wrt_C_raw(k) = result;
+              // }
               // grad_wrt_C_raw(k) = std::isfinite(result) ? result : 0.0;
               // grad_wrt_C_raw(k) = exp_val * suffix_sum;
+              //// a non-finite cutpoint gradient is returned as it is (setting it to 0 hid a failed evaluation
+              //// from the multi-attempt chain, which then never ran PartialLog / autodiff for it):
+              grad_wrt_C_raw(k) = result;
               
               if (g_debug_cutpoint_grads && (std::isnan(grad_wrt_C_raw(k)) || std::isinf(grad_wrt_C_raw(k)))) {
                 std::cout << "CHAIN_RULE NaN: k=" << k

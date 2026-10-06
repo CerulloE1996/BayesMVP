@@ -41,6 +41,8 @@ inline  void                             fn_lp_and_grad_MVP_Pinkney_AD_log_scale
         const bool corr_force_positive = Model_args_as_cpp_struct.Model_args_bools(2);
         const bool corr_prior_beta = Model_args_as_cpp_struct.Model_args_bools(3);
         const bool corr_prior_norm = Model_args_as_cpp_struct.Model_args_bools(4);
+        fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
+                                                                 "MVP_lp_grad_AD_fns.hpp");
         const bool handle_numerical_issues = Model_args_as_cpp_struct.Model_args_bools(5);
         const bool skip_checks_exp =   Model_args_as_cpp_struct.Model_args_bools(6);
         const bool skip_checks_log =   Model_args_as_cpp_struct.Model_args_bools(7);
@@ -95,7 +97,18 @@ inline  void                             fn_lp_and_grad_MVP_Pinkney_AD_log_scale
         const std::vector<Eigen::Matrix<double, -1, -1>>   prior_coeffs_sd   =  Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[1]; 
         const std::vector<Eigen::Matrix<double, -1, -1>>   prior_for_corr_a   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[2]; 
         const std::vector<Eigen::Matrix<double, -1, -1>>   prior_for_corr_b   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[3]; 
-        const std::vector<Eigen::Matrix<double, -1, -1>>   lb_corr   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[4]; 
+        // const std::vector<Eigen::Matrix<double, -1, -1>>   lb_corr   =
+        //       Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[4];
+        std::vector<Eigen::Matrix<double, -1, -1>>   lb_corr   =
+              Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[4];
+        //// ---- corr_force_positive: the lower bound of every correlation is 0, as in the manual-derivative
+        ////      paths (the flag was read here but not applied):
+        if (corr_force_positive == true) {
+              for (int c = 0; c < static_cast<int>(lb_corr.size()); ++c)
+                    for (int i = 1; i < lb_corr[c].rows(); ++i)
+                          for (int j = 0; j < i; ++j)
+                                lb_corr[c](i, j) = 0.0;
+        }
         const std::vector<Eigen::Matrix<double, -1, -1>>   ub_corr   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[5]; 
         const std::vector<Eigen::Matrix<double, -1, -1>>   known_values    = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[6]; 
         
@@ -236,7 +249,11 @@ inline  void                             fn_lp_and_grad_MVP_Pinkney_AD_log_scale
                 target_AD += stan::math::log(deriv_p);
                 
                 // Prior on prev for this population
-                target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
+                //// target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
+                //// ---- a prior: left out with exclude_priors, as in the manual-derivative paths:
+                if (exclude_priors == false) {
+                      target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
+                }
               
             }
           
@@ -304,7 +321,9 @@ inline  void                             fn_lp_and_grad_MVP_Pinkney_AD_log_scale
                 for (int j = 0; j < i; ++j) {   ////   for (j in 1:(i - 1)) {
                   if (known_values_indicator[c](i, j) == 1) {
                     stan::math::var known_val_prior_ij = stan::math::normal_lpdf( Omega_var[c](i, j), 0.0, 10.0 ); //// to ensure any corr's we aren't estimating dont cause divergences
-                    target_AD += known_val_prior_ij;
+                    //// target_AD += known_val_prior_ij;
+                    //// ---- a prior: left out with exclude_priors, as in the manual-derivative paths:
+                    if (exclude_priors == false) target_AD += known_val_prior_ij;
                   }
                 }
               }
@@ -322,15 +341,29 @@ inline  void                             fn_lp_and_grad_MVP_Pinkney_AD_log_scale
         // }
         
         ///////////////////////////////////////////////////////////////////////// prior densities
+        //// ---- priors: left out with exclude_priors, as in the manual-derivative paths:
+        if (exclude_priors == false) {
         for (int c = 0; c < n_class; c++) {
           for (int t = 0; t < n_tests; t++) {
             for (int k = 0; k < n_covariates_per_outcome_vec(c, t); k++) {
               target_AD  += stan::math::normal_lpdf(beta_all_tests_class_var[c](k, t), prior_coeffs_mean[c](k, t), prior_coeffs_sd[c](k, t));
             }
           }
-          target_AD +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c)) ;
+          //// target_AD +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c)) ;
+          //// ---- the correlation prior, as in the manual-derivative paths: LKJ (with the Jacobian terms of
+          ////      known correlations removed), or a Beta / normal prior on every off-diagonal correlation:
+          if ((corr_prior_beta == false) && (corr_prior_norm == false)) {
+                target_AD +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c)) ;
+                fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
+                      target_AD, L_Omega_var[c], known_values_indicator[c]);
+          } else {
+                target_AD += fn_log_density_of_beta_or_normal_prior_on_correlations_on_free_cholesky_entries(
+                      L_Omega_var[c], Omega_var[c], corr_prior_beta, prior_for_corr_a[c],
+                      prior_for_corr_b[c], known_values_indicator[c]);
+          }
           // target_AD += (lkj_cholesky_eta(c) - 1.0) * log_det_J_Omega(c);  // (0, 1) holds log_det_C
         }
+        } //// end of if (exclude_priors == false)
         /////////////////////////////////////////////////////////////////////////////////////////////////////////// likelihood
         Eigen::Matrix<stan::math::var, -1, 1>	   y1(n_tests);
         Eigen::Matrix<stan::math::var, -1, 1>	   lp(n_class);

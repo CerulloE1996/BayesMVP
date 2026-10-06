@@ -19,6 +19,14 @@
 #' @param n_thr_per_ord_test  Integer vector (length n_ordinal_tests) of thresholds per ordinal test
 #' @param C_param_name  Character: "C_vec" (default)
 #' @param test_names  Optional character vector of test names (length n_tests)
+#' @param n_cat_per_test  Optional integer vector (length n_tests): 2 for a binary test, the number of categories
+#'   for an ordinal test, in the TRACE layout (the order of the columns of y the model was fitted to, i.e. the
+#'   model's own n_cat_per_test). NULL = the binary tests first, then the ordinal tests.
+#' @param test_perm  Optional permutation (length n_tests): trace slot s holds ORIGINAL test test_perm[s] (the
+#'   run's test_perm). NULL = identity.
+#' @details trace_beta, trace_C, n_covs_per_outcome, n_thr_per_ord_test and n_cat_per_test are in the TRACE
+#'   layout; baseline_case_nd, baseline_case_d, test_names and every output are in ORIGINAL test order, with the
+#'   binary and ordinal tests in any positions (the AUC outputs follow the original order of the ordinal tests).
 #' @return List with Se_baseline, Sp_baseline, Fp_baseline arrays and summary tibbles
 #' @export
 R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
@@ -31,12 +39,25 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
                                                 n_thr_per_ord_test,
                                                 C_param_name = "C_vec",
                                                 test_names = NULL,
-                                                debugging = FALSE
+                                                debugging = FALSE,
+                                                n_cat_per_test = NULL,
+                                                test_perm = NULL
 ) {
   
         require(tibble)
         
         n_tests <- n_binary_tests + n_ordinal_tests
+        ##
+        ## ---- Slot type of each ORIGINAL test (the outputs are in original test order): original test t sits in
+        ##      trace slot order(test_perm)[t]. With n_cat_per_test NULL, the traces hold the binary tests first:
+        ##
+        n_cat_per_trace_slot <-  if (is.null(n_cat_per_test)) {
+                                       c(rep(2, n_binary_tests), n_thr_per_ord_test + 1)
+                                 } else {
+                                       n_cat_per_test
+                                 }
+        trace_slot_of_original_test <-  if (is.null(test_perm)) seq_len(n_tests) else order(test_perm)
+        is_ordinal_original_test    <-  (n_cat_per_trace_slot[trace_slot_of_original_test] > 2)
         
         ## ---- Validate ----
         stopifnot(is.array(trace_beta) && length(dim(trace_beta)) == 3)
@@ -76,7 +97,13 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
                                                         n_binary_tests     = n_binary_tests,
                                                         n_ordinal_tests    = n_ordinal_tests,
                                                         n_thr_per_ord_test = n_thr_per_ord_test,
-                                                        C_param_name       = C_param_name)
+                                                        C_param_name       = C_param_name,
+                                                        n_cat_per_test_in_trace_order =
+                                                              if (is.null(n_cat_per_test)) NULL else
+                                                                    as.integer(n_cat_per_test),
+                                                        test_perm          =
+                                                              if (is.null(test_perm)) NULL else
+                                                                    as.integer(test_perm))
         
         ## ---- Reshape 4D arrays and add dimnames ----
         n_thr_max <- rcpp_out$n_thr_max
@@ -86,11 +113,17 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
         Sp_baseline <- array(rcpp_out$Sp_baseline, dim = c(n_iter, n_chains, n_tests, n_thr_max))
         Fp_baseline <- array(rcpp_out$Fp_baseline, dim = c(n_iter, n_chains, n_tests, n_thr_max))
         
+        # if (is.null(test_names)) {
+        #   test_names <- c(
+        #     if (n_binary_tests > 0)  paste0("Bin", 1:n_binary_tests)  else character(0),
+        #     if (n_ordinal_tests > 0) paste0("Ord", 1:n_ordinal_tests) else character(0)
+        #   )
+        # }
+        ## ---- default names in ORIGINAL test order (Bin1, Bin2, ... and Ord1, Ord2, ... wherever they sit):
         if (is.null(test_names)) {
-          test_names <- c(
-            if (n_binary_tests > 0)  paste0("Bin", 1:n_binary_tests)  else character(0),
-            if (n_ordinal_tests > 0) paste0("Ord", 1:n_ordinal_tests) else character(0)
-          )
+              test_names <-  character(n_tests)
+              test_names[!is_ordinal_original_test] <-  paste0("Bin", seq_len(sum(!is_ordinal_original_test)))
+              test_names[is_ordinal_original_test]  <-  paste0("Ord", seq_len(sum(is_ordinal_original_test)))
         }
         
         dn <- list(
@@ -133,7 +166,8 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
         if (n_ordinal_tests > 0 && !is.null(rcpp_out$AUC_baseline)) {
           
           AUC_baseline <- array(rcpp_out$AUC_baseline, dim = c(n_iter, n_chains, n_ordinal_tests))
-          ord_names <- test_names[(n_binary_tests + 1):n_tests]
+          # ord_names <- test_names[(n_binary_tests + 1):n_tests]
+          ord_names <- test_names[is_ordinal_original_test]   ## the ordinal tests in original order
           dimnames(AUC_baseline) <- list(
             iteration = as.character(1:n_iter),
             chain     = as.character(1:n_chains),

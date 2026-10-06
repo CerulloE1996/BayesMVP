@@ -759,7 +759,11 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
 
     const int t = n_tests - 2;
     
-    if (n_problem_array[t] > 0) {
+    //// if (n_problem_array[t] > 0) {
+    //// ---- (n_tests >= 3): this block needs a third-to-last test. With n_tests = 2, t - 1 = -1: the block read
+    ////      column -1 and wrote u_grad column n_tests - 3 = -1, outside the chunk (heap corruption). For
+    ////      n_tests = 2 the likelihood part of the nuisance gradient is complete after the term above.
+    if ((n_tests >= 3) && (n_problem_array[t] > 0)) {
     
         //// resize containers to match problem index
         log_abs_z_grad_term.resize(n_problem_array[t], n_tests);

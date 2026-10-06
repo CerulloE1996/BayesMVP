@@ -135,6 +135,220 @@ compute_optimal_test_order <- function(Omega_hat_list) {
 
 
 
+#' Tail extremeness of each test in the built-in latent class MVP model
+#'
+#' For test t, the sum over classes of the mean absolute probit linear predictor, i.e. how far in the tails
+#' the class-conditional latent mean of the test sits (for an intercept-only model, |intercept| summed over
+#' classes). A test with a large value is nearly deterministic in some class: its rare "error" observations
+#' need nuisance values in a steep tail of the inverse normal transform.
+#'
+#' @param theta_main main-block parameter vector in the built-in LC_MVP layout: n_class x n_tests x
+#'   (n_tests - 1) / 2 correlation parameters, then the coefficients by class, test and covariate, then the
+#'   prevalence parameters.
+#' @param n_tests,n_class model dimensions.
+#' @param n_covariates_per_outcome_mat n_class x n_tests matrix of coefficient counts.
+#' @param X NULL (intercept-only) or the list (classes) of lists (tests) of covariate matrices.
+#' @export
+compute_tail_extremeness_per_test_LC_MVP <-  function( theta_main,
+                                                       n_tests,
+                                                       n_class,
+                                                       n_covariates_per_outcome_mat,
+                                                       X = NULL
+) {
+
+        n_corrs <-  n_class * n_tests * (n_tests - 1) / 2
+        tail_extremeness_per_test <-  numeric(n_tests)
+        ##
+        coefficient_index <-  n_corrs
+        for (class_index in seq_len(n_class)) {
+              for (test_index in seq_len(n_tests)) {
+                    n_coefficients <-  n_covariates_per_outcome_mat[class_index, test_index]
+                    coefficients <-  theta_main[coefficient_index + seq_len(n_coefficients)]
+                    coefficient_index <-  coefficient_index + n_coefficients
+                    ##
+                    if (is.null(X) || (n_coefficients == 1)) {
+                          mean_absolute_linear_predictor <-  abs(coefficients[1])
+                    } else {
+                          covariates <-  X[[class_index]][[test_index]][, seq_len(n_coefficients), drop = FALSE]
+                          mean_absolute_linear_predictor <-  mean(abs(as.vector(covariates %*% coefficients)))
+                    }
+                    tail_extremeness_per_test[test_index] <-  tail_extremeness_per_test[test_index] +
+                                                              mean_absolute_linear_predictor
+              }
+        }
+        ##
+        return(tail_extremeness_per_test)
+
+}
+
+
+#' Tail-category distance from the latent mean of each test (binary and ordinal tests)
+#'
+#' The latent-scale truncation interval of category k of a test is (C_{k-1}, C_k], with C_0 = -Inf and
+#' C_K = +Inf (a binary test has the single cut C_1 = 0). For a person with class-conditional latent mean m (the
+#' probit linear predictor), a category whose interval does not contain m is a tail category: an observation in
+#' it needs a nuisance value in the tail of the inverse normal transform of the GHK construction, at least
+#' d_k = max(0, C_{k-1} - m, m - C_k) from the latent mean, where that transform is steep. For each test, class
+#' and person, the tail-category distance is the mean of d_k over the tail categories, weighted by their
+#' probabilities p_k = Phi(C_k - m) - Phi(C_{k-1} - m) (0 when no category is a tail category); the value of the
+#' test is the sum over classes of its mean over persons. For a binary test the only tail category is the rarer
+#' outcome, at distance |m|, so the value is exactly that of compute_tail_extremeness_per_test_LC_MVP() (the mean
+#' absolute probit linear predictor summed over classes): binary and ordinal tests are measured on the same
+#' scale.
+#'
+#' @param theta_main main-block parameter vector of the built-in LC_MVP / LC_MVOP layout: n_class x n_tests x
+#'   (n_tests - 1) / 2 correlation parameters, then the coefficients by class, test and covariate (then the
+#'   prevalence and, for LC_MVOP, the cutpoint parameters, which are not read here).
+#' @param n_tests,n_class model dimensions.
+#' @param n_covariates_per_outcome_mat n_class x n_tests matrix of coefficient counts.
+#' @param X NULL (intercept-only) or the list (classes) of lists (tests) of covariate matrices.
+#' @param cutpoints_per_class_and_test list (classes) of lists (tests) of the latent-scale cutpoints C_1 < ... <
+#'   C_{K-1} of each test (0 for a binary test), e.g. from extract_cutpoints_per_class_and_test_via_bridgestan().
+#' @export
+compute_tail_category_distance_from_latent_mean_per_test <-  function( theta_main,
+                                                                       n_tests,
+                                                                       n_class,
+                                                                       n_covariates_per_outcome_mat,
+                                                                       X = NULL,
+                                                                       cutpoints_per_class_and_test
+) {
+
+        ##
+        ## ---- log probability of the latent interval (lower, upper] under N(0, 1), stable in both tails:
+        ##
+        fn_log_probability_of_standard_normal_interval <-  function(lower, upper) {
+              lower_tail <-  (upper <= 0)
+              log_upper_part <-  ifelse(lower_tail, stats::pnorm(upper, log.p = TRUE),
+                                                    stats::pnorm(lower, lower.tail = FALSE, log.p = TRUE))
+              log_lower_part <-  ifelse(lower_tail, stats::pnorm(lower, log.p = TRUE),
+                                                    stats::pnorm(upper, lower.tail = FALSE, log.p = TRUE))
+              return(log_upper_part + log1p(-exp(log_lower_part - log_upper_part)))
+        }
+        ##
+        n_corrs <-  n_class * n_tests * (n_tests - 1) / 2
+        tail_category_distance_per_test <-  numeric(n_tests)
+        ##
+        coefficient_index <-  n_corrs
+        for (class_index in seq_len(n_class)) {
+              for (test_index in seq_len(n_tests)) {
+                    n_coefficients <-  n_covariates_per_outcome_mat[class_index, test_index]
+                    coefficients <-  theta_main[coefficient_index + seq_len(n_coefficients)]
+                    coefficient_index <-  coefficient_index + n_coefficients
+                    ##
+                    latent_means <-  if (is.null(X) || (n_coefficients == 1)) {
+                          coefficients[1]
+                    } else {
+                          as.vector(X[[class_index]][[test_index]][, seq_len(n_coefficients), drop = FALSE] %*%
+                                    coefficients)
+                    }
+                    cutpoints <-  cutpoints_per_class_and_test[[class_index]][[test_index]]
+                    lower_cuts <-  c(-Inf, cutpoints)
+                    upper_cuts <-  c(cutpoints, Inf)
+                    ##
+                    distance_per_person <-  vapply(latent_means, function(latent_mean) {
+                          distance_to_category <-  pmax(0, lower_cuts - latent_mean, latent_mean - upper_cuts)
+                          is_tail_category <-  (distance_to_category > 0)
+                          if (!any(is_tail_category)) return(0)
+                          log_probability <-  fn_log_probability_of_standard_normal_interval(
+                                                    lower_cuts[is_tail_category] - latent_mean,
+                                                    upper_cuts[is_tail_category] - latent_mean)
+                          weights <-  exp(log_probability - max(log_probability))
+                          return(sum(weights * distance_to_category[is_tail_category]) / sum(weights))
+                    }, numeric(1))
+                    tail_category_distance_per_test[test_index] <-  tail_category_distance_per_test[test_index] +
+                                                                    mean(distance_per_person)
+              }
+        }
+        ##
+        return(tail_category_distance_per_test)
+
+}
+
+
+#' Latent-scale cutpoints of every test and class, from a compiled built-in skeleton model
+#'
+#' Reads the skeleton's transformed parameter C_vec (cutpoints of the ordinal tests, class by class, concatenated
+#' in the ordinal slot order of the fit) at theta_main with BridgeStan, and returns, for each class and test, the
+#' cutpoints of that test: the ordinal test of ordinal slot o gets the o-th block of n_thr_per_ord_test[o]
+#' cutpoints; a binary test gets its single cut 0.
+#'
+#' @param bs_model BridgeStan model object of the built-in skeleton (LC_MVOP / MVOP).
+#' @param theta_main main-block parameter vector (the whole unconstrained vector of the skeleton).
+#' @param n_tests,n_class model dimensions.
+#' @param n_cat_per_test number of categories of each test, in the test order of the fit (2 = binary).
+#' @param n_thr_per_ord_test number of cutpoints of each ordinal test, in ordinal slot order.
+#' @export
+extract_cutpoints_per_class_and_test_via_bridgestan <-  function( bs_model,
+                                                                  theta_main,
+                                                                  n_tests,
+                                                                  n_class,
+                                                                  n_cat_per_test,
+                                                                  n_thr_per_ord_test
+) {
+
+        cutpoints_per_class_and_test <-  lapply(seq_len(n_class), function(class_index) {
+              lapply(seq_len(n_tests), function(test_index) 0)
+        })
+        if (!any(n_cat_per_test > 2)) return(cutpoints_per_class_and_test)   ## binary tests only
+        constrained_values <-  bs_model$param_constrain(theta_main, include_tp = TRUE, include_gq = FALSE)
+        parameter_names <-  bs_model$param_names(include_tp = TRUE, include_gq = FALSE)
+        is_C_vec <-  (sub("(\\.|\\[).*$", "", parameter_names) == "C_vec")
+        if (!any(is_C_vec)) {
+              stop("extract_cutpoints_per_class_and_test_via_bridgestan: no transformed parameter C_vec.")
+        }
+        ##
+        ## ---- C_vec[c, j] (j = position in the concatenation of the ordinal slots' cutpoints):
+        ##
+        indices <-  do.call(rbind, lapply(regmatches(parameter_names[is_C_vec],
+                                                    gregexpr("[0-9]+", parameter_names[is_C_vec])), as.integer))
+        C_vec_values <-  constrained_values[is_C_vec]
+        end_of_slot <-  cumsum(n_thr_per_ord_test)
+        start_of_slot <-  c(1, utils::head(end_of_slot, -1) + 1)
+        ordinal_tests <-  which(n_cat_per_test > 2)
+        for (class_index in seq_len(n_class)) {
+              cutpoints_of_class <-  C_vec_values[indices[, 1] == class_index][order(indices[indices[, 1] ==
+                                                                                             class_index, 2])]
+              for (ordinal_slot in seq_along(ordinal_tests)) {
+                    cutpoints_per_class_and_test[[class_index]][[ordinal_tests[ordinal_slot]]] <-
+                          cutpoints_of_class[start_of_slot[ordinal_slot]:end_of_slot[ordinal_slot]]
+              }
+        }
+        return(cutpoints_per_class_and_test)
+
+}
+
+
+#' Test order with the most nearly deterministic test last
+#'
+#' The test with the largest tail extremeness is placed last, so that no other test's truncation bound depends
+#' on its steep-tail nuisance values; the other tests keep the greedy C-vine order of
+#' compute_optimal_test_order(), computed on their own correlations.
+#'
+#' @param Omega_hat_list list (one per class) of estimated correlation matrices, original test order.
+#' @param tail_extremeness_per_test output of compute_tail_extremeness_per_test_LC_MVP().
+#' @export
+compute_test_order_with_most_nearly_deterministic_test_last <-  function( Omega_hat_list,
+                                                                          tail_extremeness_per_test
+) {
+
+        n_tests <-  nrow(Omega_hat_list[[1]])
+        most_nearly_deterministic_test <-  which.max(tail_extremeness_per_test)
+        other_tests <-  setdiff(seq_len(n_tests), most_nearly_deterministic_test)
+        ##
+        Omega_hat_list_other_tests <-  lapply(Omega_hat_list,
+                                              function(Omega_hat) {
+                                                    Omega_hat[other_tests, other_tests, drop = FALSE]
+                                              })
+        order_of_other_tests <-  other_tests[compute_optimal_test_order(Omega_hat_list_other_tests)]
+        ##
+        return(c(order_of_other_tests, most_nearly_deterministic_test))
+
+}
+
+
+
+
+
 #' Infer the dimensions of the "Omega" parameter(s) of a compiled BridgeStan model
 #'
 #' The column-reordering pre-burnin needs to know how many latent classes and
@@ -473,16 +687,57 @@ fn_nuisance_chunk_remap_index <- function( N,
 }
 
 
+#' Permute a test-pair matrix into the fitted test order, reading its lower triangle
+#'
+#' For the matrices indexed by test pair (lb_corr, ub_corr, known_values_indicator_list, known_values_list,
+#' prior_for_corr_a, prior_for_corr_b), of which the models read only the strictly lower triangle (i > j).
+#' Fitted pair (i, j) holds the ORIGINAL unordered pair {test_perm[i], test_perm[j]}, whose value sits in the
+#' ORIGINAL lower triangle at (max, min); the result holds it at (i, j) and at (j, i). The diagonal is permuted
+#' with the tests. For a symmetric matrix this equals m[test_perm, test_perm]; for a matrix filled in its lower
+#' triangle only, m[test_perm, test_perm] would read the original UPPER triangle for every pair whose two tests
+#' swap order.
+#' @param test_pair_matrix_in_original_order n_tests x n_tests matrix, in the original test order.
+#' @param test_perm fitted slot j holds original test test_perm[j].
+#' @keywords internal
+fn_permute_test_pair_matrix_reading_its_lower_triangle <-  function( test_pair_matrix_in_original_order,
+                                                                     test_perm) {
+
+        test_pair_matrix_symmetric_from_its_lower_triangle <-  test_pair_matrix_in_original_order
+        ##
+        upper_triangle_positions <-  upper.tri(test_pair_matrix_in_original_order)
+        test_pair_matrix_symmetric_from_its_lower_triangle[upper_triangle_positions] <-
+              t(test_pair_matrix_in_original_order)[upper_triangle_positions]
+        ##
+        return(test_pair_matrix_symmetric_from_its_lower_triangle[test_perm, test_perm, drop = FALSE])
+
+}
+
+
 #' Permute correlation-related model data
+#'
+#' Each matrix is permuted with fn_permute_test_pair_matrix_reading_its_lower_triangle() (the models read the
+#' strictly lower triangle only).
 #' @export
 permute_corr_data <- function(lb_corr, ub_corr,
                               known_values_indicator, known_values, perm) {
-  list(
-    lb_corr = lapply(lb_corr, function(m) m[perm, perm]),
-    ub_corr = lapply(ub_corr, function(m) m[perm, perm]),
-    known_values_indicator = lapply(known_values_indicator, function(m) m[perm, perm]),
-    known_values = lapply(known_values, function(m) m[perm, perm])
-  )
+  # list(
+  #   lb_corr = lapply(lb_corr, function(m) m[perm, perm]),
+  #   ub_corr = lapply(ub_corr, function(m) m[perm, perm]),
+  #   known_values_indicator = lapply(known_values_indicator, function(m) m[perm, perm]),
+  #   known_values = lapply(known_values, function(m) m[perm, perm])
+  # )
+        return(list( lb_corr                = lapply( lb_corr,
+                                                      fn_permute_test_pair_matrix_reading_its_lower_triangle,
+                                                      test_perm = perm),
+                     ub_corr                = lapply( ub_corr,
+                                                      fn_permute_test_pair_matrix_reading_its_lower_triangle,
+                                                      test_perm = perm),
+                     known_values_indicator = lapply( known_values_indicator,
+                                                      fn_permute_test_pair_matrix_reading_its_lower_triangle,
+                                                      test_perm = perm),
+                     known_values           = lapply( known_values,
+                                                      fn_permute_test_pair_matrix_reading_its_lower_triangle,
+                                                      test_perm = perm)))
 }
 
 
@@ -636,16 +891,24 @@ validate_y_tests_ordinal <- function(y) {
         n_ordinal_tests <- sum(is_ordinal)
         
         ## Check ordering: all binary first, then all ordinal
-        if (n_binary_tests > 0 && n_ordinal_tests > 0) {
-              
-              last_binary   <- max(which(is_binary))
-              first_ordinal <- min(which(is_ordinal))
-              if (first_ordinal < last_binary) {
-                stop("Binary tests must come before ordinal tests in y. ",
-                     paste0("Found ordinal test in column ", first_ordinal, " but binary test in column ", last_binary, "."))
-              }
-          
-        }
+        ## Any test order is supported (binary and ordinal tests may be interleaved); the check is commented out.
+        # if (n_binary_tests > 0 && n_ordinal_tests > 0) {
+        #       
+        #       last_binary   <- max(which(is_binary))
+        #       first_ordinal <- min(which(is_ordinal))
+        #       if (first_ordinal < last_binary) {
+        #         stop("Binary tests must come before ordinal tests in y. ",
+        #              paste0("Found ordinal test in column ", first_ordinal, " but binary test in column ",
+        #                     last_binary, "."))
+        #       }
+        #   
+        # }
+        ##
+        ## ---- No order check: the binary and ordinal tests may sit in any columns of y. Every part of the
+        ##      LC_MVOP / MVOP models (C++ lp / gradient paths, Stan skeleton, R re-layout) reads the type of each
+        ##      column from n_cat_per_test (column order of y, 2 = binary; built from y in
+        ##      init_hard_coded_model_args) and indexes the ordinal metadata through it:
+        ##
         
         list(n_binary_tests  = n_binary_tests,
              n_ordinal_tests = n_ordinal_tests,

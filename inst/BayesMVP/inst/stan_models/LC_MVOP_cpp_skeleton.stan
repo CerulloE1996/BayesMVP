@@ -535,6 +535,23 @@ transformed data {
          else                       { ord_idx_of_slot[j] = -1; }
        }
      }
+     ////
+     //// ---- ORIGINAL test index of the b-th original binary test and of the o-th original ordinal test (in
+     ////      original order). The original data may hold its binary and ordinal tests in any positions:
+     ////      original test t sits in fitted slot inv_perm[t], whose type is n_cat_per_test[inv_perm[t]].
+     ////      (The Se/Sp outputs below used original tests 1..n_binary_tests as the binary ones and
+     ////      n_binary_tests + t_ord as the ordinal ones, i.e. original data with the binary tests first.)
+     ////
+     array[n_binary_tests] int original_test_index_of_original_binary_test;
+     array[n_ordinal_tests] int original_test_index_of_original_ordinal_test;
+     {
+       int b = 0;
+       int o = 0;
+       for (t in 1:n_tests) {
+         if (n_cat_per_test[inv_perm[t]] > 2) { o += 1; original_test_index_of_original_ordinal_test[o] = t; }
+         else                                 { b += 1; original_test_index_of_original_binary_test[b] = t; }
+       }
+     }
 }
 
 
@@ -612,6 +629,7 @@ transformed parameters {
      //// ---- Compute Xbeta_baseline for ALL tests:
      ////
      //// t = ORIGINAL test index (canonical data is binaries-first); s = fitted slot:
+     //// (the original data may now hold its binary and ordinal tests in any positions; see transformed data)
      for (t in 1:n_tests) {
         int s = inv_perm[t];
         Xbeta_baseline_nd[t] = dot_product( baseline_case_nd[s][1:n_covs_per_outcome[1, s]],
@@ -659,10 +677,16 @@ generated quantities {
       //// ---- Binary baseline Se/Sp:
       ////
       if (n_class == 2) {
-          for (t in 1:n_binary_tests) {   //// original binary tests are 1..n_binary_tests
-              Se_baseline_bin[t] =       Phi( Xbeta_baseline_d[t] );
-              Fp_baseline_bin[t] =       Phi( Xbeta_baseline_nd[t] );
-              Sp_baseline_bin[t] = 1.0 - Fp_baseline_bin[t];
+          // for (t in 1:n_binary_tests) {   //// original binary tests are 1..n_binary_tests
+          //     Se_baseline_bin[t] =       Phi( Xbeta_baseline_d[t] );
+          //     Fp_baseline_bin[t] =       Phi( Xbeta_baseline_nd[t] );
+          //     Sp_baseline_bin[t] = 1.0 - Fp_baseline_bin[t];
+          // }
+          for (b in 1:n_binary_tests) {
+              int t = original_test_index_of_original_binary_test[b];   //// original test (any position)
+              Se_baseline_bin[b] =       Phi( Xbeta_baseline_d[t] );
+              Fp_baseline_bin[b] =       Phi( Xbeta_baseline_nd[t] );
+              Sp_baseline_bin[b] = 1.0 - Fp_baseline_bin[b];
           }
       }
       ////
@@ -670,7 +694,8 @@ generated quantities {
       ////
       if (n_class == 2) {
           for (t_ord in 1:n_ordinal_tests) {
-              int t     = n_binary_tests + t_ord;      //// original ordinal test
+              // int t     = n_binary_tests + t_ord;      //// original ordinal test
+              int t     = original_test_index_of_original_ordinal_test[t_ord];   //// original ordinal test
               int s     = inv_perm[t];                 //// its fitted slot (may sit anywhere)
               int s_ord = ord_idx_of_slot[s];          //// fitted-slot ordinal index
               int n_thr_t = n_thr_per_ord_test[s_ord];

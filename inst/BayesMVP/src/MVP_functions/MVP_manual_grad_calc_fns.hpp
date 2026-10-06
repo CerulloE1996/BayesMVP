@@ -546,7 +546,13 @@ ALWAYS_INLINE void fn_MVP_compute_nuisance_grad_v2(     Eigen::Ref<Eigen::Matrix
           
        }
       
-       { ///// then third-to-last term (test T - 2)
+       //// { ///// then third-to-last term (test T - 2)
+       //// ---- (n_tests >= 3): this block needs a third-to-last test (t = n_tests - 2 >= 1, so that column t - 1
+       ////      and u_grad column n_tests - 3 exist). With n_tests = 2, t - 1 = -1: the block read column -1 and
+       ////      L_Omega_double(0, -1) and wrote u_grad column n_tests - 3 = -1, outside the chunk (heap
+       ////      corruption).
+       ////      For n_tests = 2 the likelihood part of the nuisance gradient is complete after the term above.
+       if (n_tests >= 3) { ///// then third-to-last term (test T - 2)
          
              int t = n_tests - 2;
              

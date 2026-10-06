@@ -54,6 +54,8 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   const bool corr_force_positive = Model_args_as_cpp_struct.Model_args_bools(2);
   const bool corr_prior_beta = Model_args_as_cpp_struct.Model_args_bools(3);
   const bool corr_prior_norm = Model_args_as_cpp_struct.Model_args_bools(4);
+  fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
+                                                           "std_MVP_lp_grad_AD_fns.hpp");
   const bool handle_numerical_issues = Model_args_as_cpp_struct.Model_args_bools(5);
   const bool skip_checks_exp =   Model_args_as_cpp_struct.Model_args_bools(6);
   const bool skip_checks_log =   Model_args_as_cpp_struct.Model_args_bools(7);
@@ -111,7 +113,18 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   const std::vector<Eigen::Matrix<double, -1, -1>>   prior_coeffs_sd   =  Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[1]; 
   const std::vector<Eigen::Matrix<double, -1, -1>>   prior_for_corr_a   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[2]; 
   const std::vector<Eigen::Matrix<double, -1, -1>>   prior_for_corr_b   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[3]; 
-  const std::vector<Eigen::Matrix<double, -1, -1>>   lb_corr   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[4]; 
+  // const std::vector<Eigen::Matrix<double, -1, -1>>   lb_corr   =
+  //       Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[4];
+  std::vector<Eigen::Matrix<double, -1, -1>>   lb_corr   =
+        Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[4];
+  //// ---- corr_force_positive: the lower bound of every correlation is 0, as in the manual-derivative
+  ////      paths (the flag was read here but not applied):
+  if (corr_force_positive == true) {
+        for (int c = 0; c < static_cast<int>(lb_corr.size()); ++c)
+              for (int i = 1; i < lb_corr[c].rows(); ++i)
+                    for (int j = 0; j < i; ++j)
+                          lb_corr[c](i, j) = 0.0;
+  }
   const std::vector<Eigen::Matrix<double, -1, -1>>   ub_corr   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[5]; 
   const std::vector<Eigen::Matrix<double, -1, -1>>   known_values    = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[6]; 
   
@@ -246,12 +259,34 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
 
 
   ///////////////////////////////////////////////////////////////////////// prior densities
+  //// ---- priors: left out with exclude_priors, as in the manual-derivative paths:
+  if (exclude_priors == false) {
   for (int t = 0; t < n_tests; t++) {
       for (int k = 0; k < n_covariates_per_outcome_vec(0, t); k++) {
         target  += stan::math::normal_lpdf(beta_all_tests_class_var[0](k, t), prior_coeffs_mean[0](k, t), prior_coeffs_sd[0](k, t));
       }
   }
-  target +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[0], lkj_cholesky_eta(0)) ;
+  //// target +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[0], lkj_cholesky_eta(0)) ;
+  //// ---- the correlation prior, as in the manual-derivative paths: LKJ (with the Jacobian terms of
+  ////      known correlations removed), or a Beta / normal prior on every off-diagonal correlation:
+  if ((corr_prior_beta == false) && (corr_prior_norm == false)) {
+        target +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[0], lkj_cholesky_eta(0)) ;
+        fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
+              target, L_Omega_var[0], known_values_indicator[0]);
+  } else {
+        target += fn_log_density_of_beta_or_normal_prior_on_correlations_on_free_cholesky_entries(
+              L_Omega_var[0], Omega_var[0], corr_prior_beta, prior_for_corr_a[0],
+              prior_for_corr_b[0], known_values_indicator[0]);
+  }
+  //// ---- the normal(0, 10) term of known (fixed) correlations of the manual-derivative paths:
+  for (int i = 1; i < n_tests; ++i) {
+        for (int j = 0; j < i; ++j) {
+              if (known_values_indicator[0](i, j) == 1) {
+                    target += stan::math::normal_lpdf(Omega_var[0](i, j), 0.0, 10.0);
+              }
+        }
+  }
+  } //// end of if (exclude_priors == false)
     
   /////////////////////////////////////////////////////////////////////////////////////////////////////////// likelihood
   Eigen::Matrix<stan::math::var, -1, 1>	   y1(n_tests);

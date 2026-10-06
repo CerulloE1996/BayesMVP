@@ -60,6 +60,65 @@ Note that the backups only change how the gradient is computed at that position 
 
 The AVX functions are general external kernels. They are also used by the native BayesMVP implementations where the selected processor supports the required instruction set. The compiled implementation reports the detected SIMD lane count.
 
+## Automatic test (column) reordering
+
+For the latent class models (LC-MVP and LC-MVOP), BayesMVP chooses the order of the tests
+(i.e., the columns of `y`) automatically, before the main burnin;
+this is on by default (`reorder_cols_MVP = TRUE`;
+set `reorder_cols_MVP = FALSE` to keep the original order).
+The model itself does not depend on the order of the tests;
+however, the unconstrained parameters which HMC samples do - and hence so does the efficiency of HMC.
+
+**How it works:**
+
+- A short pre-burnin (by default 125 iterations; `pre_burnin_n_iter`), on the data in the original order,
+gives rough estimates of the within-class correlations, the probit intercepts
+and (for ordinal tests) the cutpoints.
+- The most nearly deterministic test is placed last;
+i.e., for the LC-MVP, the test whose probit linear predictors are furthest from zero (summed over the two latent
+classes), and, for the LC-MVOP, the test whose tail categories sit furthest from the class-conditional latent mean
+(which, for a binary test, is the same measure).
+- The other tests then follow the greedy correlation order: the most strongly correlated pair first,
+then, one at a time, the test with the largest sum of squared correlations with the tests already placed.
+- The old greedy-only rule remains available via
+`test_order_rule_for_reorder_cols_MVP = "greedy_correlation_order"`
+(which is also the rule used for user-supplied Stan models).
+- The summaries and traces of the model parameters (e.g., the coefficients, correlations, cutpoints,
+sensitivities and specificities) are returned in the original test order.
+
+**Why it works:**
+
+- In the GHK (truncated-normal) construction, the truncation bounds of each test depend on the latent values
+of every test placed before it.
+- For a nearly deterministic test, each rare discordant result has a latent value deep in the tail
+(i.e., $\Phi^{-1}(u \cdot p)$, with a small $p$),
+which is a steep, strongly non-linear function of the parameters;
+this curvature then propagates to the bounds of every later test -
+whereas, placed last, no other test depends on it.
+- The order also sets the order of the correlation parameterisation
+([Pinkney, 2024](https://arxiv.org/abs/2405.07286));
+hence, placing the most strongly correlated tests first means that the largest dependencies are carried by the
+first columns of the Cholesky factor.
+
+**Evidence:**
+
+- Binary LC-MVP (N = 10,000): with the old greedy-only rule, the position of two tests which are only weakly
+correlated with the others was decided by the noise of the pre-burnin, so the chosen order changed between runs;
+the slower order - with the most nearly deterministic test fifth, rather than last -
+gave 0.59× the min ESS per 1000 gradient evaluations,
+and needed 1.60× the gradient evaluations to reach the target min ESS
+(over 173 comparisons within the cells of our pilot-study grid;
+and 0.45× and 2.15×, respectively, when we fixed both orders as a control).
+- Binary LC-MVP (N = 10,000): the new rule chose the same (faster) order in all 599 logged pre-burnins of a
+600-fit grid; furthermore, when we changed the simulated data so that the greedy-only rule placed the most extreme
+test first, its order needed 2.67× the gradient evaluations to reach the target min ESS
+(0.33× the min ESS per 1000 gradient evaluations) of the new rule's order.
+- Ordinal LC-MVOP (one binary and two ordinal tests, N = 5,000): the rule placed the binary test last
+(order 2-3-1) in all 15 of our checks (5 seeds × 3 chunk counts);
+in a 36-fit test of all six orders, the two orders with the binary test last needed 0.67-0.75× the gradient
+evaluations of the input order (1-2-3) to reach the target min ESS,
+and had 1.37-1.56× its min ESS per 1000 gradient evaluations.
+
 ## Installation order
 
 BayesMVP depends on NicoStan. Install NicoStan first, then BayesMVP.

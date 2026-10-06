@@ -85,6 +85,31 @@ using three_layer_std_vec_of_EigenMats_int = std::vector<std::vector<std::vector
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///// Number-of-chunks multiplier for the PartialLog (log-scale) fallback (attempt 2 below).
+///// The PartialLog gradient allocates roughly 3 times more memory per individual than the NoLog gradient
+///// (about 6,250 vs. 1,964 bytes per individual, measured as allocated memory), so evaluating the fallback with
+///// 3 times as many chunks keeps each PartialLog chunk about the same size in memory as a NoLog chunk (i.e., it still
+///// fits in the same cache). The multiplier applies only to the fallback evaluation itself; the next gradient
+///// evaluation (attempt 1) uses the normal number of chunks again. A value of 1 gives the previous behaviour.
+// constexpr int PartialLog_fallback_n_chunks_multiplier = 3;
+///// Set to 1: the PartialLog evaluations (LC_MVP and LC_MVOP) read the nuisance vector, and write its gradient,
+///// chunk by chunk at segment(row_start * n_tests, chunk_size * n_tests), i.e. in the chunk-major layout of the
+///// number of chunks they use, whereas the sampler stores the nuisance vector in the layout of num_chunks
+///// (Model_args_ints(3)). With 3 x num_chunks the fallback evaluated the log density and its gradient at a
+///// permuted nuisance vector (latent values of the wrong individuals and tests). A value above 1 needs the
+///// nuisance vector and its gradient re-laid out between the two chunk layouts.
+// constexpr int PartialLog_fallback_n_chunks_multiplier = 1;
+///// The multiplier is no longer a constant here: every PartialLog evaluation (attempt 2 below, fallback or
+///// forced, and the forced one in lp_grad_model_selector.hpp) uses the sample() argument
+///// n_chunks_multiplier_for_PartialLog_log_scale_evaluation (default 3, the value above before 5 Oct 2026),
+///// carried in Model_args_as_cpp_struct.PartialLog_n_chunks_multiplier, and the PartialLog functions re-lay out
+///// the nuisance vector and its gradient between the stored layout of num_chunks and the layout of their own
+///// number of chunks (PartialLog_nuisance_chunk_relayout.hpp).
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ///// This model ccan be either the "standard" MVP model or the latent class MVP model (w/ 2 classes) for analysis of test accuracy data. 
 inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat,
                                                            const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
@@ -95,7 +120,9 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
                                                            std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
                                                            const int n_threads_WCP,
                                                            const bool use_autodiff_fallback = false,
-                                                           const bool use_standard_MVP_autodiff = false
+                                                           const bool use_standard_MVP_autodiff = false,
+                                                           const bool force_autodiff = false,
+                                                           const bool force_PartialLog = false
 ) {
  
         int NaN_or_Inf_indicator = 0;  
@@ -114,7 +141,12 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
                                                           "fn_lp_grad_MVP_multi_attempts_InPlace_process");
         
         ///// 1st attempt
-        { //// if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {   // NOT log-scale and NOT autodiff (least numerically stable but fastest)
+        // { //// if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {
+        //       // NOT log-scale and NOT autodiff (least numerically stable but fastest)
+        //// the condition of the comment above, made active: the 1st attempt is skipped when force_autodiff or
+        //// force_PartialLog is TRUE:
+        if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {
+              //// NOT log-scale and NOT autodiff (least numerically stable but fastest)
               
               NaN_or_Inf_indicator = 0;  // Reset NaN_or_Inf indicator
               
@@ -138,12 +170,22 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
         }
         
         ///// 2nd attempt (if first fails) - uses log-scale but NOT autodiff
-        if ( (NaN_or_Inf_indicator == 1) ) { ///  if ( (NaN_or_Inf_indicator == 1) || ( (force_autodiff == false) && (force_PartialLog == true)   ) ) {
+        // if ( (NaN_or_Inf_indicator == 1) ) { ///  if ( (NaN_or_Inf_indicator == 1) ||
+        //       ( (force_autodiff == false) && (force_PartialLog == true)   ) ) {
+        //// the condition of the comment above, made active: the 2nd attempt also runs FIRST when
+        //// force_PartialLog is TRUE and force_autodiff is FALSE (the 1st attempt is then skipped):
+        if ( (NaN_or_Inf_indicator == 1) || ( (force_autodiff == false) && (force_PartialLog == true)   ) ) {
 
               NaN_or_Inf_indicator = 0;  // Reset main_div indicator
               out_mat = out_mat_orig;
 
               try {   //// see above
+                    //// the last argument was the constant PartialLog_fallback_n_chunks_multiplier (above, now a
+                    //// comment):
+                    ////     PartialLog_fallback_n_chunks_multiplier);
+                    //// it is the value set in R (sample() argument
+                    //// n_chunks_multiplier_for_PartialLog_log_scale_evaluation, default 3):
+                    const int n_chunks_multiplier = Model_args_as_cpp_struct.PartialLog_n_chunks_multiplier;
                     fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(  out_mat,
                                                                                      theta_main_vec_ref,
                                                                                      theta_us_vec_ref,
@@ -151,7 +193,8 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
                                                                                      grad_option,
                                                                                      Model_args_as_cpp_struct,
                                                                                      LC_MVP_ws_structs,
-                                                                                     n_threads_WCP);
+                                                                                     n_threads_WCP,
+                                                                                     n_chunks_multiplier);
 
                     if (is_NaN_or_Inf_Eigen(out_mat)) {
                       NaN_or_Inf_indicator = 1;
@@ -165,7 +208,13 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
         ///// Optional 3rd evaluation at EXACTLY the same position, before the caller consumes the gradient.
         ///// No position/velocity update, trajectory restart, random draw or Metropolis decision happens here.
         ///// The energy-divergence check belongs to the sampler, not this position-only evaluator.
-        if (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) {
+        // if (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) {
+        //// force_autodiff = TRUE: the autodiff evaluation runs first and only (the 1st and 2nd attempts are
+        //// skipped, whatever force_PartialLog, multi_attempts and autodiff_fallback are; a failure leaves the
+        //// NaN flag below). Otherwise it runs after a failed 1st / 2nd attempt when the autodiff fallback is on,
+        //// as before. (The commented-out condition of the old 3rd attempt below required force_autodiff AND
+        //// force_PartialLog.)
+        if ( (force_autodiff == true) || (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) ) {
 
               out_mat = out_mat_orig;
               try {
@@ -236,7 +285,9 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
                                                             const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                             std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
                                                             const int n_threads_WCP,
-                                                            const bool use_autodiff_fallback = false
+                                                            const bool use_autodiff_fallback = false,
+                                                            const bool force_autodiff = false,
+                                                            const bool force_PartialLog = false
 ) {
   
         int NaN_or_Inf_indicator = 0;  
@@ -250,7 +301,12 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
                                                           "fn_lp_grad_MVOP_multi_attempts_InPlace_process");
         
         ///// 1st attempt
-        { //// if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {   // NOT log-scale and NOT autodiff (least numerically stable but fastest)
+        // { //// if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {
+        //       // NOT log-scale and NOT autodiff (least numerically stable but fastest)
+        //// the condition of the comment above, made active: the 1st attempt is skipped when force_autodiff or
+        //// force_PartialLog is TRUE:
+        if  ( (force_autodiff == false) && (force_PartialLog == false)  )  {
+              //// NOT log-scale and NOT autodiff (least numerically stable but fastest)
 
               NaN_or_Inf_indicator = 0;  // Reset NaN_or_Inf indicator
               
@@ -274,12 +330,22 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
         }
         
         // ///// 2nd attempt (if first fails) - uses log-scale but NOT autodiff
-        if ( (NaN_or_Inf_indicator == 1) ) { ///  if ( (NaN_or_Inf_indicator == 1) || ( (force_autodiff == false) && (force_PartialLog == true)   ) ) {
+        // if ( (NaN_or_Inf_indicator == 1) ) { ///  if ( (NaN_or_Inf_indicator == 1) ||
+        //       ( (force_autodiff == false) && (force_PartialLog == true)   ) ) {
+        //// the condition of the comment above, made active: the 2nd attempt also runs FIRST when
+        //// force_PartialLog is TRUE and force_autodiff is FALSE (the 1st attempt is then skipped):
+        if ( (NaN_or_Inf_indicator == 1) || ( (force_autodiff == false) && (force_PartialLog == true)   ) ) {
 
               NaN_or_Inf_indicator = 0;  // Reset main_div indicator
               out_mat = out_mat_orig;
 
               try {   //// see above
+                    //// the last argument was the constant PartialLog_fallback_n_chunks_multiplier (above, now a
+                    //// comment):
+                    ////     PartialLog_fallback_n_chunks_multiplier);
+                    //// it is the value set in R (sample() argument
+                    //// n_chunks_multiplier_for_PartialLog_log_scale_evaluation, default 3):
+                    const int n_chunks_multiplier = Model_args_as_cpp_struct.PartialLog_n_chunks_multiplier;
                     fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process(   out_mat,
                                                                                        theta_main_vec_ref,
                                                                                        theta_us_vec_ref,
@@ -287,7 +353,8 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
                                                                                        grad_option,
                                                                                        Model_args_as_cpp_struct,
                                                                                        LC_MVP_ws_structs,
-                                                                                       n_threads_WCP);
+                                                                                       n_threads_WCP,
+                                                                                       n_chunks_multiplier);
 
                     if (is_NaN_or_Inf_Eigen(out_mat)) {
                       NaN_or_Inf_indicator = 1;
@@ -299,7 +366,13 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
         }
         
         ///// Optional autodiff evaluation at the same position; no integrator or random-number calls.
-        if (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) {
+        // if (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) {
+        //// force_autodiff = TRUE: the autodiff evaluation runs first and only (the 1st and 2nd attempts are
+        //// skipped, whatever force_PartialLog, multi_attempts and autodiff_fallback are; a failure leaves the
+        //// NaN flag below). Otherwise it runs after a failed 1st / 2nd attempt when the autodiff fallback is on,
+        //// as before. (The commented-out condition of the old 3rd attempt below required force_autodiff AND
+        //// force_PartialLog.)
+        if ( (force_autodiff == true) || (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) ) {
 
               out_mat = out_mat_orig;
               try {

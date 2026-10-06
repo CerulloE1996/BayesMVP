@@ -92,4 +92,6 @@ init_and_run_burnin_ChESSR(
 init_and_run_burnin_ChESSR
 }
 
-\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{KE}, \code{ChEES}, \code{ChEESR}, or \code{SNAPER}. Historical \code{ChESSR} spellings select \code{ChEESR}. The frozen BayesMVPlegacy package retains the previous API and defaults.}
+\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{ChEES},
+\code{ChEESR}, or \code{SNAPER}. Historical \code{ChESSR} spellings select \code{ChEESR}. The frozen
+BayesMVPlegacy package retains the previous API and defaults.}

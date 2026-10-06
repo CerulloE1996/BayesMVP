@@ -376,7 +376,14 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
             }
             
             //// clamp to avoid -Inf propagating into rowwise log-lik sums (matches -700 sentinel convention):
-            if (!(log_prob > -700.0)) log_prob = -700.0;
+            // if (!(log_prob > -700.0)) log_prob = -700.0;
+            //// only a non-finite value (-Inf / NaN) takes the -700 sentinel. A finite log_prob below -700 is
+            //// exact here and stays exact: the gradient engine of this row (fn_MVOP_row_grads_log_scale) uses
+            //// it together with the exact Z, in dZ/du = prob / phi(Z) = exp(log_prob + Z^2 / 2 + log sqrt(2pi)),
+            //// and with log_prob clamped to -700 the two no longer cancel (nuisance gradient ~1e+267 for an
+            //// ordinal test whose bounds are near -53, e.g. a test intercept of +40), and the row's lp was
+            //// biased upwards:
+            if (!std::isfinite(log_prob)) log_prob = -700.0;
             
             y1_log_prob(i, t) = log_prob;
             prob(i, t)        = sl_exp(log_prob, S);   //// may underflow to 0.0 - grads for these rows use the log-scale path
@@ -602,12 +609,34 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
                   const double lnum = lse_2(log_1mu + lph_lb[t], log_u + lph_ub[t], S);
                   sl_dZneg[t] = sl_make(lnum + lphZr[t] + log_L_recip, 1.0);
                   ////
-                  SignedLog term_lb = std::isinf(lb) ? sl_zero() : sl_make(lph_lb[t] + sl_log(std::abs(lb) > 0.0 ? std::abs(lb) : 1e-300, S) + log_L_recip, (lb < 0.0) ? -1.0 : 1.0);
-                  SignedLog term_ub = std::isinf(ub) ? sl_zero() : sl_make(lph_ub[t] + sl_log(std::abs(ub) > 0.0 ? std::abs(ub) : 1e-300, S) + log_L_recip, (ub < 0.0) ? -1.0 : 1.0);
+                  // SignedLog term_lb = std::isinf(lb) ? sl_zero() : sl_make(lph_lb[t] + sl_log(std::abs(lb) >
+                  //                     0.0 ? std::abs(lb) : 1e-300, S) + log_L_recip, (lb < 0.0) ? -1.0 : 1.0);
+                  // SignedLog term_ub = std::isinf(ub) ? sl_zero() : sl_make(lph_ub[t] + sl_log(std::abs(ub) >
+                  //                     0.0 ? std::abs(ub) : 1e-300, S) + log_L_recip, (ub < 0.0) ? -1.0 : 1.0);
+                  //// phi(bound) * bound is exactly 0 for a bound of exactly 0 (e.g. a binary test whose
+                  //// linear predictor is 0), so such a term is the exact zero sl_zero(); the |bound| = 1e-300
+                  //// stand-in above gave a small non-zero term instead:
+                  SignedLog term_lb = (std::isinf(lb) || (lb == 0.0)) ? sl_zero() :
+                                      sl_make( lph_lb[t] + sl_log(std::abs(lb), S) + log_L_recip,
+                                               (lb < 0.0) ? -1.0 : 1.0);
+                  SignedLog term_ub = (std::isinf(ub) || (ub == 0.0)) ? sl_zero() :
+                                      sl_make( lph_ub[t] + sl_log(std::abs(ub), S) + log_L_recip,
+                                               (ub < 0.0) ? -1.0 : 1.0);
                   sl_dphibz[t] = sl_add(term_lb, sl_neg(term_ub), S);
                   ////
-                  SignedLog n_lb = std::isinf(lb) ? sl_zero() : sl_make(log_1mu + lph_lb[t] + sl_log(std::abs(lb) > 0.0 ? std::abs(lb) : 1e-300, S), (lb < 0.0) ? -1.0 : 1.0);
-                  SignedLog n_ub = std::isinf(ub) ? sl_zero() : sl_make(log_u   + lph_ub[t] + sl_log(std::abs(ub) > 0.0 ? std::abs(ub) : 1e-300, S), (ub < 0.0) ? -1.0 : 1.0);
+                  // SignedLog n_lb = std::isinf(lb) ? sl_zero() : sl_make(log_1mu + lph_lb[t] +
+                  //                  sl_log(std::abs(lb) > 0.0 ? std::abs(lb) : 1e-300, S),
+                  //                  (lb < 0.0) ? -1.0 : 1.0);
+                  // SignedLog n_ub = std::isinf(ub) ? sl_zero() : sl_make(log_u   + lph_ub[t] +
+                  //                  sl_log(std::abs(ub) > 0.0 ? std::abs(ub) : 1e-300, S),
+                  //                  (ub < 0.0) ? -1.0 : 1.0);
+                  //// the same exact zero for a bound of exactly 0:
+                  SignedLog n_lb = (std::isinf(lb) || (lb == 0.0)) ? sl_zero() :
+                                   sl_make( log_1mu + lph_lb[t] + sl_log(std::abs(lb), S),
+                                            (lb < 0.0) ? -1.0 : 1.0);
+                  SignedLog n_ub = (std::isinf(ub) || (ub == 0.0)) ? sl_zero() :
+                                   sl_make( log_u   + lph_ub[t] + sl_log(std::abs(ub), S),
+                                            (ub < 0.0) ? -1.0 : 1.0);
                   sl_dZbz[t] = sl_mul( sl_add(n_lb, n_ub, S), sl_make(lphZr[t] + log_L_recip, 1.0) );
                   
               

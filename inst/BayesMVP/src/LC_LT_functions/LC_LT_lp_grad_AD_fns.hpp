@@ -341,7 +341,11 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
            target_AD += stan::math::log(deriv_p);
            
            // Prior on prev for this population
-           target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
+           //// target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
+           //// ---- a prior: left out with exclude_priors (as for MVP / MVOP):
+           if (exclude_priors == false) {
+                 target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
+           }
          
        }
        
@@ -400,6 +404,9 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
 
   ///////////////////////////////////////////////////////////////////////// prior densities
   /// priors and Jacobians for coeffs
+  //// ---- the prior on LT_theta and its LT_a -> LT_theta Jacobian (a term of that prior): left out with
+  ////      exclude_priors (as for MVP / MVOP):
+  if (exclude_priors == false)
   for (int c = 0; c < n_class; ++c) {
     for (int t = 0; t < n_tests; ++t) {
       target_AD += stan::math::normal_lpdf(LT_theta(c, t), prior_coeffs_mean[c](0, t), prior_coeffs_sd[c](0, t)); //// Prior on theta
@@ -408,6 +415,8 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   }
 
   ////////////////////// Weibull priors for  b's / corr
+  //// ---- priors: left out with exclude_priors (as for MVP / MVOP):
+  if (exclude_priors == false)
   for (int t = 0; t < n_tests; ++t) {
       if (LT_prior_corr_bs == "Weibull") {
         target_AD += stan::math::weibull_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = scale/sigma

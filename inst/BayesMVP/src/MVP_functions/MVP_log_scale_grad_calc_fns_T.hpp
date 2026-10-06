@@ -684,7 +684,12 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
       
         {  //// third-to-last column
           const int t = n_tests - 2;
-          if (n_problem_array[t] > 0) {
+          //// if (n_problem_array[t] > 0) {
+          //// ---- (n_tests >= 3): this block needs a third-to-last test. With n_tests = 2, t - 1 = -1: the block
+          ////      read column -1 and wrote u_grad column n_tests - 3 = -1, outside the chunk (heap corruption).
+          ////      For n_tests = 2 the likelihood part of the nuisance gradient is complete after the column
+          ////      above.
+          if ((n_tests >= 3) && (n_problem_array[t] > 0)) {
             const std::vector<int> &idx = problem_index_array[t];
             resize_all(n_problem_array[t]);
       

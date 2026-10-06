@@ -349,6 +349,11 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_LDL_bounds_opt_dbl( int K,
        for (int i = 2; i < K + 1; ++i) {
          if (known_values_indicator(i-1, 0) == 1) {
            L(i-1, 0) = known_values(i-1, 0);
+           //// ---- the raw coordinate of a known (fixed) correlation is not read by the
+           ////      transform: it gets an independent standard normal density, so that it is
+           ////      not a free coordinate without a density (the joint factorises, so no model
+           ////      quantity changes):
+           target += stan::math::std_normal_lpdf(Omega_theta_unconstrained_array(i-1, 0));
          } else {
            stan::math::check_greater("Pinkney_LDL_bounds_opt_dbl", "first-column upper bound", ub(i-1, 0), lb(i-1, 0));
            Eigen::VectorXd lb_ub_lp_outs = lb_ub_lp_dbl(Omega_theta_unconstrained_array(i-1, 0), lb(i-1, 0), ub(i-1, 0));
@@ -395,6 +400,11 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_LDL_bounds_opt_dbl( int K,
                        //// b1 + known_value, not known_value; the M3 / M4 zero patterns happen to have
                        //// b1 = 0 so they were unaffected, but any other fixed pattern is wrong.
                        L(i-1, j-1) = (known_values(i-1, j-1) - b1) / D(j-1);
+                       //// ---- the raw coordinate of a known (fixed) correlation is not read by the
+                       ////      transform: it gets an independent standard normal density, so that it is
+                       ////      not a free coordinate without a density (the joint factorises, so no model
+                       ////      quantity changes):
+                       target += stan::math::std_normal_lpdf(Omega_theta_unconstrained_array(i-1, j-1));
                      } else {
                        stan::math::check_greater("Pinkney_LDL_bounds_opt_dbl", "upper residual bound", up, low);
                        Eigen::Matrix<double, -1, 1> lb_ub_lp_outs = lb_ub_lp_dbl(Omega_theta_unconstrained_array(i-1, j-1), low, up);
@@ -453,6 +463,11 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
        for (int i = 2; i < K + 1; ++i) {
          if (known_values_indicator(i-1, 0) == 1) {
            L(i-1, 0) = stan::math::to_var(known_values(i-1, 0));
+           //// ---- the raw coordinate of a known (fixed) correlation is not read by the
+           ////      transform: it gets an independent standard normal density, so that it is
+           ////      not a free coordinate without a density (the joint factorises, so no model
+           ////      quantity changes):
+           target += stan::math::std_normal_lpdf(Omega_theta_unconstrained_array(i-1, 0));
          } else {
            stan::math::check_greater("Pinkney_LDL_bounds_opt", "first-column upper bound", ub(i-1, 0), lb(i-1, 0));
            Eigen::Matrix<stan::math::var, -1, 1> lb_ub_lp_outs = lb_ub_lp(Omega_theta_unconstrained_array(i-1, 0), lb(i-1, 0), ub(i-1, 0));
@@ -493,6 +508,11 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
                      //// R(i,j) = b1 + L(i,j)*D(j): subtract the b1 accumulated from columns < j, or the
                      //// realised entry is b1 + known_value rather than known_value.
                      L(i-1, j-1) =  (stan::math::to_var(known_values(i-1, j-1)) - b1) /  D(j-1)  ;
+                     //// ---- the raw coordinate of a known (fixed) correlation is not read by the
+                     ////      transform: it gets an independent standard normal density, so that it is
+                     ////      not a free coordinate without a density (the joint factorises, so no model
+                     ////      quantity changes):
+                     target += stan::math::std_normal_lpdf(Omega_theta_unconstrained_array(i-1, j-1));
                    } else {
                      stan::math::check_greater("Pinkney_LDL_bounds_opt", "upper residual bound", up, low);
                      Eigen::Matrix<stan::math::var, -1, 1 >  lb_ub_lp_outs = lb_ub_lp(Omega_theta_unconstrained_array(i-1, j-1), low,  up) ;
@@ -1190,6 +1210,117 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_corr_master_dbl( int K,
                                           known_values);
    
 }
+
+
+// =============================================================================
+// Jacobian helpers of the correlation priors with known (fixed) correlations
+// =============================================================================
+//// ---- number of FREE (not known) correlations below the diagonal in column `column` (0-indexed) of a
+////      correlation matrix: the power of L_Omega(column, column) in the Jacobian of the map from the free
+////      entries of its Cholesky factor L_Omega to its free off-diagonal correlations (n_tests - 1 - column
+////      when no correlation is known):
+inline int fn_number_of_free_correlations_below_diagonal_in_column(
+                                                  const Eigen::Matrix<int, -1, -1> &known_values_indicator,
+                                                  const int column
+) {
+
+       int number_of_free_correlations = 0;
+       for (int row = column + 1; row < known_values_indicator.rows(); ++row) {
+             if (known_values_indicator(row, column) != 1) number_of_free_correlations += 1;
+       }
+       return number_of_free_correlations;
+
+}
+
+
+//// ---- stan::math::lkj_corr_cholesky_lpdf(L_Omega, eta) contains the Jacobian of the map from L_Omega to ALL
+////      off-diagonal correlations, sum over i > j of log L_Omega(j, j). With known (fixed) correlations the
+////      prior is on the FREE correlations only, so the terms of the known pairs are subtracted from `density`
+////      (no operation at all when no correlation is known):
+inline void fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
+                                                  stan::math::var &density,
+                                                  const Eigen::Matrix<stan::math::var, -1, -1> &L_Omega,
+                                                  const Eigen::Matrix<int, -1, -1> &known_values_indicator
+) {
+
+       for (int i = 1; i < L_Omega.rows(); ++i) {
+             for (int j = 0; j < i; ++j) {
+                   if (known_values_indicator(i, j) == 1) density -= stan::math::log(L_Omega(j, j));
+             }
+       }
+
+}
+
+
+
+
+//// ---- corr_prior_beta / corr_prior_norm of one class as a log density on the free strictly-lower entries of
+////      the
+////      Cholesky factor L_Omega (the terms of the corr_prior_beta / corr_prior_norm branches of the
+////      manual-derivative
+////      paths, e.g. MVP_lp_grad_MD_AD_fns.hpp): for every off-diagonal correlation rho = Omega(i, j), the Beta
+////      log
+////      density of (rho + 1) / 2 with -log(2) (corr_prior_beta = true) or the normal log density of rho (false),
+////      plus the log Jacobian of the map from the free entries of L_Omega to the free correlations:
+inline stan::math::var fn_log_density_of_beta_or_normal_prior_on_correlations_on_free_cholesky_entries(
+                                                  const Eigen::Matrix<stan::math::var, -1, -1> &L_Omega,
+                                                  const Eigen::Matrix<stan::math::var, -1, -1> &Omega,
+                                                  const bool corr_prior_beta,
+                                                  const Eigen::Matrix<double, -1, -1> &prior_for_corr_a,
+                                                  const Eigen::Matrix<double, -1, -1> &prior_for_corr_b,
+                                                  const Eigen::Matrix<int, -1, -1> &known_values_indicator
+) {
+
+       const int n_tests = L_Omega.rows();
+       stan::math::var log_density = 0.0;
+       for (int i = 1; i < n_tests; i++) {
+             for (int j = 0; j < i; j++) {
+                   if (corr_prior_beta) {
+                         log_density += stan::math::beta_lpdf((Omega(i, j) + 1) / 2, prior_for_corr_a(i, j),
+                                                              prior_for_corr_b(i, j));
+                   } else {
+                         log_density += stan::math::normal_lpdf(Omega(i, j), prior_for_corr_a(i, j),
+                                                                prior_for_corr_b(i, j));
+                   }
+             }
+       }
+       Eigen::Matrix<stan::math::var, -1, 1> jacobian_diag_elements(n_tests);
+       for (int i = 0; i < n_tests; ++i) {
+             const int number_of_free_correlations_below_diagonal_in_column_i =
+                   fn_number_of_free_correlations_below_diagonal_in_column(known_values_indicator, i);
+             jacobian_diag_elements(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                                         stan::math::log(L_Omega(i, i));
+       }
+       if (corr_prior_beta) {
+             log_density += (- 0.5 * n_tests * (n_tests - 1) * stan::math::log(2.0) +
+                             jacobian_diag_elements.sum());
+       } else {
+             log_density += jacobian_diag_elements.sum();
+       }
+       return log_density;
+
+}
+
+
+
+
+//// ---- corr_prior_beta and corr_prior_norm are alternatives (a Beta or a normal prior on every
+////      correlation): both TRUE is not a model (the functions used to give different priors on different
+////      evaluation paths). The R argument check stops first (init_hard_coded_model_args); this guard stops any
+////      other caller:
+inline void fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true( const bool corr_prior_beta,
+                                                                          const bool corr_prior_norm,
+                                                                          const std::string &function_name
+) {
+
+       if (corr_prior_beta && corr_prior_norm) {
+             throw std::invalid_argument(function_name + ": corr_prior_beta and corr_prior_norm are both TRUE; "
+                                         "set at most one of them to TRUE.");
+       }
+
+}
+
+
 
 
 // =============================================================================

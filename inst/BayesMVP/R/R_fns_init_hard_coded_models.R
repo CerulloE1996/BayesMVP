@@ -617,6 +617,16 @@ init_hard_coded_model_args <- function( Model_type,
           }
         }
         ##
+        ## ---- corr_prior_beta and corr_prior_norm are alternatives (a Beta or a normal prior on every
+        ##      correlation; both FALSE = the LKJ prior): both TRUE is not a model, so stop:
+        ##
+        if (isTRUE(as.logical(model_args_list$corr_prior_beta)) &&
+            isTRUE(as.logical(model_args_list$corr_prior_norm))) {
+          stop(paste0("corr_prior_beta = TRUE and corr_prior_norm = TRUE: set at most one of them to TRUE ",
+                      "(corr_prior_beta: Beta prior on (rho + 1) / 2; corr_prior_norm: normal prior on rho; ",
+                      "both FALSE: LKJ prior)."))
+        }
+        ##
         ## ---- Multiple-pop stuff:
         ##
         if (is.null(model_args_list$n_pops)) {
@@ -803,9 +813,25 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         n_thr_per_ord_test   <- matrix(as.integer(n_thr_per_ord_test), ncol = 1)
         ##
         # n_cat_per_test <- c( rep(2L, n_binary_tests), as.integer(n_cat_per_ord_test) )
-        n_cat_per_test <- matrix(as.integer(
-          model_args_list$n_cat_per_test %||% c(rep(2L, n_binary_tests), as.integer(model_args_list$n_cat_per_ord_test))
-        ), ncol = 1)
+        # n_cat_per_test <- matrix(as.integer(
+        #   model_args_list$n_cat_per_test %||% c(rep(2L, n_binary_tests),
+        #                                         as.integer(model_args_list$n_cat_per_ord_test))
+        # ), ncol = 1)
+        ##
+        ## ---- n_cat_per_test (length n_tests, column order of y, 2 for a binary test) is set from y by
+        ##      init_hard_coded_model_args. The fallback above assumed that the binary tests come first in y;
+        ##      a missing n_cat_per_test is now built from y in the same way as there (a column is binary iff
+        ##      all its values are in {0, 1}; the ordinal columns take n_cat_per_ord_test, in column order):
+        ##
+        n_cat_per_test_in_column_order_of_y <-  model_args_list$n_cat_per_test
+        ##
+        if (is.null(n_cat_per_test_in_column_order_of_y)) {
+              is_binary_column_of_y <-  apply(y, 2, function(column_of_y) all(column_of_y %in% c(0, 1)))
+              n_cat_per_test_in_column_order_of_y <-  rep(2, ncol(y))
+              n_cat_per_test_in_column_order_of_y[!is_binary_column_of_y] <-  model_args_list$n_cat_per_ord_test
+        }
+        ##
+        n_cat_per_test <-  matrix(as.integer(n_cat_per_test_in_column_order_of_y), ncol = 1)
         ##
         # print(paste("n_cat_per_ord_test = ", n_cat_per_ord_test))
         # print(paste("n_thr_per_ord_test = ", n_thr_per_ord_test))

@@ -33,8 +33,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // Rcpp_compute_LC_MVOP_Se_Sp_baseline
-List Rcpp_compute_LC_MVOP_Se_Sp_baseline(NumericVector trace_beta_flat, IntegerVector beta_dims, CharacterVector beta_names, NumericVector trace_C_flat, IntegerVector C_dims, CharacterVector C_names, List baseline_case_nd, List baseline_case_d, IntegerVector n_covs_nd, IntegerVector n_covs_d, int n_binary_tests, int n_ordinal_tests, IntegerVector n_thr_per_ord_test, std::string C_param_name);
-RcppExport SEXP _BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline(SEXP trace_beta_flatSEXP, SEXP beta_dimsSEXP, SEXP beta_namesSEXP, SEXP trace_C_flatSEXP, SEXP C_dimsSEXP, SEXP C_namesSEXP, SEXP baseline_case_ndSEXP, SEXP baseline_case_dSEXP, SEXP n_covs_ndSEXP, SEXP n_covs_dSEXP, SEXP n_binary_testsSEXP, SEXP n_ordinal_testsSEXP, SEXP n_thr_per_ord_testSEXP, SEXP C_param_nameSEXP) {
+List Rcpp_compute_LC_MVOP_Se_Sp_baseline(NumericVector trace_beta_flat, IntegerVector beta_dims, CharacterVector beta_names, NumericVector trace_C_flat, IntegerVector C_dims, CharacterVector C_names, List baseline_case_nd, List baseline_case_d, IntegerVector n_covs_nd, IntegerVector n_covs_d, int n_binary_tests, int n_ordinal_tests, IntegerVector n_thr_per_ord_test, std::string C_param_name, Nullable<IntegerVector> n_cat_per_test_in_trace_order, Nullable<IntegerVector> test_perm);
+RcppExport SEXP _BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline(SEXP trace_beta_flatSEXP, SEXP beta_dimsSEXP, SEXP beta_namesSEXP, SEXP trace_C_flatSEXP, SEXP C_dimsSEXP, SEXP C_namesSEXP, SEXP baseline_case_ndSEXP, SEXP baseline_case_dSEXP, SEXP n_covs_ndSEXP, SEXP n_covs_dSEXP, SEXP n_binary_testsSEXP, SEXP n_ordinal_testsSEXP, SEXP n_thr_per_ord_testSEXP, SEXP C_param_nameSEXP, SEXP n_cat_per_test_in_trace_orderSEXP, SEXP test_permSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -52,7 +52,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type n_ordinal_tests(n_ordinal_testsSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type n_thr_per_ord_test(n_thr_per_ord_testSEXP);
     Rcpp::traits::input_parameter< std::string >::type C_param_name(C_param_nameSEXP);
-    rcpp_result_gen = Rcpp::wrap(Rcpp_compute_LC_MVOP_Se_Sp_baseline(trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name));
+    Rcpp::traits::input_parameter< Nullable<IntegerVector> >::type n_cat_per_test_in_trace_order(n_cat_per_test_in_trace_orderSEXP);
+    Rcpp::traits::input_parameter< Nullable<IntegerVector> >::type test_perm(test_permSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_compute_LC_MVOP_Se_Sp_baseline(trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name, n_cat_per_test_in_trace_order, test_perm));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -122,6 +124,26 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< const Rcpp::List >::type EHMC_args_as_Rcpp_List(EHMC_args_as_Rcpp_ListSEXP);
     rcpp_result_gen = Rcpp::wrap(Rcpp_fn_check_joint_trajectory(EHMC_args_as_Rcpp_List));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_set_sampling_tau_jitter_halton
+void fn_set_sampling_tau_jitter_halton(bool halton);
+RcppExport SEXP _BayesMVP_fn_set_sampling_tau_jitter_halton(SEXP haltonSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< bool >::type halton(haltonSEXP);
+    fn_set_sampling_tau_jitter_halton(halton);
+    return R_NilValue;
+END_RCPP
+}
+// fn_get_sampling_tau_jitter_halton
+bool fn_get_sampling_tau_jitter_halton();
+RcppExport SEXP _BayesMVP_fn_get_sampling_tau_jitter_halton() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(fn_get_sampling_tau_jitter_halton());
     return rcpp_result_gen;
 END_RCPP
 }
@@ -757,6 +779,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// fn_persistent_burnin_run_one_iter_tau_jitter
+Rcpp::List fn_persistent_burnin_run_one_iter_tau_jitter(SEXP worker_ptr, const int seed_R, const int current_iter_R, const std::vector<double> tau_main_ii_R, const std::vector<double> tau_us_ii_R, const bool main_only_R, const bool profile_burnin_R);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_run_one_iter_tau_jitter(SEXP worker_ptrSEXP, SEXP seed_RSEXP, SEXP current_iter_RSEXP, SEXP tau_main_ii_RSEXP, SEXP tau_us_ii_RSEXP, SEXP main_only_RSEXP, SEXP profile_burnin_RSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< const int >::type seed_R(seed_RSEXP);
+    Rcpp::traits::input_parameter< const int >::type current_iter_R(current_iter_RSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double> >::type tau_main_ii_R(tau_main_ii_RSEXP);
+    Rcpp::traits::input_parameter< const std::vector<double> >::type tau_us_ii_R(tau_us_ii_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type main_only_R(main_only_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type profile_burnin_R(profile_burnin_RSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_run_one_iter_tau_jitter(worker_ptr, seed_R, current_iter_R, tau_main_ii_R, tau_us_ii_R, main_only_R, profile_burnin_R));
+    return rcpp_result_gen;
+END_RCPP
+}
 // fn_persistent_burnin_get_main_outputs
 Rcpp::List fn_persistent_burnin_get_main_outputs(SEXP worker_ptr);
 RcppExport SEXP _BayesMVP_fn_persistent_burnin_get_main_outputs(SEXP worker_ptrSEXP) {
@@ -1016,6 +1055,24 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// fn_persistent_burnin_joint_position_two_ended_reductions_resident
+Rcpp::List fn_persistent_burnin_joint_position_two_ended_reductions_resident(SEXP worker_ptr, const bool projection_R, const bool use_proposals_R, const Rcpp::NumericMatrix initial_main, const Rcpp::NumericMatrix proposed_main, const Rcpp::NumericMatrix velocity_main, const Rcpp::NumericMatrix velocity_initial_main, const Rcpp::NumericVector factor_us);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_joint_position_two_ended_reductions_resident(SEXP worker_ptrSEXP, SEXP projection_RSEXP, SEXP use_proposals_RSEXP, SEXP initial_mainSEXP, SEXP proposed_mainSEXP, SEXP velocity_mainSEXP, SEXP velocity_initial_mainSEXP, SEXP factor_usSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< const bool >::type projection_R(projection_RSEXP);
+    Rcpp::traits::input_parameter< const bool >::type use_proposals_R(use_proposals_RSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix >::type initial_main(initial_mainSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix >::type proposed_main(proposed_mainSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix >::type velocity_main(velocity_mainSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix >::type velocity_initial_main(velocity_initial_mainSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type factor_us(factor_usSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_joint_position_two_ended_reductions_resident(worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, velocity_initial_main, factor_us));
+    return rcpp_result_gen;
+END_RCPP
+}
 // fn_persistent_burnin_joint_kinetic_energy_sums_us_resident
 Rcpp::List fn_persistent_burnin_joint_kinetic_energy_sums_us_resident(SEXP worker_ptr, const bool use_proposed_velocity_R, const Rcpp::NumericVector mass_us_vec);
 RcppExport SEXP _BayesMVP_fn_persistent_burnin_joint_kinetic_energy_sums_us_resident(SEXP worker_ptrSEXP, SEXP use_proposed_velocity_RSEXP, SEXP mass_us_vecSEXP) {
@@ -1026,6 +1083,51 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< const bool >::type use_proposed_velocity_R(use_proposed_velocity_RSEXP);
     Rcpp::traits::input_parameter< const Rcpp::NumericVector >::type mass_us_vec(mass_us_vecSEXP);
     rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_joint_kinetic_energy_sums_us_resident(worker_ptr, use_proposed_velocity_R, mass_us_vec));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_persistent_burnin_tau_initial_api_version
+int fn_persistent_burnin_tau_initial_api_version();
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_tau_initial_api_version() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_tau_initial_api_version());
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident
+void fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident(SEXP worker_ptr, const Rcpp::IntegerMatrix positions);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident(SEXP worker_ptrSEXP, SEXP positionsSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerMatrix >::type positions(positionsSEXP);
+    fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident(worker_ptr, positions);
+    return R_NilValue;
+END_RCPP
+}
+// fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident
+Rcpp::NumericMatrix fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident(SEXP worker_ptr, SEXP centre_R, SEXP scale_R);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident(SEXP worker_ptrSEXP, SEXP centre_RSEXP, SEXP scale_RSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type centre_R(centre_RSEXP);
+    Rcpp::traits::input_parameter< SEXP >::type scale_R(scale_RSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident(worker_ptr, centre_R, scale_R));
+    return rcpp_result_gen;
+END_RCPP
+}
+// fn_persistent_burnin_tau_initial_nuisance_moments_get_resident
+Rcpp::List fn_persistent_burnin_tau_initial_nuisance_moments_get_resident(SEXP worker_ptr);
+RcppExport SEXP _BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_get_resident(SEXP worker_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type worker_ptr(worker_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(fn_persistent_burnin_tau_initial_nuisance_moments_get_resident(worker_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1062,13 +1164,15 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_BayesMVP_Rcpp_BayesMVP_SIMD_lane_width_for_vect_type", (DL_FUNC) &_BayesMVP_Rcpp_BayesMVP_SIMD_lane_width_for_vect_type, 1},
     {"_BayesMVP_Rcpp_BayesMVP_compiled_SIMD_levels", (DL_FUNC) &_BayesMVP_Rcpp_BayesMVP_compiled_SIMD_levels, 0},
-    {"_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline", (DL_FUNC) &_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline, 14},
+    {"_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline", (DL_FUNC) &_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline, 16},
     {"_BayesMVP_cpp_fn_post_burnin_prep_for_sampling", (DL_FUNC) &_BayesMVP_cpp_fn_post_burnin_prep_for_sampling, 9},
     {"_BayesMVP_set_debug_cutpoint_grads", (DL_FUNC) &_BayesMVP_set_debug_cutpoint_grads, 1},
     {"_BayesMVP_fn_get_stan_load_time_sec", (DL_FUNC) &_BayesMVP_fn_get_stan_load_time_sec, 0},
     {"_BayesMVP_fn_get_stan_load_count", (DL_FUNC) &_BayesMVP_fn_get_stan_load_count, 0},
     {"_BayesMVP_fn_reset_stan_load_timer", (DL_FUNC) &_BayesMVP_fn_reset_stan_load_timer, 0},
     {"_BayesMVP_Rcpp_fn_check_joint_trajectory", (DL_FUNC) &_BayesMVP_Rcpp_fn_check_joint_trajectory, 1},
+    {"_BayesMVP_fn_set_sampling_tau_jitter_halton", (DL_FUNC) &_BayesMVP_fn_set_sampling_tau_jitter_halton, 1},
+    {"_BayesMVP_fn_get_sampling_tau_jitter_halton", (DL_FUNC) &_BayesMVP_fn_get_sampling_tau_jitter_halton, 0},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_mat", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_mat, 4},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec, 4},
     {"_BayesMVP_Rcpp_wrapper_fn_lp_grad", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_fn_lp_grad, 9},
@@ -1105,6 +1209,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BayesMVP_fn_persistent_burnin_resident_api_version", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_resident_api_version, 0},
     {"_BayesMVP_fn_persistent_burnin_run_one_iter_main_only", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_run_one_iter_main_only, 3},
     {"_BayesMVP_fn_persistent_burnin_run_one_iter_main_only_profiled", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_run_one_iter_main_only_profiled, 3},
+    {"_BayesMVP_fn_persistent_burnin_run_one_iter_tau_jitter", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_run_one_iter_tau_jitter, 7},
     {"_BayesMVP_fn_persistent_burnin_get_main_outputs", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_get_main_outputs, 1},
     {"_BayesMVP_fn_persistent_burnin_update_adaptation_main_only", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_update_adaptation_main_only, 5},
     {"_BayesMVP_fn_persistent_burnin_init_resident_statistics", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_init_resident_statistics, 5},
@@ -1125,7 +1230,12 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BayesMVP_fn_persistent_burnin_joint_direction_transport_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_joint_direction_transport_resident, 5},
     {"_BayesMVP_fn_persistent_burnin_joint_direction_update_snaper_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_joint_direction_update_snaper_resident, 4},
     {"_BayesMVP_fn_persistent_burnin_joint_position_reductions_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_joint_position_reductions_resident, 7},
+    {"_BayesMVP_fn_persistent_burnin_joint_position_two_ended_reductions_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_joint_position_two_ended_reductions_resident, 8},
     {"_BayesMVP_fn_persistent_burnin_joint_kinetic_energy_sums_us_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_joint_kinetic_energy_sums_us_resident, 3},
+    {"_BayesMVP_fn_persistent_burnin_tau_initial_api_version", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_tau_initial_api_version, 0},
+    {"_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident, 2},
+    {"_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident, 3},
+    {"_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_get_resident", (DL_FUNC) &_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_get_resident, 1},
     {"_BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling", (DL_FUNC) &_BayesMVP_Rcpp_fn_OpenMP_EHMC_sampling, 19},
     {NULL, NULL, 0}
 };

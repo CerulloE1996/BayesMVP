@@ -23,8 +23,16 @@ Rcpp_BayesMVP_compiled_SIMD_levels <- function() {
 #'     Se[k]   = Phi( X_d' * beta[2][, t]  - C_d[k] )
 #'     Sp[k]   = Phi( C_nd[k] - X_nd' * beta[1][, t] )
 #'
-Rcpp_compute_LC_MVOP_Se_Sp_baseline <- function(trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name = "C_vec") {
-    .Call(`_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline`, trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name)
+#' Test order: the traces (beta, C), n_covs_nd / n_covs_d, n_thr_per_ord_test and
+#' n_cat_per_test_in_trace_order are in the TRACE layout, i.e. the order of the columns of y the model was
+#' fitted to; n_cat_per_test_in_trace_order[s] = 2 for a binary test and the number of categories for an
+#' ordinal test (NULL = the binary tests first, then the ordinal tests: the layout the two counts describe on
+#' their own). test_perm[s] = the ORIGINAL test held by trace slot s (the run's test_perm; NULL = identity).
+#' baseline_case_nd / baseline_case_d and every output (Se/Sp/Fp, AUC, AUC differences, threshold map) are in
+#' ORIGINAL test order, with the binary and ordinal tests in any positions.
+#'
+Rcpp_compute_LC_MVOP_Se_Sp_baseline <- function(trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name = "C_vec", n_cat_per_test_in_trace_order = NULL, test_perm = NULL) {
+    .Call(`_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline`, trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name, n_cat_per_test_in_trace_order, test_perm)
 }
 
 cpp_fn_post_burnin_prep_for_sampling <- function(n_chains_burnin, n_chains_sampling, n_superchains, n_params_main, n_nuisance, theta_main_in, theta_us_in, nuisance_jitter_scale = 0.25, seed = 123L) {
@@ -49,6 +57,14 @@ fn_reset_stan_load_timer <- function() {
 
 Rcpp_fn_check_joint_trajectory <- function(EHMC_args_as_Rcpp_List) {
     .Call(`_BayesMVP_Rcpp_fn_check_joint_trajectory`, EHMC_args_as_Rcpp_List)
+}
+
+fn_set_sampling_tau_jitter_halton <- function(halton) {
+    invisible(.Call(`_BayesMVP_fn_set_sampling_tau_jitter_halton`, halton))
+}
+
+fn_get_sampling_tau_jitter_halton <- function() {
+    .Call(`_BayesMVP_fn_get_sampling_tau_jitter_halton`)
 }
 
 Rcpp_wrapper_EIGEN_double_mat <- function(x, fn, vect_type, skip_checks) {
@@ -195,6 +211,10 @@ fn_persistent_burnin_run_one_iter_main_only_profiled <- function(worker_ptr, see
     .Call(`_BayesMVP_fn_persistent_burnin_run_one_iter_main_only_profiled`, worker_ptr, seed_R, current_iter_R)
 }
 
+fn_persistent_burnin_run_one_iter_tau_jitter <- function(worker_ptr, seed_R, current_iter_R, tau_main_ii_R, tau_us_ii_R, main_only_R, profile_burnin_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_run_one_iter_tau_jitter`, worker_ptr, seed_R, current_iter_R, tau_main_ii_R, tau_us_ii_R, main_only_R, profile_burnin_R)
+}
+
 fn_persistent_burnin_get_main_outputs <- function(worker_ptr) {
     .Call(`_BayesMVP_fn_persistent_burnin_get_main_outputs`, worker_ptr)
 }
@@ -275,8 +295,28 @@ fn_persistent_burnin_joint_position_reductions_resident <- function(worker_ptr, 
     .Call(`_BayesMVP_fn_persistent_burnin_joint_position_reductions_resident`, worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, factor_us)
 }
 
+fn_persistent_burnin_joint_position_two_ended_reductions_resident <- function(worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, velocity_initial_main, factor_us) {
+    .Call(`_BayesMVP_fn_persistent_burnin_joint_position_two_ended_reductions_resident`, worker_ptr, projection_R, use_proposals_R, initial_main, proposed_main, velocity_main, velocity_initial_main, factor_us)
+}
+
 fn_persistent_burnin_joint_kinetic_energy_sums_us_resident <- function(worker_ptr, use_proposed_velocity_R, mass_us_vec) {
     .Call(`_BayesMVP_fn_persistent_burnin_joint_kinetic_energy_sums_us_resident`, worker_ptr, use_proposed_velocity_R, mass_us_vec)
+}
+
+fn_persistent_burnin_tau_initial_api_version <- function() {
+    .Call(`_BayesMVP_fn_persistent_burnin_tau_initial_api_version`)
+}
+
+fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident <- function(worker_ptr, positions) {
+    invisible(.Call(`_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_reset_resident`, worker_ptr, positions))
+}
+
+fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident <- function(worker_ptr, centre_R, scale_R) {
+    .Call(`_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_accumulate_resident`, worker_ptr, centre_R, scale_R)
+}
+
+fn_persistent_burnin_tau_initial_nuisance_moments_get_resident <- function(worker_ptr) {
+    .Call(`_BayesMVP_fn_persistent_burnin_tau_initial_nuisance_moments_get_resident`, worker_ptr)
 }
 
 Rcpp_fn_OpenMP_EHMC_sampling <- function(n_threads_R, seed_R, n_iter_R, iter_one_by_one, partitioned_HMC_R, diffusion_HMC_R, Model_type_R, sample_nuisance_R, force_autodiff_R, force_PartialLog_R, multi_attempts_R, n_nuisance_to_track, theta_main_vectors_all_chains_input_from_R, theta_us_vectors_all_chains_input_from_R, y_Eigen_R, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads_WCP) {

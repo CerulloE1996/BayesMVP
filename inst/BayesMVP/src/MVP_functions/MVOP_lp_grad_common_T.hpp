@@ -34,6 +34,10 @@ struct MVOP_prep {
   const std::vector<Eigen::Matrix<double, -1, -1>> *prior_coeffs_mean, *prior_coeffs_sd;
   //// derived
   Eigen::Matrix<int, -1, 1> ord_idx_of_test;
+  //// for each ordinal slot t_ord (0-based, in fitted order) the index of the fitted test (column of y)
+  //// that holds it, i.e. the inverse of ord_idx_of_test; every test-indexed read for an ordinal slot
+  //// goes through it, so that no read assumes that the binary tests come first in y:
+  Eigen::Matrix<int, -1, 1> fitted_test_index_of_ordinal_slot;
   std::vector<Eigen::Matrix<double, -1, -1>> beta_double_array, C_raw, C, dC_raw_dunc;
   std::vector<Eigen::Matrix<double, -1, -1>> L_Omega_double, L_Omega_recip_double, deriv_L_wrt_unc_full;
   Eigen::Matrix<double, -1, -1> prev_mat, log_prev_mat_small;
@@ -52,7 +56,8 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
                                 const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                 const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
-                                const Model_fn_args_struct &A
+                                const Model_fn_args_struct &A,
+                                const int n_chunks_multiplier = 1
 ) {
         MVOP_prep P;
         out_mat.setZero();
@@ -63,6 +68,8 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
         P.X = &A.Model_args_2_layer_vecs_of_mats_double[0];
         P.exclude_priors = A.Model_args_bools(0);
         const bool corr_force_positive = A.Model_args_bools(2), corr_prior_beta = A.Model_args_bools(3), corr_prior_norm = A.Model_args_bools(4);
+        fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
+                                                                 "MVOP_lp_grad_common_T.hpp (fn_MVOP_prep)");
         P.n_class = A.Model_args_ints(1); const int n_class = P.n_class;
         const int n_chunks = A.Model_args_ints(3);
         P.overflow_threshold = A.Model_args_doubles(0); P.underflow_threshold = A.Model_args_doubles(1);
@@ -95,7 +102,15 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
           if (n_cat_per_test(t) > 2) { P.ord_idx_of_test(t) = P.n_ordinal_tests; ++P.n_ordinal_tests; }
           else                       { P.ord_idx_of_test(t) = -1;                ++P.n_binary_tests;  }
         }
-        const int n_ordinal_tests = P.n_ordinal_tests, n_binary_tests = P.n_binary_tests;
+        // const int n_ordinal_tests = P.n_ordinal_tests, n_binary_tests = P.n_binary_tests;
+        const int n_ordinal_tests = P.n_ordinal_tests;
+        //// ---- ordinal slot -> fitted test (the inverse of ord_idx_of_test). The cutpoint-prior anchor
+        ////      below read the intercept prior mean of test n_binary_tests + t_ord, which is the test of
+        ////      ordinal slot t_ord only when the binary tests come first in y:
+        P.fitted_test_index_of_ordinal_slot.resize(n_ordinal_tests);
+        for (int t = 0; t < n_tests; ++t) {
+          if (P.ord_idx_of_test(t) >= 0) P.fitted_test_index_of_ordinal_slot(P.ord_idx_of_test(t)) = t;
+        }
         P.n_cat_per_ord_test = &A.Model_args_col_vecs_int[0];
         P.n_thr_per_ord_test = &A.Model_args_col_vecs_int[1];
         const Eigen::Matrix<int, -1, 1> &n_thr_per_ord_test = *P.n_thr_per_ord_test;
@@ -112,7 +127,16 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
 
         //// ---- chunking ----
         int vec_size; if (vect_type == "AVX512") vec_size = 8; else if (vect_type == "AVX2") vec_size = 4; else if (vect_type == "AVX") vec_size = 2; else vec_size = 1;
-        ChunkSizeInfo csi = calculate_chunk_sizes(N, vec_size, n_chunks);
+        //// n_chunks_multiplier is 1 except in the PartialLog evaluations (the fallback, attempt 2 in
+        //// MVP_lp_grad_multi_attempts.hpp, and the forced ones), which use the sample() argument
+        //// n_chunks_multiplier_for_PartialLog_log_scale_evaluation (default 3) so that each
+        //// (larger-per-individual) PartialLog chunk stays about the same size in memory as a NoLog chunk;
+        //// the nuisance vector and its gradient are re-laid out between the stored chunk layout and this
+        //// one (PartialLog_nuisance_chunk_relayout.hpp).
+        //// Capped at N / vec_size chunks (so no chunk is smaller than one SIMD vector, which would otherwise make calculate_chunk_sizes
+        //// fall back to ONE chunk of ~N rows), and never fewer chunks than n_chunks:
+        const int n_chunks_used = std::min(n_chunks * std::max(1, n_chunks_multiplier), std::max(n_chunks, N / vec_size));
+        ChunkSizeInfo csi = calculate_chunk_sizes(N, vec_size, n_chunks_used);
         P.chunk_size_orig = csi.chunk_size_orig; P.normal_chunk_size = csi.normal_chunk_size; P.last_chunk_size = csi.last_chunk_size;
         P.n_total_chunks = csi.n_total_chunks; P.n_full_chunks = csi.n_full_chunks;
 
@@ -140,7 +164,10 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
           const int n_thr_t = n_thr_per_ord_test(t_ord), n_cat_t = n_thr_t + 1;
           P.C[c](0, t_ord) = P.C_raw[c](0, t_ord);
           for (int k = 1; k < n_thr_t; ++k) { P.C[c](k, t_ord) = P.C[c](k - 1, t_ord) + std::exp(P.C_raw[c](k, t_ord)); log_det_J_C_raw_to_C_double += P.C_raw[c](k, t_ord); }
-          const int t = n_binary_tests + t_ord; const double anchor = prior_coeffs_mean[c](0, t);
+          // const int t = n_binary_tests + t_ord; const double anchor = prior_coeffs_mean[c](0, t);
+          //// anchor = the intercept prior mean of the fitted test holding ordinal slot t_ord (any order):
+          const int t = P.fitted_test_index_of_ordinal_slot(t_ord);
+          const double anchor = prior_coeffs_mean[c](0, t);
           Eigen::Matrix<double, -1, 1> cp(n_thr_t); for (int k = 0; k < n_thr_t; ++k) cp(k) = stan::math::Phi(P.C[c](k, t_ord) - anchor);
           Eigen::Matrix<double, -1, 1> p_ord(n_cat_t); p_ord(0) = cp(0); for (int k = 1; k < n_thr_t; ++k) p_ord(k) = cp(k) - cp(k - 1); p_ord(n_cat_t - 1) = 1.0 - cp(n_thr_t - 1);
           const Eigen::Matrix<double, -1, 1> alpha_t = prior_dirichlet_alpha[c].col(t_ord).head(n_cat_t);
@@ -197,7 +224,11 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
               const int n_thr_t = n_thr_per_ord_test(t_ord), n_cat_t = n_thr_t + 1;
               C_var[c](0, t_ord) = C_raw_var[c](0, t_ord);
               for (int k = 1; k < n_thr_t; ++k) { C_var[c](k, t_ord) = C_var[c](k - 1, t_ord) + stan::math::exp(C_raw_var[c](k, t_ord)); ldJ += C_raw_var[c](k, t_ord); }
-              const int t = n_binary_tests + t_ord; stan::math::var anchor = stan::math::to_var(prior_coeffs_mean[c](0, t));
+              // const int t = n_binary_tests + t_ord;
+              // stan::math::var anchor = stan::math::to_var(prior_coeffs_mean[c](0, t));
+              //// the same anchor as the double-side prior above (the test of ordinal slot t_ord):
+              const int t = P.fitted_test_index_of_ordinal_slot(t_ord);
+              stan::math::var anchor = stan::math::to_var(prior_coeffs_mean[c](0, t));
               Eigen::Matrix<stan::math::var, -1, 1> cp(n_thr_t); for (int k = 0; k < n_thr_t; ++k) cp(k) = stan::math::Phi(C_var[c](k, t_ord) - anchor);
               Eigen::Matrix<stan::math::var, -1, 1> p_ord(n_cat_t); p_ord(0) = cp(0); for (int k = 1; k < n_thr_t; ++k) p_ord(k) = cp(k) - cp(k - 1); p_ord(n_cat_t - 1) = 1.0 - cp(n_thr_t - 1);
               const Eigen::Matrix<double, -1, 1> alpha_t = prior_dirichlet_alpha[c].col(t_ord).head(n_cat_t);
@@ -207,7 +238,11 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
               }
               for (int k = 0; k < n_thr_t; ++k) pdD += stan::math::std_normal_lpdf(C_var[c](k, t_ord) - anchor);
             }
-            target_AD += ldJ + pdD;
+            //// target_AD += ldJ + pdD;
+            //// ---- the induced Dirichlet cutpoint prior pdD is a prior: left out of the gradient with
+            ////      exclude_priors, as it is left out of the log density; the C_raw -> C Jacobian ldJ stays:
+            if (!P.exclude_priors) target_AD += ldJ + pdD;
+            else                   target_AD += ldJ;
           }
           target_AD.grad();
           out_mat.segment(1 + n_us + n_corrs + n_covariates_total + (n_class > 1 ? n_pops : 0), n_cutpoints_total) = C_unc_vec_var.adj();
@@ -223,29 +258,78 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
               L_Omega_var[c] = CS.block(1, 0, n_tests, n_tests); target_AD += CS(0, 0); ldJ += CS(0, 0);
               Omega_var[c] = L_Omega_var[c] * L_Omega_var[c].transpose();
               for (int i = 1; i < n_tests; ++i) for (int j = 0; j < i; ++j) if (known_values_indicator[c](i, j) == 1) {
-                stan::math::var kv = stan::math::normal_lpdf(Omega_var[c](i, j), 0.0, 10.0); target_AD += kv; prior_densities_L_Omega_double += kv.val(); }
+                //// stan::math::var kv = stan::math::normal_lpdf(Omega_var[c](i, j), 0.0, 10.0); target_AD += kv;
+                ////       prior_densities_L_Omega_double += kv.val(); }
+                stan::math::var kv = stan::math::normal_lpdf(Omega_var[c](i, j), 0.0, 10.0);
+                //// ---- a prior: left out of the gradient with exclude_priors, as it is left out of the log
+                ////      density:
+                if (!P.exclude_priors) target_AD += kv;
+                prior_densities_L_Omega_double += kv.val(); }
             }
             log_det_J_L_Omega_double += ldJ.val();
           }
           {
             stan::math::var pd = 0.0;
             for (int c = 0; c < n_class; ++c) {
-              if (!corr_prior_beta && !corr_prior_norm) pd += stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
+              //// if (!corr_prior_beta && !corr_prior_norm) pd +=
+              ////       stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
+              if (!corr_prior_beta && !corr_prior_norm) {
+                pd += stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
+                //// ---- with known (fixed) correlations, the terms of the known pairs in the
+                ////      Jacobian that lkj_corr_cholesky_lpdf contains are removed (the prior is
+                ////      on the free correlations):
+                fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
+                      pd, L_Omega_var[c], known_values_indicator[c]);
+              }
               else {
                 for (int i = 1; i < n_tests; i++) for (int j = 0; j < i; j++)
                   pd += corr_prior_beta ? stan::math::beta_lpdf((Omega_var[c](i, j) + 1) / 2, prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j))
                                         : stan::math::normal_lpdf(Omega_var[c](i, j), prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
-                Eigen::Matrix<stan::math::var, -1, 1> jd(n_tests); for (int i = 0; i < n_tests; ++i) jd(i) = (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
-                pd += (n_tests * stan::math::log(2) + jd.sum());
+                //// ---- log Jacobian of the map from the free entries of L_Omega to the off-diagonal
+                ////      entries of Omega: sum over i of (n_tests - 1 - i) * log(L_Omega(i, i)) for
+                ////      0-indexed i, i.e. prod_r L_rr^(K - r) for 1-indexed r. The exponent was
+                ////      n_tests + 1 - (i + 1): one power of L_Omega(i, i) too many, i.e. an extra
+                ////      det(Omega)^(1/2) factor that pulled the correlations towards 0.
+                //// Eigen::Matrix<stan::math::var, -1, 1> jd(n_tests); for (int i = 0; i < n_tests; ++i) jd(i) =
+                ////       (n_tests + 1 - (i + 1)) * stan::math::log(L_Omega_var[c](i, i));
+                Eigen::Matrix<stan::math::var, -1, 1> jd(n_tests);
+                //// ---- with known (fixed) correlations the map is to the FREE off-diagonal
+                ////      correlations only: the power of L_Omega(i, i) is the number of free
+                ////      correlations below the diagonal in column i (n_tests - 1 - i when no
+                ////      correlation is known):
+                //// for (int i = 0; i < n_tests; ++i) {
+                ////       jd(i) = (n_tests - 1 - i) *
+                ////             stan::math::log(L_Omega_var[c](i, i));
+                //// }
+                for (int i = 0; i < n_tests; ++i) {
+                      const int number_of_free_correlations_below_diagonal_in_column_i =
+                            fn_number_of_free_correlations_below_diagonal_in_column(
+                                  known_values_indicator[c], i);
+                      jd(i) = number_of_free_correlations_below_diagonal_in_column_i *
+                             stan::math::log(L_Omega_var[c](i, i));
+                }
+                //// ---- constant: -log(2) per correlation for the Beta prior on (rho + 1) / 2, i.e.
+                ////      n_tests * (n_tests - 1) / 2 per class; no log(2) term for the normal prior on
+                ////      rho (was + n_tests * log(2) for both; a constant, so the draws do not change):
+                //// pd += (n_tests * stan::math::log(2) + jd.sum());
+                pd += corr_prior_beta ? (- 0.5 * n_tests * (n_tests - 1) * stan::math::log(2.0) + jd.sum())
+                                      : jd.sum();
               }
             }
-            target_AD += pd; prior_densities_L_Omega_double += pd.val();
+            //// target_AD += pd; prior_densities_L_Omega_double += pd.val();
+            //// ---- the correlation prior: left out of the gradient with exclude_priors, as it is left out
+            ////      of the log density (prior_densities):
+            if (!P.exclude_priors) target_AD += pd;
+            prior_densities_L_Omega_double += pd.val();
             target_AD.grad();
             out_mat.segment(1 + n_us, n_corrs) = Omega_raw_vec_var.adj();
             stan::math::set_zero_all_adjoints_nested();
           }
           if (n_class > 1) {
             fn_MVP_prev_multi_pop_AD(u_prev_raw, prev_prior_a, prev_prior_b, n_pops, prior_densities_prev_double, log_det_J_prev_from_AD, grad_prev_raw);
+            //// ---- the prevalence prior is a prior: with exclude_priors its gradient is left out, as its
+            ////      density is left out of the log density (the Jacobian gradient is added below):
+            if (P.exclude_priors) grad_prev_raw.setZero();
             out_mat.segment(1 + n_us + n_corrs + n_covariates_total, n_pops) = grad_prev_raw;
           }
           if (J_grad_option == "autodiff") {

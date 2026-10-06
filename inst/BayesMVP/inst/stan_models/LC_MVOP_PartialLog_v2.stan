@@ -2,8 +2,7 @@
 //
 // Latent Class Multivariate Ordinal Probit (LC-MVOP)
 // Extends binary LC-MVP to handle mixed binary + ordinal outcomes.
-// First n_binary_tests columns of y are binary (0/1).
-// Next n_ordinal_tests columns are ordinal (1, 2, ..., K_t).
+// y has n_binary_tests binary (0/1) and n_ordinal_tests ordinal (1, ..., K_t) columns, in ANY order.
 //
 // This version implements ONLY the fully_vectorised == 1 / handle_numerical_issues == 1
 // path (i.e. matches the scheme of LC_MVP_bin_PartialLog_v5.stan). The data flag
@@ -632,6 +631,52 @@ transformed data {
           ord_end_index   = calculate_end_indices(n_thr_per_ord_test, n_ordinal_tests, ord_start_index);
       }
       ////
+      //// ---- Order-agnostic test-type slot maps, derived from the data (y):
+      //// A column of y is a BINARY test when every entry is 0 or 1. Ordinal categories are coded
+      //// 1, ..., K_t, so an ordinal column contains a value >= 2 unless every subject is in
+      //// category 1 (rejected below as ambiguous).
+      //// Binary slot b / ordinal slot k = the b-th binary / k-th ordinal column of y, counted from
+      //// the left, so n_cat_per_ord_test[k], n_thr_per_ord_test[k], prior_dirichlet_alpha[c][, k]
+      //// and the k-th cutpoint block of C_unc_vec[c] all belong to column test_of_ordinal_slot[k]
+      //// of y. For the binaries-first layout the maps reduce to test_of_binary_slot =
+      //// 1:n_binary_tests and test_of_ordinal_slot = (n_binary_tests + 1):n_tests, i.e. the old
+      //// fixed layout.
+      ////
+      array[n_tests] int test_is_binary;                        //// 1 = binary column of y, 0 = ordinal
+      array[n_tests] int ordinal_slot_of_test;                  //// ordinal slot of column t (0 if binary)
+      array[max(n_binary_tests, 1)] int test_of_binary_slot;    //// column of y holding binary slot b
+      array[max(n_ordinal_tests, 1)] int test_of_ordinal_slot;  //// column of y holding ordinal slot k
+      test_of_binary_slot  = rep_array(1, max(n_binary_tests, 1));
+      test_of_ordinal_slot = rep_array(1, max(n_ordinal_tests, 1));
+      {
+          int n_binary_columns_found  = 0;
+          int n_ordinal_columns_found = 0;
+          for (t in 1:n_tests) {
+              int column_t_is_binary = 1;
+              for (n in 1:N) {
+                  if ((y[n, t] != 0) && (y[n, t] != 1)) column_t_is_binary = 0;
+              }
+              test_is_binary[t] = column_t_is_binary;
+              if (column_t_is_binary == 1) {
+                  n_binary_columns_found += 1;
+                  ordinal_slot_of_test[t] = 0;
+                  if (n_binary_columns_found <= n_binary_tests)
+                      test_of_binary_slot[n_binary_columns_found] = t;
+              } else {
+                  n_ordinal_columns_found += 1;
+                  ordinal_slot_of_test[t] = n_ordinal_columns_found;
+                  if (n_ordinal_columns_found <= n_ordinal_tests)
+                      test_of_ordinal_slot[n_ordinal_columns_found] = t;
+              }
+          }
+          if ((n_binary_columns_found != n_binary_tests) || (n_ordinal_columns_found != n_ordinal_tests))
+              reject("the 0/1 columns of y do not match n_binary_tests / n_ordinal_tests: found ",
+                     n_binary_columns_found, " binary and ", n_ordinal_columns_found,
+                     " ordinal columns, expected ", n_binary_tests, " and ", n_ordinal_tests,
+                     " (an ordinal column with every subject in",
+                     " category 1 cannot be told apart from a binary column)");
+      }
+      ////
       //// ---- Ordinal category data as int (per ordinal test, per person):
       ////
       array[max(n_ordinal_tests, 1), N] int y_ord;
@@ -639,7 +684,8 @@ transformed data {
       if (n_ordinal_tests > 0) {
           for (t_ord in 1:n_ordinal_tests) {
               for (n in 1:N) {
-                  y_ord[t_ord, n] = to_int(y[n, n_binary_tests + t_ord]);
+                  // y_ord[t_ord, n] = to_int(y[n, n_binary_tests + t_ord]);
+                  y_ord[t_ord, n] = to_int(y[n, test_of_ordinal_slot[t_ord]]);
               }
           }
       }
@@ -777,7 +823,8 @@ transformed parameters {
                                     Xbeta = rep_vector(beta[c, t, 1], N);
                               }
 
-                              if (t <= n_binary_tests) {
+                              // if (t <= n_binary_tests) {
+                              if (test_is_binary[t] == 1) {
 
                                     ////////////////////////////////////////////////////////////
                                     //// ---- BINARY test t (one-sided truncation) -- identical
@@ -941,7 +988,8 @@ transformed parameters {
                                     ////////////////////////////////////////////////////////////
                                     //// ---- ORDINAL test t (two-sided truncation):
                                     ////////////////////////////////////////////////////////////
-                                    int t_ord = t - n_binary_tests;
+                                    // int t_ord = t - n_binary_tests;
+                                    int t_ord = ordinal_slot_of_test[t];
                                     int n_thr_t = n_thr_per_ord_test[t_ord];
                                     int n_cat_t = n_cat_per_ord_test[t_ord];
                                     vector[n_thr_t] C_t = get_test_values(C_vec[c], ord_start_index, ord_end_index, t_ord);
@@ -1190,8 +1238,12 @@ model {
                     ////
                     //// Induced-Dirichlet prior:
                     ////
-                    int t = t_ord + n_binary_tests;
-                    real anchor_ct = prior_beta_mean[c, t, 1];
+                    // int t = t_ord + n_binary_tests;
+                    int t = test_of_ordinal_slot[t_ord];
+                    // real anchor_ct = prior_beta_mean[c, t, 1];
+                    //// anchor = intercept prior mean of test t (row 1 = intercept, column t = test), as
+                    //// BayesMVP's C++ (prior_coeffs_mean[c](0, t)); [c, t, 1] read covariate t of column 1:
+                    real anchor_ct = prior_beta_mean[c][1, t];
                     // if (c == 1) {
                     //     anchor_ct = dot_product(baseline_case_nd[t][1:n_covs_per_outcome[c, t]], to_vector(beta[c, t, 1:n_covs_per_outcome[c, t]]));
                     // } else {
@@ -1217,7 +1269,9 @@ model {
       //// ---- Truncation (note: NOT the same as re-parameterisation!) to avoid label-switching:
       ////
       if ((n_binary_tests > 0) && (n_class > 1)) {
-         if (beta[2, 1 ,1] < beta[1, 1, 1]) target += negative_infinity();
+         // if (beta[2, 1 ,1] < beta[1, 1, 1]) target += negative_infinity();
+         if (beta[2, test_of_binary_slot[1], 1] < beta[1, test_of_binary_slot[1], 1])
+             target += negative_infinity();
       }
       ////
       //// ---- Likelihood:
@@ -1250,10 +1304,15 @@ generated quantities {
       vector[n_binary_tests] Fp_baseline_bin;
       ////
       if (n_class == 2) {
-          for (t in 1:n_binary_tests) {
-              Se_baseline_bin[t] =       Phi(Xbeta_baseline_d[t]);
-              Fp_baseline_bin[t] =       Phi(Xbeta_baseline_nd[t]);
-              Sp_baseline_bin[t] = 1.0 - Fp_baseline_bin[t];
+          // for (t in 1:n_binary_tests) {
+          for (t_bin in 1:n_binary_tests) {
+              int t = test_of_binary_slot[t_bin];
+              // Se_baseline_bin[t] =       Phi(Xbeta_baseline_d[t]);
+              Se_baseline_bin[t_bin] =       Phi(Xbeta_baseline_d[t]);
+              // Fp_baseline_bin[t] =       Phi(Xbeta_baseline_nd[t]);
+              Fp_baseline_bin[t_bin] =       Phi(Xbeta_baseline_nd[t]);
+              // Sp_baseline_bin[t] = 1.0 - Fp_baseline_bin[t];
+              Sp_baseline_bin[t_bin] = 1.0 - Fp_baseline_bin[t_bin];
           }
       }
       ////
@@ -1265,7 +1324,8 @@ generated quantities {
       ////
       if (n_ordinal_tests > 0 && n_class == 2) {
           for (t_ord in 1:n_ordinal_tests) {
-              int t = n_binary_tests + t_ord;
+              // int t = n_binary_tests + t_ord;
+              int t = test_of_ordinal_slot[t_ord];
               int n_thr_t = n_thr_per_ord_test[t_ord];
               ////
               Se_baseline_ord[t_ord] = rep_vector(-1.0, n_thr_max_gq);

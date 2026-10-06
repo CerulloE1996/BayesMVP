@@ -91,6 +91,8 @@ R_fn_sample_model(
   reorder_cols_MVP,
   metric_estimator = "pooled",
   test_perm_override = NULL,
+  test_order_rule_for_reorder_cols_MVP = NULL,
+  n_chunks_multiplier_for_PartialLog_log_scale_evaluation = 3,
   num_chunks_burnin = NULL,
   num_chunks_sampling = NULL,
   diffusion_HMC_integrator = "kick_flow_kick",
@@ -118,6 +120,8 @@ n_chains_burnin * n_threads_WCP_burnin threads. An explicit FALSE remains availa
 columns permuted into the Dissmann (2013) pair-first order of the estimated
 correlation matrix. Supported for Model_type = "LC_MVP" and for USER-SUPPLIED
 Stan models (Model_type = "Stan").
+(Model_type = "LC_MVOP" is supported as well, with binary and ordinal tests in any positions.)
+Default (NULL, or not given): TRUE for Model_type = "LC_MVP" and "LC_MVOP", FALSE for every other model.
 
 For Model_type = "Stan" only \code{y} is permuted - BayesMVP cannot know which of
 an external model's other data objects are test-indexed - so the option is REFUSED
@@ -132,7 +136,43 @@ silently. Note also that test-indexed OUTPUTS are not un-permuted (slot j corres
 to original test \code{test_perm[j]}; the permutation and its inverse are returned as
 \code{test_perm} / \code{test_inv_perm}), and that user-supplied test-indexed initial
 values are left alone. This has only been tested to work and/or be beneficial for
-multivariate probit-based models.}
+multivariate probit-based models. For Model_type = "LC_MVP" (y, the coefficient priors, the
+correlation bounds, priors and known values, the covariates and the beta initial values are permuted
+with the tests) the summaries and traces are returned in the ORIGINAL test order: beta, Omega and
+L_Omega are re-indexed from the fitted order by create_summary_and_traces(), and Omega_orig,
+L_Omega_orig, Xbeta_baseline_nd / _d and Se / Sp / Fp_baseline are computed in the original order by
+the model; Omega_unconstrained_vec, the raw sampler draws, the burn-in draws and the metric stay in
+the sampler's coordinates of the fitted order (HMC_info$parameter_families_left_in_fitted_test_order).
+For Model_type = "LC_MVOP" the same holds (the ordinal metadata, the Dirichlet priors and the cutpoint
+initial values are permuted with the tests as well), and the cutpoints C_unc_vec, C_raw_vec and C_vec
+are also re-indexed into the original order of the ordinal tests (HMC_info lists every re-indexed family).}
+
+\item{test_order_rule_for_reorder_cols_MVP}{The rule that sets the test (column) order after the pre-burnin
+of reorder_cols_MVP = TRUE (unused when reorder_cols_MVP = FALSE or when test_perm_override is given).
+\code{"most_nearly_deterministic_test_last_then_greedy_correlation_order"} places last the test whose
+class-conditional latent means sit furthest in the tails at the pre-burnin estimate (the sum over classes of
+the mean absolute probit linear predictor; BayesMVP's compute_tail_extremeness_per_test_LC_MVP()), and orders
+the other tests by the greedy pair-first rule of compute_optimal_test_order() on their own estimated
+correlations. \code{"greedy_correlation_order"} orders all tests by compute_optimal_test_order(), the rule
+used before this option existed. NULL (default, not set): the first rule for Model_type = "LC_MVP" and
+"greedy_correlation_order" for USER-SUPPLIED Stan models, whose intercepts are not known here; the first
+rule set explicitly for a Stan model stops with an error. The rule used is returned as
+\code{test_order_rule_for_reorder_cols_MVP}.
+\code{"test_with_largest_tail_category_distance_from_latent_mean_last_then_greedy_correlation_order"}
+(binary and ordinal tests; the default for Model_type = "LC_MVOP") places last the test whose tail
+categories sit furthest from the class-conditional latent mean at the pre-burnin estimate (BayesMVP's
+compute_tail_category_distance_from_latent_mean_per_test(), from the cutpoints and category probabilities;
+for a binary test it equals the measure of the first rule), and orders the other tests by the greedy rule.
+The first rule is for binary tests only (it stops for LC_MVOP); neither is available for a Stan model.}
+
+\item{n_chunks_multiplier_for_PartialLog_log_scale_evaluation}{A positive whole number (default 3): every
+PartialLog (log-scale) evaluation of the built-in LC_MVP / MVP and LC_MVOP / MVOP models (the fallback of
+multi_attempts when the standard evaluation fails, and the evaluation forced by force_PartialLog = TRUE)
+uses this many times the number of chunks of the fit (capped at N / SIMD width chunks), so that each
+PartialLog chunk, which needs about 3 times more memory per individual than a standard one, stays about the
+same size in memory. The nuisance values and their gradient are re-laid out exactly between the two chunk
+layouts. 1 = the number of chunks of the fit. Returned as
+\code{n_chunks_multiplier_for_PartialLog_log_scale_evaluation} and in HMC_info.}
 
 \item{diffusion_HMC_integrator}{Joint diffusion integrator: "kick_flow_kick" (default) or "flow_kick_flow".}
 
@@ -153,4 +193,11 @@ is frozen for the fit and returned as autodiff_fallback. For separate R worker
 processes, set the option in the process which calls this function.
 }
 
-\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{KE}, \code{ChEES}, \code{CHESSR}, \code{CHESSR_log}, or \code{SNAPER}. Historical \code{ChEESR}/\code{ChESSR} spellings select \code{CHESSR}. Both rate variants score the main parameters in mandatory mass-matrix coordinates. \code{CHESSR} uses the direct per-trajectory rate gradient; \code{CHESSR_log} uses the established smoothed log ratio of the expected numerator to mean trajectory length. These jitter-averaging conventions differ. \code{SNAPER} learns its direction in the same metric coordinates. Joint nuisance diffusion is supported. The existing warm-up schedule is retained; this is not a reproduction of every SGA-HMC adaptation rule in the 2022 paper. The frozen BayesMVPlegacy package retains the previous API and defaults.}
+\details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{ChEES},
+\code{CHESSR}, \code{CHESSR_log}, or \code{SNAPER}. Historical \code{ChEESR}/\code{ChESSR} spellings select
+\code{CHESSR}. Both rate variants score the main parameters in mandatory mass-matrix coordinates.
+\code{CHESSR} uses the direct per-trajectory rate gradient; \code{CHESSR_log} uses the established smoothed
+log ratio of the expected numerator to mean trajectory length. These jitter-averaging conventions differ.
+\code{SNAPER} learns its direction in the same metric coordinates. Joint nuisance diffusion is supported. The
+existing warm-up schedule is retained; this is not a reproduction of every SGA-HMC adaptation rule in the 2022
+paper. The frozen BayesMVPlegacy package retains the previous API and defaults.}
