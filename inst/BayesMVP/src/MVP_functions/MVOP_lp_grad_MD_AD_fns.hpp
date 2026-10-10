@@ -7,6 +7,7 @@
 
 
 #include <Eigen/Dense>
+#include <exception>
 
 #include <unsupported/Eigen/SpecialFunctions>
 
@@ -320,11 +321,42 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T(  Eigen
           std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> cutpoint_grad_per_chunk(P.n_full_chunks);
           std::vector<Eigen::Matrix<double, -1, -1>>              prev_grad_per_chunk(P.n_full_chunks);
           std::vector<double>                                     log_jac_u_per_chunk(P.n_full_chunks, 0.0);
+       // #pragma omp parallel num_threads(n_threads_WCP)
+       // {
+         // LC_MVP_workspace_struct &ws = LC_MVP_ws_structs[omp_get_thread_num()]; ws.reset_sizes();
+         // #pragma omp for schedule(static)
+         // for (int nc = 0; nc < P.n_full_chunks; nc++) {
+           // beta_grad_per_chunk[nc]     = vec_of_mats<double>(n_covariates_max, n_tests, n_class);
+           // U_Omega_grad_per_chunk[nc]  = vec_of_mats<double>(n_tests, n_tests, n_class);
+           // cutpoint_grad_per_chunk[nc] = vec_of_mats<double>(P.n_cutpoints_max, P.n_ordinal_tests, n_class);
+           // prev_grad_per_chunk[nc]     = Eigen::Matrix<double, -1, -1>::Zero(n_pops, n_class);
+           // fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat, theta_us_vec_ref, y_ref, grad_option, nc, P.normal_chunk_size, P,
+                                                                 // log_jac_u_per_chunk[nc], beta_grad_per_chunk[nc], U_Omega_grad_per_chunk[nc],
+                                                                 // cutpoint_grad_per_chunk[nc], prev_grad_per_chunk[nc], ws, Model_args_as_cpp_struct);
+         // }
+       // }
+          //// An exception thrown in a chunk must never leave the OpenMP region (it would end the R process through
+          //// std::terminate). Each chunk's exception is caught and kept, and after the region the one of the
+          //// FIRST failing chunk in chunk order is rethrown on the calling thread: the exception the serial path
+          //// throws, so the multi-attempt fallback (PartialLog, then autodiff) runs, or the caller gets the
+          //// error, exactly as for the serial path:
+          std::vector<std::exception_ptr> exception_thrown_in_chunk(P.n_full_chunks);
           #pragma omp parallel num_threads(n_threads_WCP)
           {
-            LC_MVP_workspace_struct &ws = LC_MVP_ws_structs[omp_get_thread_num()]; ws.reset_sizes();
+            std::exception_ptr exception_thrown_in_workspace_reset_of_this_thread;
+            LC_MVP_workspace_struct &ws = LC_MVP_ws_structs[omp_get_thread_num()];
+            try {
+              ws.reset_sizes();
+            } catch (...) {
+              exception_thrown_in_workspace_reset_of_this_thread = std::current_exception();
+            }
             #pragma omp for schedule(static)
             for (int nc = 0; nc < P.n_full_chunks; nc++) {
+              if (exception_thrown_in_workspace_reset_of_this_thread) {
+                exception_thrown_in_chunk[nc] = exception_thrown_in_workspace_reset_of_this_thread;
+                continue;
+              }
+              try {
               beta_grad_per_chunk[nc]     = vec_of_mats<double>(n_covariates_max, n_tests, n_class);
               U_Omega_grad_per_chunk[nc]  = vec_of_mats<double>(n_tests, n_tests, n_class);
               cutpoint_grad_per_chunk[nc] = vec_of_mats<double>(P.n_cutpoints_max, P.n_ordinal_tests, n_class);
@@ -332,7 +364,13 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T(  Eigen
               fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat, theta_us_vec_ref, y_ref, grad_option, nc, P.normal_chunk_size, P,
                                                                     log_jac_u_per_chunk[nc], beta_grad_per_chunk[nc], U_Omega_grad_per_chunk[nc],
                                                                     cutpoint_grad_per_chunk[nc], prev_grad_per_chunk[nc], ws, Model_args_as_cpp_struct);
+              } catch (...) {
+                exception_thrown_in_chunk[nc] = std::current_exception();
+              }
             }
+          }
+          for (int nc = 0; nc < P.n_full_chunks; nc++) {
+            if (exception_thrown_in_chunk[nc]) std::rethrow_exception(exception_thrown_in_chunk[nc]);
           }
           //// ---- deterministic reduction, in chunk order:
           for (int nc = 0; nc < P.n_full_chunks; nc++) {

@@ -196,7 +196,13 @@ inline MVOP_prep fn_MVOP_prep(  Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat
               double eps = std::max(1e-8, 1e-6 * std::abs(Omega_unconstrained_double[c](i, j))); if (std::abs(Omega_unconstrained_double[c](i, j)) > 2.0) eps = 1e-4;
               Omega_unconstrained_double[c](i, j) += eps; Eigen::Matrix<double, -1, -1> Lp = get_L(Omega_unconstrained_double[c]); Omega_unconstrained_double[c](i, j) -= eps;
               int cnt_1 = 0;
-              for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) { const double d = (Lp(k, l) - P.L_Omega_double[c](k, l)) / eps; P.deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(d) ? d : 0.0; }
+           // for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) { const double d = (Lp(k, l) - P.L_Omega_double[c](k, l)) / eps; P.deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(d) ? d : 0.0; }
+              //// a non-finite derivative is stored as NaN, not as 0 (flagged, so the fallback runs):
+              for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) {
+                double deriv = (Lp(k, l) - P.L_Omega_double[c](k, l)) / eps;
+                if (!std::isfinite(deriv)) deriv = std::numeric_limits<double>::quiet_NaN();
+                P.deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = deriv;
+              }
               cnt_2++;
             }
           }

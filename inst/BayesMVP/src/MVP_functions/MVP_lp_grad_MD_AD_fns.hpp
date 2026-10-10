@@ -228,7 +228,12 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_imp
                                   for (int k = 0; k < n_tests; k++) {
                                     for (int l = 0; l <= k; l++) {
                                       double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
-                                      deriv_L_wrt_unc_full[c](cnt_1, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+                                   // deriv_L_wrt_unc_full[c](cnt_1, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+                                      //// a non-finite derivative is stored as NaN, not as 0: the Omega gradient
+                                      //// is then non-finite, so the failed evaluation is flagged and the
+                                      //// multi-attempt fallback runs (0 would give a finite, wrong gradient):
+                                      if (!std::isfinite(deriv)) deriv = std::numeric_limits<double>::quiet_NaN();
+                                      deriv_L_wrt_unc_full[c](cnt_1, cnt_2) = deriv;
                                       cnt_1++;
                                     }
                                   }

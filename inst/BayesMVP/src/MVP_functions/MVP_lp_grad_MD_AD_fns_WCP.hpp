@@ -9,6 +9,7 @@
 
 
 #include <Eigen/Dense>
+#include <exception>
 #include <optional>
  
 #include <unsupported/Eigen/SpecialFunctions>
@@ -248,7 +249,13 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_WCP_impl_T
               double eps = std::max(1e-8, 1e-6 * std::abs(Omega_unconstrained_double[c](i, j))); if (std::abs(Omega_unconstrained_double[c](i, j)) > 2.0) eps = 1e-4;
               Omega_unconstrained_double[c](i, j) += eps; Eigen::Matrix<double, -1, -1> Lp = get_L_orig(Omega_unconstrained_double[c]); Omega_unconstrained_double[c](i, j) -= eps;
               int cnt_1 = 0;
-              for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) { const double d = (Lp(k, l) - L_Omega_double[c](k, l)) / eps; deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(d) ? d : 0.0; }
+           // for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) { const double d = (Lp(k, l) - L_Omega_double[c](k, l)) / eps; deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(d) ? d : 0.0; }
+              //// a non-finite derivative is stored as NaN, not as 0 (flagged, so the fallback runs):
+              for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) {
+                double deriv = (Lp(k, l) - L_Omega_double[c](k, l)) / eps;
+                if (!std::isfinite(deriv)) deriv = std::numeric_limits<double>::quiet_NaN();
+                deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = deriv;
+              }
               cnt_2++;
             }
           }
@@ -392,14 +399,48 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_WCP_impl_T
         std::vector<Eigen::Matrix<double, -1, -1>>              prev_grad_per_chunk(n_full_chunks);
         std::vector<double>                                     log_jac_u_per_chunk(n_full_chunks, 0.0);
         
+     // #pragma omp parallel num_threads(n_threads_WCP) if (n_threads_WCP > 1)
+     // {
+       // const int tid = omp_get_thread_num();
+       // LC_MVP_workspace_struct &ws = LC_MVP_ws_structs[tid];
+       // ws.reset_sizes();
+
+       // #pragma omp for schedule(static)
+       // for (int nc = 0; nc < n_full_chunks; nc++) {
+         // beta_grad_per_chunk[nc]    = vec_of_mats<double>(n_covariates_max, n_tests, n_class);
+         // U_Omega_grad_per_chunk[nc] = vec_of_mats<double>(n_tests, n_tests, n_class);
+         // prev_grad_per_chunk[nc]    = Eigen::Matrix<double, -1, -1>::Zero(n_pops, n_class);
+         // fn_MVP_NoLog_process_chunk_T<vec>(out_mat, theta_us_vec_ref, y_ref, grad_option, nc, normal_chunk_size, chunk_size_orig,
+                                           // N, n_params, n_tests, n_class, n_covariates_max, n_pops, n_covariates_per_outcome_vec, pop_ind, X,
+                                           // beta_double_array, L_Omega_double, L_Omega_recip_double, prev_mat, log_prev_mat_small,
+                                           // log_jac_u_per_chunk[nc], beta_grad_per_chunk[nc], U_Omega_grad_per_chunk[nc], prev_grad_per_chunk[nc],
+                                           // ws, kchoice, Model_args_as_cpp_struct);
+       // }
+     // }
+        //// An exception thrown in a chunk must never leave the OpenMP region (it would end the R process through
+        //// std::terminate). Each chunk's exception is caught and kept, and after the region the one of the
+        //// FIRST failing chunk in chunk order is rethrown on the calling thread: the exception the serial path
+        //// throws, so the multi-attempt fallback (PartialLog, then autodiff) runs, or the caller gets the
+        //// error, exactly as for the serial path:
+        std::vector<std::exception_ptr> exception_thrown_in_chunk(n_full_chunks);
         #pragma omp parallel num_threads(n_threads_WCP) if (n_threads_WCP > 1)
         {
+          std::exception_ptr exception_thrown_in_workspace_reset_of_this_thread;
           const int tid = omp_get_thread_num();
           LC_MVP_workspace_struct &ws = LC_MVP_ws_structs[tid];
-          ws.reset_sizes();
+          try {
+            ws.reset_sizes();
+          } catch (...) {
+            exception_thrown_in_workspace_reset_of_this_thread = std::current_exception();
+          }
 
           #pragma omp for schedule(static)
           for (int nc = 0; nc < n_full_chunks; nc++) {
+            if (exception_thrown_in_workspace_reset_of_this_thread) {
+              exception_thrown_in_chunk[nc] = exception_thrown_in_workspace_reset_of_this_thread;
+              continue;
+            }
+            try {
             beta_grad_per_chunk[nc]    = vec_of_mats<double>(n_covariates_max, n_tests, n_class);
             U_Omega_grad_per_chunk[nc] = vec_of_mats<double>(n_tests, n_tests, n_class);
             prev_grad_per_chunk[nc]    = Eigen::Matrix<double, -1, -1>::Zero(n_pops, n_class);
@@ -408,7 +449,13 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_WCP_impl_T
                                               beta_double_array, L_Omega_double, L_Omega_recip_double, prev_mat, log_prev_mat_small,
                                               log_jac_u_per_chunk[nc], beta_grad_per_chunk[nc], U_Omega_grad_per_chunk[nc], prev_grad_per_chunk[nc],
                                               ws, kchoice, Model_args_as_cpp_struct);
+            } catch (...) {
+              exception_thrown_in_chunk[nc] = std::current_exception();
+            }
           }
+        }
+        for (int nc = 0; nc < n_full_chunks; nc++) {
+          if (exception_thrown_in_chunk[nc]) std::rethrow_exception(exception_thrown_in_chunk[nc]);
         }
         //// ---- deterministic reduction, in chunk order:
         for (int nc = 0; nc < n_full_chunks; nc++) {
@@ -638,7 +685,12 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_ord
                                   for (int k = 0; k < n_tests; k++) {
                                     for (int l = 0; l <= k; l++) {
                                       double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
-                                      deriv_L_wrt_unc_full[c](cnt_1, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+                                   // deriv_L_wrt_unc_full[c](cnt_1, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+                                      //// a non-finite derivative is stored as NaN, not as 0: the Omega gradient
+                                      //// is then non-finite, so the failed evaluation is flagged and the
+                                      //// multi-attempt fallback runs (0 would give a finite, wrong gradient):
+                                      if (!std::isfinite(deriv)) deriv = std::numeric_limits<double>::quiet_NaN();
+                                      deriv_L_wrt_unc_full[c](cnt_1, cnt_2) = deriv;
                                       cnt_1++;
                                     }
                                   }
@@ -872,11 +924,16 @@ inline void fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_ord
           {
             const int tid = omp_get_thread_num();
             LC_MVP_workspace_struct &ws = LC_MVP_ws_structs[tid];
-            ws.reset_sizes();
+         // ws.reset_sizes();
+            //// (inside a try: an exception must not leave the OpenMP region; it marks this thread's chunks as
+            //// failed below, so the serial evaluation runs, as for an exception in a chunk)
+            bool workspace_reset_of_this_thread_threw = false;
+            try { ws.reset_sizes(); } catch (...) { workspace_reset_of_this_thread_threw = true; }
             Eigen::Matrix<double, -1, -1> prev_grad_mat_not_used = Eigen::Matrix<double, -1, -1>::Zero(n_pops, n_class);
 
             #pragma omp for schedule(static)
             for (int nc = 0; nc < n_full_chunks; nc++) {
+              if (workspace_reset_of_this_thread_threw) { chunk_threw[nc] = 1; continue; }
               try {
                     beta_grad_per_chunk[nc]       = vec_of_mats<double>(n_covariates_max, n_tests, n_class);
                     U_Omega_grad_per_chunk[nc]    = vec_of_mats<double>(n_tests, n_tests, n_class);

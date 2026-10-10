@@ -616,8 +616,13 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_T(  E
                 Omega_unconstrained_double[c](i, j) -= epsilon;
                 int cnt_1 = 0;
                 for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) {
-                  const double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
-                  deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+               // const double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
+               // deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+                  //// a non-finite derivative is stored as NaN, not as 0: the Omega gradient is then non-finite,
+                  //// so the failed evaluation is flagged and the multi-attempt fallback runs:
+                  double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
+                  if (!std::isfinite(deriv)) deriv = std::numeric_limits<double>::quiet_NaN();
+                  deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = deriv;
                 }
                 cnt_2++;
               }
@@ -992,8 +997,13 @@ inline void fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process_seria
                 Omega_unconstrained_double[c](i, j) -= epsilon;
                 int cnt_1 = 0;
                 for (int k = 0; k < n_tests; k++) for (int l = 0; l <= k; l++) {
-                  const double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
-                  deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+               // const double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
+               // deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = std::isfinite(deriv) ? deriv : 0.0;
+                  //// a non-finite derivative is stored as NaN, not as 0: the Omega gradient is then non-finite,
+                  //// so the failed evaluation is flagged and the multi-attempt fallback runs:
+                  double deriv = (L_perturbed(k, l) - L_Omega_double[c](k, l)) / epsilon;
+                  if (!std::isfinite(deriv)) deriv = std::numeric_limits<double>::quiet_NaN();
+                  deriv_L_wrt_unc_full[c](cnt_1++, cnt_2) = deriv;
                 }
                 cnt_2++;
               }

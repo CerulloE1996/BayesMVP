@@ -84,13 +84,24 @@ ALWAYS_INLINE SignedLog sl_zero() {
   return { SL_NEG_INF, 1.0 };
 }
 
+// ALWAYS_INLINE bool sl_is_zero(const SignedLog &a) {
+//   return !(a.lg > SL_NEG_INF);
+// }
+//// exact zero only for lg == -Inf; a NaN lg (a failed computation) is NOT zero, so sl_add / sl_val carry it
+//// through to a NaN value and the failed evaluation is flagged:
 ALWAYS_INLINE bool sl_is_zero(const SignedLog &a) {
-  return !(a.lg > SL_NEG_INF);
+  return (a.lg == SL_NEG_INF);
 }
 
 //// make a SignedLog from (log|x|, sign) - returns exact zero if lg is -Inf/NaN:
+// ALWAYS_INLINE SignedLog sl_make(const double lg, const double sg) {
+//   if (!(lg > SL_NEG_INF)) return sl_zero();
+//   return { lg, (sg < 0.0) ? -1.0 : 1.0 };
+// }
+//// exact zero only if lg is -Inf; a NaN lg is kept (a NaN SignedLog), so the failure is flagged downstream
+//// instead of being masked as an exact zero:
 ALWAYS_INLINE SignedLog sl_make(const double lg, const double sg) {
-  if (!(lg > SL_NEG_INF)) return sl_zero();
+  if (lg == SL_NEG_INF) return sl_zero();
   return { lg, (sg < 0.0) ? -1.0 : 1.0 };
 }
 
@@ -137,8 +148,18 @@ ALWAYS_INLINE SignedLog sl_make(const double lg, const double sg) {
 //   return m + stan::math::log1p_exp( ((a > b) ? b : a) - m );
 // }
 
-ALWAYS_INLINE SignedLog sl_from_val(const double x, const bool S) {
-  if ( (x == 0.0) || (!std::isfinite(x)) ) return sl_zero();  //// nonfinite guarded to zero (call sites guard Inf bounds explicitly)
+// ALWAYS_INLINE SignedLog sl_from_val(const double x, const bool S) {
+//   if ( (x == 0.0) || (!std::isfinite(x)) ) return sl_zero();  //// nonfinite guarded to zero (call sites guard Inf bounds explicitly)
+//   return { sl_log(std::abs(x), S), (x < 0.0) ? -1.0 : 1.0 };
+// }
+//// exact zero only for x == 0. A NaN x gives a NaN SignedLog, and an infinite x gives lg = +Inf with the sign
+//// of x (an infinite value, not zero), so a failure is flagged downstream instead of being masked as zero.
+//// (An infinite x times an exact-zero SignedLog is still exact zero in sl_mul: the x phi(x) -> 0 limit.)
+ALWAYS_INLINE SignedLog sl_from_val(const double x_given, const bool S) {
+  const double x = x_given;
+  if (x == 0.0) return sl_zero();
+  if (std::isnan(x)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
+  if (std::isinf(x)) return { std::numeric_limits<double>::infinity(), (x < 0.0) ? -1.0 : 1.0 };
   return { sl_log(std::abs(x), S), (x < 0.0) ? -1.0 : 1.0 };
 }
 
@@ -148,11 +169,22 @@ ALWAYS_INLINE SignedLog sl_neg(const SignedLog &a) {
 }
 
 ALWAYS_INLINE SignedLog sl_mul(const SignedLog &a, const SignedLog &b) {
+  //// NaN times anything (also exact zero) stays NaN, as for doubles: no zero factor masks a failure:
+  if (std::isnan(a.lg) || std::isnan(b.lg)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
   if (sl_is_zero(a) || sl_is_zero(b)) return sl_zero();
   return { a.lg + b.lg, a.sg * b.sg };
 }
 
 ALWAYS_INLINE SignedLog sl_add(const SignedLog &a, const SignedLog &b, const bool S) {
+  //// a NaN term gives a NaN sum (not left to the fast exp / log approximations when S is false):
+  if (std::isnan(a.lg) || std::isnan(b.lg)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
+  //// an infinite term (lg = +Inf) gives that infinity, and +Inf plus -Inf gives NaN (not left to the fast exp):
+  const double lg_of_infinite_value = std::numeric_limits<double>::infinity();
+  if ((a.lg == lg_of_infinite_value) && (b.lg == lg_of_infinite_value) && (a.sg != b.sg)) {
+        return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
+  }
+  if (a.lg == lg_of_infinite_value) return a;
+  if (b.lg == lg_of_infinite_value) return b;
   if (sl_is_zero(a)) return b;
   if (sl_is_zero(b)) return a;
   const double m = (a.lg > b.lg) ? a.lg : b.lg;
@@ -162,6 +194,8 @@ ALWAYS_INLINE SignedLog sl_add(const SignedLog &a, const SignedLog &b, const boo
 }
 
 ALWAYS_INLINE double sl_val(const SignedLog &a, const bool S) {
+  if (std::isnan(a.lg)) return std::numeric_limits<double>::quiet_NaN();   //// a failure stays a NaN value
+  if (a.lg == std::numeric_limits<double>::infinity()) return a.sg * std::numeric_limits<double>::infinity();
   if (sl_is_zero(a)) return 0.0;
   return a.sg * sl_exp(a.lg, S);
 }
@@ -173,9 +207,21 @@ ALWAYS_INLINE double log_phi_std_norm(const double x) {
 }
 
 //// numerically-safe log-sum-exp of two logs (either may be -Inf):
+// ALWAYS_INLINE double lse_2(const double a, const double b, const bool S) {
+//   if (!(a > SL_NEG_INF)) return b;
+//   if (!(b > SL_NEG_INF)) return a;
+//   const double m = (a > b) ? a : b;
+//   const double d = ((a > b) ? b : a) - m;
+//   return m + (S ? stan::math::log1p_exp(d) : fast_log1p_exp_1(d));
+// }
+//// -Inf (the log of an exact zero) returns the other argument, as before. A NaN argument gives NaN (a failure is
+//// no longer masked by returning the other argument), and +Inf gives +Inf (not left to the fast log1p_exp):
 ALWAYS_INLINE double lse_2(const double a, const double b, const bool S) {
-  if (!(a > SL_NEG_INF)) return b;
-  if (!(b > SL_NEG_INF)) return a;
+  if (std::isnan(a) || std::isnan(b)) return std::numeric_limits<double>::quiet_NaN();
+  if (a == SL_NEG_INF) return b;
+  if (b == SL_NEG_INF) return a;
+  const double positive_infinity = std::numeric_limits<double>::infinity();
+  if ((a == positive_infinity) || (b == positive_infinity)) return positive_infinity;
   const double m = (a > b) ? a : b;
   const double d = ((a > b) ? b : a) - m;
   return m + (S ? stan::math::log1p_exp(d) : fast_log1p_exp_1(d));
@@ -383,7 +429,10 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
             //// and with log_prob clamped to -700 the two no longer cancel (nuisance gradient ~1e+267 for an
             //// ordinal test whose bounds are near -53, e.g. a test intercept of +40), and the row's lp was
             //// biased upwards:
-            if (!std::isfinite(log_prob)) log_prob = -700.0;
+         // if (!std::isfinite(log_prob)) log_prob = -700.0;
+            //// only -Inf (an exact zero probability) takes the -700 placeholder; NaN or +Inf (a failed
+            //// computation) stays non-finite, so the evaluation is flagged and the multi-attempt fallback runs:
+            if (log_prob == SL_NEG_INF) log_prob = -700.0;
             
             y1_log_prob(i, t) = log_prob;
             prob(i, t)        = sl_exp(log_prob, S);   //// may underflow to 0.0 - grads for these rows use the log-scale path

@@ -2,47 +2,30 @@
 % Please edit documentation in R/R_fn_install_BayesMVP.R
 \name{install_BayesMVP}
 \alias{install_BayesMVP}
-\title{install_BayesMVP}
+\title{Install the compiled BayesMVP package from the bundled inner source}
 \usage{
-install_BayesMVP(CUSTOM_FLAGS = NULL, lib = .libPaths()[1L],
-                 nicostan_lib = .libPaths()[1L], force = TRUE)
+install_BayesMVP(
+  CUSTOM_FLAGS = NULL,
+  lib = .libPaths()[1L],
+  nicostan_lib = .libPaths()[1L],
+  force = TRUE
+)
 }
 \arguments{
-\item{CUSTOM_FLAGS}{An (optional) R list containing user-supplied C++ flags. The possible allowed flags one can supply to this function are the following:
-\itemize{
-\item \code{CCACHE_PATH}: Note that this variable is passed onto the standard "CC" and "CXX" flags It is the path to your ccache file, if installed on your system. E.g., this may be ""/usr/bin/ccache" on
-Linux and "C:/rtools44/mingw64/bin/ccache.exe" on Windows.
-\item \code{CXX_COMPILER}: Note that this variable is passed onto the standard "CXX" flag The C++ compiler to use. E.g. "g++" or "clang++" or "C:/rtools44/clang64/bin/clang++.exe", etc.
-\item \code{CPP_COMPILER}: Note that this variable is passed onto the standard "CC" flag The C compiler to use. E.g. "gcc" or "clang" or "C:/rtools44/clang64/bin/clang.exe", etc.
-\item \code{CXX_STD}: This is the standard "CXX_STD" macro, and it tells the compiler which C++ standard to use. Default is C++17 i.e. "CXX_STD = CXX17" or ""-std=gnu++17", depending on compiler used.
-\item \code{CPU_BASE_FLAGS}: Note that this variable is passed onto the standard "PKG_CPPFLAGS", "PKG_CXXFLAGS", "CPPFLAGS", and "CXXFLAGS" flags It is the "base" C/C++ CPU flags to use.
-The default is "CPU_BASE_FLAGS = -O3  -march=native  -mtune=native".
-\item \code{FMA_FLAGS}: Note that this variable is passed onto the standard "PKG_CPPFLAGS", "PKG_CXXFLAGS", "CPPFLAGS", and "CXXFLAGS" flags It specifies the FMA flags to use.
-The default is "FMA_FLAGS = -mfma", if the CPU supports FMA instructions.
-\item \code{AVX_FLAGS}: Note that this variable is passed onto the standard "PKG_CPPFLAGS", "PKG_CXXFLAGS", "CPPFLAGS", and "CXXFLAGS" flags It specifies the AVX flags to use.
-The default is: "AVX_FLAGS = "-mavx", if the CPU supports AVX," AVX_FLAGS = "-mavx -mavx2", if the CPU supports AVX-2, and "AVX_FLAGS = "-mavx -mavx2 -mavx512f -mavx512cd -mavx512bw
--mavx512dq -mavx512vl", if the CPU (fully) supports AVX-512.
-\item \code{OMP_FLAGS}: Note that this variable is passed onto the standard "SHLIB_OPENMP_CFLAGS" and "SHLIB_OPENMP_CXXFLAGS" macros, and is then passed onto the standard "PKG_CPPFLAGS", "PKG_CXXFLAGS", "CPPFLAGS", and
-"CXXFLAGS" flags It specifies the OpenMP flags to use (for parallel computations using the OpenMP backend). E.g.: "OMP_FLAGS = -fopenmp". Defaults depend on compiler and operating system.
-Also note that BayesMVP will search for OpenMP paths during package installation, and should be able to correctly determine the appropriate flags / libraries to use.
-\item \code{OMP_LIB_PATH}: Note that this variable is passed onto the standard "CC" flag
-Also note that BayesMVP will search for OpenMP paths during package installation, and should be able to correctly determine the appropriate flags / libraries to use.
-\item \code{OMP_LIB_FLAGS}: Note that this variable is passed onto the standard "PKG_LIBS" flag
-This variable specifies the OpenMP flags to use for the OpenMP library path (i.e. the \code{OMP_LIB_PATH} variable - see above). E.g., "OMP_LIB_FLAGS = -L"$(OMP_LIB_PATH)" -lomp".
-Also note that BayesMVP will search for OpenMP paths during package installation, and should be able to correctly determine the appropriate flags / libraries to use.
-\item \code{PKG_CPPFLAGS}: A standard C++/C flag
-\item \code{PKG_CXXFLAGS}: A standard C++/C flag
-\item \code{CPPFLAGS}: A standard C++/C flag
-\item \code{CXXFLAGS}: A standard C++/C flag
-\item \code{PKG_LIBS}: A standard C++/C flag
-}}
-\item{lib}{Target BayesMVP R package library. Defaults to the first current library.}
-\item{nicostan_lib}{R package library containing the compiled NicoStan dependency and exported headers. NicoStan must be installed there first.}
-\item{force}{Must remain \code{TRUE} for the outer-to-inner package replacement. The installer stages the inner source and compiles it in a fresh R process.}
+\item{CUSTOM_FLAGS}{Optional named list of Makevars overrides.  The default
+uses the package's ordinary compiler and CPU detection.}
+
+\item{lib}{Target R package library.  Defaults to the first current library.}
+
+\item{force}{Passed through as an installation intent.  The installer never
+removes a package directory itself; the fresh R CMD INSTALL process handles
+replacement while no BayesMVP namespace is loaded in that process.}
+}
+\value{
+Invisibly, the target library path.
 }
 \description{
-Installs the compiled BayesMVP extension from its bundled inner source after
-checking for NicoStan version 0.1.9000 or newer and its exported headers. The
-outer package is an installer shell; the inner package is installed in a fresh
-R process so a development namespace cannot be reused accidentally.
+The outer BayesMVP package is an installer shell.  This function stages the
+bundled inner source and installs it from a fresh R process, so a development
+namespace already loaded by the caller cannot be reused accidentally.
 }
