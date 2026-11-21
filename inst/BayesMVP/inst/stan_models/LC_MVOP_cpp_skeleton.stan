@@ -524,6 +524,7 @@ transformed data {
      for (j in 1:n_tests) {
         inv_perm[test_perm[j]] = j;
      }
+     int n_covariates_total = sum(to_array_1d(n_covs_per_outcome));
      ////
      //// ---- slot-order ordinal index per FITTED slot (-1 for binary) — mirrors C++ ord_idx_of_test:
      ////
@@ -558,14 +559,32 @@ transformed data {
 parameters {
      //// matrix[N, n_tests] u_raw; //  put nuisance parameters FIRST (NOTE: doesnt have to be on "raw" scale to work as grad is computed w.r.t unconstrained anyway!)
      array[n_class] vector[n_corrs_per_class] Omega_unconstrained_vec;
-     array[n_class] matrix[n_covariates_max, n_tests] beta; 
+     vector[n_covariates_total] beta_vec;
      vector[n_pops] p_raw;
      // array[2] vector[sum(n_thr_per_ord_test)] C_unc_vec;  //// RAW LOG-DIFFS - Global cutpoints for each test (staggered array/matrix using "n_thr_per_ord_test[t]" to index correctly)
      array[2] vector[sum(n_thr_per_ord_test)] C_unc_vec;  //// UNCONSTRAINED (mapped to bounded raw log-diffs via lb_ub in TP block)
 }
 
 
-transformed parameters { 
+transformed parameters {
+     //// ---- the coefficients the model samples (beta_vec: for each class, each test, its n_covs_per_outcome[c, t]
+     ////      coefficients, the order of the native C++ model), as the full table beta (0 in unused cells) and in the
+     ////      ORIGINAL test order (beta_orig):
+     array[n_class] matrix[n_covariates_max, n_tests] beta;
+     array[n_class] matrix[n_covariates_max, n_tests] beta_orig;
+     {
+       int position = 1;
+       for (c in 1:n_class) {
+         beta[c] = rep_matrix(0.0, n_covariates_max, n_tests);
+         for (t in 1:n_tests) {
+           for (k in 1:n_covs_per_outcome[c, t]) {
+             beta[c][k, t] = beta_vec[position];
+             position += 1;
+           }
+         }
+         for (t in 1:n_tests) beta_orig[c][:, t] = beta[c][:, inv_perm[t]];
+       }
+     }
      vector<lower=0, upper=1>[n_pops] prev = lb_ub(p_raw, 0.0, 1.0);
      array[n_class] matrix[n_tests, n_tests] L_Omega;
      array[n_class] matrix[n_tests, n_tests] Omega;

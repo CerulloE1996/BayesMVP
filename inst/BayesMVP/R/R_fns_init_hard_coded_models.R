@@ -1607,6 +1607,15 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                   ##
                   baseline_case_nd[[t]][1] <- 1.0
                   baseline_case_d[[t]][1]  <- 1.0
+                  ## (the baseline cases given by the user, test by test, padded with 0)
+                  for (baseline_name in c("baseline_case_nd", "baseline_case_d")) {
+                        given <- model_args_list[[baseline_name]]
+                        if (!is.null(given) && (length(given) >= t) && length(given[[t]])) {
+                              values <- as.numeric(given[[t]])[seq_len(min(length(given[[t]]), n_covariates_max))]
+                              if (baseline_name == "baseline_case_nd") baseline_case_nd[[t]][seq_along(values)] <- values
+                              else                                      baseline_case_d[[t]][seq_along(values)]  <- values
+                        }
+                  }
                 }
                 ##
                 Stan_data_list <- list(N = N,
@@ -1692,6 +1701,15 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                   ##
                   baseline_case_nd[[t]][1] <- 1.0
                   baseline_case_d[[t]][1]  <- 1.0
+                  ## (the baseline cases given by the user, test by test, padded with 0)
+                  for (baseline_name in c("baseline_case_nd", "baseline_case_d")) {
+                        given <- model_args_list[[baseline_name]]
+                        if (!is.null(given) && (length(given) >= t) && length(given[[t]])) {
+                              values <- as.numeric(given[[t]])[seq_len(min(length(given[[t]]), n_covariates_max))]
+                              if (baseline_name == "baseline_case_nd") baseline_case_nd[[t]][seq_along(values)] <- values
+                              else                                      baseline_case_d[[t]][seq_along(values)]  <- values
+                        }
+                  }
                 }
                 ##
                 baseline_case_nd
@@ -1870,6 +1888,15 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                   ##
                   baseline_case_nd[[t]][1] <- 1.0
                   baseline_case_d[[t]][1]  <- 1.0
+                  ## (the baseline cases given by the user, test by test, padded with 0)
+                  for (baseline_name in c("baseline_case_nd", "baseline_case_d")) {
+                        given <- model_args_list[[baseline_name]]
+                        if (!is.null(given) && (length(given) >= t) && length(given[[t]])) {
+                              values <- as.numeric(given[[t]])[seq_len(min(length(given[[t]]), n_covariates_max))]
+                              if (baseline_name == "baseline_case_nd") baseline_case_nd[[t]][seq_along(values)] <- values
+                              else                                      baseline_case_d[[t]][seq_along(values)]  <- values
+                        }
+                  }
                 }
                 ##
                 C_raw_lower = model_args_list$C_raw_lower
@@ -1990,6 +2017,15 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                   ##
                   baseline_case_nd[[t]][1] <- 1.0
                   baseline_case_d[[t]][1]  <- 1.0
+                  ## (the baseline cases given by the user, test by test, padded with 0)
+                  for (baseline_name in c("baseline_case_nd", "baseline_case_d")) {
+                        given <- model_args_list[[baseline_name]]
+                        if (!is.null(given) && (length(given) >= t) && length(given[[t]])) {
+                              values <- as.numeric(given[[t]])[seq_len(min(length(given[[t]]), n_covariates_max))]
+                              if (baseline_name == "baseline_case_nd") baseline_case_nd[[t]][seq_along(values)] <- values
+                              else                                      baseline_case_d[[t]][seq_along(values)]  <- values
+                        }
+                  }
                 }
                 ##
                 C_raw_lower = model_args_list$C_raw_lower

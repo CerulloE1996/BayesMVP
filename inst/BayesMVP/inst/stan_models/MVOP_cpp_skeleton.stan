@@ -444,9 +444,11 @@ data {
   array[n_ordinal_tests] int<lower=1> n_thr_per_ord_test;
   real C_raw_lower;
   real<lower=C_raw_lower> C_raw_upper;
+  array[1, n_tests] int<lower=0> n_covs_per_outcome;
 }
 transformed data {
-  int n_corrs_per_class = (n_tests * (n_tests - 1)) %/% 2;   //// (%/% binds before *: without the brackets 24 for 8 tests)
+  int n_corrs_per_class = (n_tests * (n_tests - 1)) %/% 2;
+  int n_covariates_total = sum(to_array_1d(n_covs_per_outcome));//// (%/% binds before *: without the brackets 24 for 8 tests)
   matrix[n_tests,n_tests] lb_corr_actual = lb_corr[1];
   array[n_tests] int inv_perm;
   for (j in 1:n_tests) inv_perm[test_perm[j]] = j;
@@ -459,11 +461,29 @@ transformed data {
 parameters {
   // Internal constrain-only skeleton. Nuisance values are sampled/stored by the native backend.
   array[1] vector[n_corrs_per_class] Omega_unconstrained_vec;
-  array[1] matrix[n_covariates_max,n_tests] beta;
+  vector[n_covariates_total] beta_vec;
   array[1] vector[sum(n_thr_per_ord_test)] C_unc_vec;
 }
 transformed parameters {
-  array[1] matrix[n_tests,n_tests] L_Omega;
+     //// ---- the coefficients the model samples (beta_vec: for each class, each test, its n_covs_per_outcome[c, t]
+     ////      coefficients, the order of the native C++ model), as the full table beta (0 in unused cells) and in the
+     ////      ORIGINAL test order (beta_orig):
+     array[1] matrix[n_covariates_max, n_tests] beta;
+     array[1] matrix[n_covariates_max, n_tests] beta_orig;
+     {
+       int position = 1;
+       for (c in 1:1) {
+         beta[c] = rep_matrix(0.0, n_covariates_max, n_tests);
+         for (t in 1:n_tests) {
+           for (k in 1:n_covs_per_outcome[c, t]) {
+             beta[c][k, t] = beta_vec[position];
+             position += 1;
+           }
+         }
+         for (t in 1:n_tests) beta_orig[c][:, t] = beta[c][:, inv_perm[t]];
+       }
+     }
+array[1] matrix[n_tests,n_tests] L_Omega;
   array[1] matrix[n_tests,n_tests] Omega;
   array[1] matrix[n_tests,n_tests] Omega_orig;
   array[1] matrix[n_tests,n_tests] L_Omega_orig;
