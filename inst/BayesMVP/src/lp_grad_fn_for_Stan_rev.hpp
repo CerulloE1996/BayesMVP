@@ -179,7 +179,9 @@ double                                         Stan_wrapper_lp_fn_var(          
    Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[6] = known_values;
    
    /// convert known_values_indicator_int to int 
-   std::vector<Eigen::Matrix<int, -1, -1>> known_values_indicator_int = vec_of_mats<int>(n_tests, n_tests, n_class);
+   std::vector<Eigen::Matrix<int, -1, -1>> known_values_indicator_int = vec_of_mats<int>(n_tests,
+                                                                                         n_tests,
+                                                                                         n_class);
    for (int c = 0; c < n_class; c++) {
      known_values_indicator_int[c] = known_values_indicator[c].cast<int>();
    } 

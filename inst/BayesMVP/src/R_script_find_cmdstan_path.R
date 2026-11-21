@@ -1,7 +1,10 @@
-## Build-time path discovery uses the maintained helper in installed NicoStan.
-## Capture namespace startup output so stdout contains only the path consumed by make.
-invisible(capture.output(build_dependency_path <- NicoStan::cmdstanr_path()))
-cat(build_dependency_path)
+##
+## ---- CmdStan path for the Makevars, from NicoStan::cmdstanr_path(). Anything printed to stdout whilst NicoStan
+##      loads is captured, so that the only output (read by make) is the path:
+##
+NicoStan_startup_output <-  utils::capture.output(CmdStan_path <-  NicoStan::cmdstanr_path())
+##
+cat(CmdStan_path)
 
 
 

@@ -446,7 +446,7 @@ data {
   real<lower=C_raw_lower> C_raw_upper;
 }
 transformed data {
-  int n_corrs_per_class = n_tests * (n_tests - 1) %/% 2;
+  int n_corrs_per_class = (n_tests * (n_tests - 1)) %/% 2;   //// (%/% binds before *: without the brackets 24 for 8 tests)
   matrix[n_tests,n_tests] lb_corr_actual = lb_corr[1];
   array[n_tests] int inv_perm;
   for (j in 1:n_tests) inv_perm[test_perm[j]] = j;

@@ -29,11 +29,11 @@
 // #include "MVP_helpers_migrated.hpp"
 
 //// =====================================================================================
-//// PART 0: (REMOVED — KernelChoice, kernel_choice_from_args, apply_col_inplace, Phi_col_inplace,
+//// PART 0: (REMOVED - KernelChoice, kernel_choice_from_args, apply_col_inplace, Phi_col_inplace,
 ////          inv_Phi_col_inplace all live in MVP_helpers_migrated.hpp; include that instead.)
 
 //// =====================================================================================
-//// PART A: fn_MVOP_compute_lp_GHK_cols — rewritten. Same outputs, same maths, no strings,
+//// PART A: fn_MVOP_compute_lp_GHK_cols - rewritten. Same outputs, same maths, no strings,
 ////         no temporaries. Note the pattern: copy the input column INTO the output column,
 ////         then transform the output column in place.
 //// =====================================================================================
@@ -103,7 +103,7 @@ inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
 }
 
 //// =====================================================================================
-//// PART B: fn_MVOP_compute_phi_Bound_Z_cols — rewritten.
+//// PART B: fn_MVOP_compute_phi_Bound_Z_cols - rewritten.
 //// =====================================================================================
 template <Vec vec>
 inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
@@ -232,7 +232,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////       std::string vect_type_inv_Phi = ...;
 ////       std::string vect_type_inv_Phi_approx_from_logit_prob = ...;
 ////
-////     KEEP `vect_type` (strings(0)) — it is still used for vec_size in calculate_chunk_sizes.
+////     KEEP `vect_type` (strings(0)) - it is still used for vec_size in calculate_chunk_sizes.
 ////     Inside the chunk block, DELETE the nine `std::string vt_* = vect_type_*;` copies.
 ////
 //// D4. In the chunk loop, replace the helper calls:
@@ -261,7 +261,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////
 //// D5. Collapse the duplicated LAST-CHUNK block. With the masked tail, the remainder chunk
 ////     runs the SAME instantiation as the full chunks, so the entire
-////       "// LAST CHUNK (remainder) — processed serially with fallback SIMD" block
+////       "// LAST CHUNK (remainder) - processed serially with fallback SIMD" block
 ////     (the Model_args_last_chunk copy, the nine "Stan" string overrides, the duplicated
 ////     class/test/grad loops) is deleted. What remains is the workspace resize, which the driver
 ////     fold into the main loop by iterating to n_total_chunks instead of n_full_chunks:
@@ -283,7 +283,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////
 ////     Note `n_full_chunks < n_total_chunks` iff last_chunk_size > 0, so `is_last` is only
 ////     ever true when there is a remainder; no extra guard needed.
-////     Model_args_as_cpp_struct is passed to the un-migrated helpers for ALL chunks now —
+////     Model_args_as_cpp_struct is passed to the un-migrated helpers for ALL chunks now -
 ////     which is correct, because the masked tail means the AVX path handles any length.
 ////
 ////     (If the loop structure should remain unchanged: keep the last-chunk block but
@@ -297,7 +297,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////   1. Add fn_dispatch_templated.hpp + PART 0. Build. Export dispatch_self_test() to R, run it.
 ////   2. Add PART C (fn_MVP_compute_lp_GHK_cols<vec>) alongside the old one (different signature,
 ////      they coexist). Do D1, D2, D4 (just the GHK call + prob_n). Build. Run a model, compare lp
-////      against the AD path at one theta — they must agree to what they agreed before.
+////      against the AD path at one theta - they must agree to what they agreed before.
 ////   3. D3, D5. Build, same check.
 ////   4. Migrate the remaining helpers one by one (phi_Z_recip, phi_Bound_Z, nuisance, jac_u,
 ////      first_deriv, log_det_J, log_sum_exp_general), building after each.

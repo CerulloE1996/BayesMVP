@@ -11,7 +11,6 @@
  
  
  
-using namespace Eigen;
  
   
  
@@ -71,7 +70,6 @@ using namespace Eigen;
 
 
  
-using namespace Eigen;
 
 
  
@@ -107,6 +105,7 @@ using three_layer_std_vec_of_EigenMats_int = std::vector<std::vector<std::vector
   
 
 inline Eigen::Matrix<int, 3, -1>  comb2M_double( Eigen::Ref<Eigen::Matrix<int, -1, 1>>   x) {
+
   int xlen = x.rows();
   int counter = 0;
   int outsize = xlen * (xlen - 1) / 2 ; // Rf_choose(xlen, 2);
@@ -124,6 +123,7 @@ inline Eigen::Matrix<int, 3, -1>  comb2M_double( Eigen::Ref<Eigen::Matrix<int, -
     }
   }
   return out;
+
 }
 
 
@@ -285,7 +285,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
   Eigen::Matrix<double, -1, 1  >  Omega_raw_vec_double = theta_main_vec_ref.head(n_corrs); // .cast<double>();
 
   // coeffs
-  std::vector<Eigen::Matrix<double, -1, -1 > > beta_double_array = vec_of_mats(n_covariates_max, n_tests,  n_class);
+  std::vector<Eigen::Matrix<double, -1, -1 > > beta_double_array = vec_of_mats(n_covariates_max,
+                                                                               n_tests,
+                                                                               n_class);
 
   {
     int i = n_corrs;
@@ -307,7 +309,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
   double grad_prev_AD = 0.0;
 
   int dim_choose_2 = n_tests * (n_tests - 1) * 0.5 ;
-  std::vector<Eigen::Matrix<double, -1, -1 > > deriv_L_wrt_unc_full = vec_of_mats(dim_choose_2 + n_tests, dim_choose_2, n_class);
+  std::vector<Eigen::Matrix<double, -1, -1 > > deriv_L_wrt_unc_full = vec_of_mats(dim_choose_2 + n_tests,
+                                                                                  dim_choose_2,
+                                                                                  n_class);
   std::vector<Eigen::Matrix<double, -1, -1 > > L_Omega_double = vec_of_mats(n_tests, n_tests, n_class);
   std::vector<Eigen::Matrix<double, -1, -1 > > L_Omega_recip_double = L_Omega_double;
   std::vector<Eigen::Matrix<double, -1, -1 > > log_abs_L_Omega_double = L_Omega_double;
@@ -325,8 +329,12 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
     
     
     std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_unconstrained_var = fn_convert_std_vec_of_corrs_to_3d_array_var(Eigen_vec_to_std_vec_var(Omega_constrained_raw_vec_var),  n_tests, n_class);
-    std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > L_Omega_var = vec_of_mats_var(n_tests, n_tests, n_class);
-    std::vector<Eigen::Matrix<stan::math::var, -1, -1 > >  Omega_var   = vec_of_mats_var(n_tests, n_tests, n_class);
+    std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > L_Omega_var = vec_of_mats_var(n_tests,
+                                                                                        n_tests,
+                                                                                        n_class);
+    std::vector<Eigen::Matrix<stan::math::var, -1, -1 > >  Omega_var   = vec_of_mats_var(n_tests,
+                                                                                         n_tests,
+                                                                                         n_class);
 
     for (int c = 0; c < n_class; ++c) {
       Eigen::Matrix<stan::math::var, -1, -1 >  ub = stan::math::to_var(ub_corr[c]);
@@ -343,7 +351,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
       } else if ( (corr_prior_beta == true)   &&  (corr_prior_norm == false) ) {
         for (int i = 1; i < n_tests; i++) {
           for (int j = 0; j < i; j++) {
-            target_AD +=  stan::math::beta_lpdf(  (Omega_var[c](i, j) + 1)/2, prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
+            target_AD +=  stan::math::beta_lpdf(  (Omega_var[c](i, j) + 1)/2,
+                                                prior_for_corr_a[c](i, j),
+                                                prior_for_corr_b[c](i, j));
           }
         }
         //  Jacobian for  Omega -> L_Omega transformation for prior log-densities (since both LKJ and truncated normal prior densities are in terms of Omega, not L_Omega)
@@ -353,7 +363,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
       } else if  ( (corr_prior_beta == false)   &&  (corr_prior_norm == true) ) {
         for (int i = 1; i < n_tests; i++) {
           for (int j = 0; j < i; j++) {
-            target_AD +=  stan::math::normal_lpdf(  Omega_var[c](i, j), prior_for_corr_a[c](i, j), prior_for_corr_b[c](i, j));
+            target_AD +=  stan::math::normal_lpdf(  Omega_var[c](i, j),
+                                                  prior_for_corr_a[c](i, j),
+                                                  prior_for_corr_b[c](i, j));
           }
         }
         Eigen::Matrix<stan::math::var, -1, 1 >  jacobian_diag_elements(n_tests);
@@ -467,7 +479,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
     for (int c = 0; c < n_class; c++) {
       for (int t = 0; t < n_tests; t++) {
         for (int k = 0; k < n_covariates_per_outcome_vec[c](t); k++) {
-          prior_densities_coeffs  += stan::math::normal_lpdf(beta_double_array[c](k, t), prior_coeffs_mean[c](k, t), prior_coeffs_sd[c](k, t));
+          prior_densities_coeffs  += stan::math::normal_lpdf(beta_double_array[c](k, t),
+                                                             prior_coeffs_mean[c](k, t),
+                                                             prior_coeffs_sd[c](k, t));
         }
       }
     }
@@ -542,7 +556,8 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
           inc(c, 0)  = 0;
         }
 
-        Bound_Z[c](n,t) =   ( ((  0 - ( beta_double_array[c](0, t) + inc(c, 0)   )  ) / L_Omega_double[c](t, t) )  );
+        Bound_Z[c](n,
+                t) =   ( ((  0 - ( beta_double_array[c](0, t) + inc(c, 0)   )  ) / L_Omega_double[c](t, t) )  );
         Bound_U_Phi_Bound_Z[c](n,t) =   stan::math::Phi_approx(   Bound_Z[c](n, t)  );
 
         if (index == 1) {
@@ -636,7 +651,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
 
         int t = n_tests - (i + 1) ;
         common_grad_term_1[c](n, t) =   prev_div_prob * (prob[c].row(n).prod()/  prob[c].row(n).segment(t + 0, i + 1).prod()  );
-        common_grad_term_numerator[c](n, t) =   prev(0,c) * ( prob[c].row(n).prod() /  prob[c].row(n).segment(t + 0, i + 1).prod()  );
+        common_grad_term_numerator[c](n,
+                                   t) =   prev(0,
+                                   c) * ( prob[c].row(n).prod() /  prob[c].row(n).segment(t + 0, i + 1).prod()  );
         common_grad_term_denominator[c](n, t) =    prob_n(n);
 
       }
@@ -658,15 +675,19 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
   // terms for first-order grad
   Eigen::Matrix<double,  -1, -1> grad_prob  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //  (N, n_tests);
   Eigen::Matrix<double , -1, -1> grad_Phi_bound_z = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   =  grad_prob;
-  Eigen::Matrix<double , -1, -1> grad_bound_z  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //  = grad_prob;
+  Eigen::Matrix<double , -1, -1> grad_bound_z  = Eigen::Matrix<double, -1, -1>::Zero(N,
+                                                                                     n_tests); //  = grad_prob;
   Eigen::Matrix<double , -1, -1> grad_z  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //  = grad_prob;
 
   // terms for second-order grad
   Eigen::Matrix<double , -1, -1> grad_grad_Phi_bound_z  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
-  Eigen::Matrix<double , -1, -1> grad_grad_z = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
+  Eigen::Matrix<double , -1, -1> grad_grad_z = Eigen::Matrix<double, -1, -1>::Zero(N,
+                                                                                   n_tests); //   = grad_prob;
   Eigen::Matrix<double , -1, -1> grad_grad_bound_z = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
-  Eigen::Matrix<double , -1, -1> grad_grad_prob  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
-  Eigen::Matrix<double , -1, -1> grad_phi_z  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
+  Eigen::Matrix<double , -1, -1> grad_grad_prob  = Eigen::Matrix<double, -1, -1>::Zero(N,
+                                                                                       n_tests); //   = grad_prob;
+  Eigen::Matrix<double , -1, -1> grad_phi_z  = Eigen::Matrix<double, -1, -1>::Zero(N,
+                                                                                   n_tests); //   = grad_prob;
   Eigen::Matrix<double , -1, -1> grad_phi_z_recip  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
   Eigen::Matrix<double , -1, -1> grad_phi_bound_z  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
 
@@ -719,7 +740,8 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
           grad_phi_z_recip.col(0) =    - ( 1 / ( phi_Z[c].col(t).array() * phi_Z[c].col(t).array() ) ) * grad_phi_z.col(0).array() ;   // correct
           grad_grad_z.col(0) = grad_phi_z_recip.col(0).array()  *  (    prob[c].col(t).array()   )  ;  // correct
 
-          temp_L_Omega_x_grad_grad_z_sum_1 =    L_Omega_double[c](t + 1, t)   * grad_grad_z.col(0).array() ;  // correct
+          temp_L_Omega_x_grad_grad_z_sum_1 =    L_Omega_double[c](t + 1,
+                                                               t)   * grad_grad_z.col(0).array() ; // correct
           grad_grad_bound_z.col(0) =  (  1 / L_Omega_double[c](t + 1, t + 1)  ) * ( -  temp_L_Omega_x_grad_grad_z_sum_1.array()  ) ;   // correct
           grad_phi_bound_z.col(0) = deriv_phi_Bound_Z[c].col(t + 1);
           grad_grad_Phi_bound_z.col(0) = deriv_phi_Bound_Z[c].col(t + 1).array() *   grad_bound_z.col(0).array() * grad_bound_z.col(0).array()  + phi_Bound_Z[c].col(t + 1).array() *    grad_grad_bound_z.col(0).array() ;  // wrong
@@ -752,7 +774,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
 
         // 2nd set of grad_z and grad_prob terms
         grad_z.col(1) =  ( 1 / phi_Z[c].col(t + 1).array() ) *     y_m_y_sign_x_u[c].col(t + 1).array() *    grad_Phi_bound_z.col(0).array() ;
-        temp_L_Omega_x_grad_z_sum_1 =   L_Omega_double[c](t + 2, t)   * grad_z.col(0).array()   +  L_Omega_double[c](t + 2, t + 1)   * grad_z.col(1).array()    ;
+        temp_L_Omega_x_grad_z_sum_1 =   L_Omega_double[c](t + 2,
+                                                       t)   * grad_z.col(0).array()   +  L_Omega_double[c](t + 2,
+                                                       t + 1)   * grad_z.col(1).array()    ;
         grad_bound_z.col(1) =   (  1 / L_Omega_double[c](t + 2, t + 2)  ) *  ( -  temp_L_Omega_x_grad_z_sum_1.array()  ) ;
         grad_Phi_bound_z.col(1) =  phi_Bound_Z[c].col(t + 2).array() * grad_bound_z.col(1).array();
         grad_prob.col(1)   =   (  - y_sign.col(t + 2).array()  )  * grad_Phi_bound_z.col(1).array();
@@ -769,7 +793,8 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
           grad_phi_z_recip.col(0) =    - ( 1 / ( phi_Z[c].col(t).array() * phi_Z[c].col(t).array() ) ) * grad_phi_z.col(0).array() ;   // correct
           grad_grad_z.col(0) = grad_phi_z_recip.col(0).array()  *  (    prob[c].col(t).array()   )  ;  // correct
 
-          temp_L_Omega_x_grad_grad_z_sum_1 =    L_Omega_double[c](t + 1, t)   * grad_grad_z.col(0).array() ;  // correct
+          temp_L_Omega_x_grad_grad_z_sum_1 =    L_Omega_double[c](t + 1,
+                                                               t)   * grad_grad_z.col(0).array() ; // correct
           grad_grad_bound_z.col(0) =  (  1 / L_Omega_double[c](t + 1, t + 1)  ) * ( -  temp_L_Omega_x_grad_grad_z_sum_1.array()  ) ;   // correct
           grad_phi_bound_z.col(0) = deriv_phi_Bound_Z[c].col(t + 1);
           grad_grad_Phi_bound_z.col(0) = deriv_phi_Bound_Z[c].col(t + 1).array() *   grad_bound_z.col(0).array() * grad_bound_z.col(0).array()  + phi_Bound_Z[c].col(t + 1).array() *    grad_grad_bound_z.col(0).array() ;
@@ -827,7 +852,11 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
 
           for (int ii = 1; ii < i + 2; ii++ ) {
             grad_z.col(ii) =  ( 1 / phi_Z[c].col(t + ii).array() ) *     y_m_y_sign_x_u[c].col(t + ii).array() *    grad_Phi_bound_z.col(ii - 1).array() ;
-            temp_L_Omega_x_grad_z_sum_1 =  grad_z.block(0, 0, N, ii + 1)  *  L_Omega_double[c].row(t + ii + 1).segment(t, ii + 1).transpose()   ;
+            temp_L_Omega_x_grad_z_sum_1 =  grad_z.block(0,
+                                                        0,
+                                                        N,
+                                                        ii + 1)  *  L_Omega_double[c].row(t + ii + 1).segment(t,
+                                                        ii + 1).transpose()   ;
             grad_bound_z.col(ii) =   (  1 / L_Omega_double[c](t + ii + 1, t + ii + 1)  ) *  ( -  temp_L_Omega_x_grad_z_sum_1.array()  ) ;
             grad_Phi_bound_z.col(ii) =  phi_Bound_Z[c].col(t + ii + 1).array() * grad_bound_z.col(ii).array();
             grad_prob.col(ii)   =   (  - y_sign.col(t + ii + 1).array()  )  * grad_Phi_bound_z.col(ii).array();
@@ -852,7 +881,8 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
             grad_phi_z_recip.col(0) =    - ( 1 / ( phi_Z[c].col(t).array() * phi_Z[c].col(t).array() ) ) * grad_phi_z.col(0).array() ;   // correct
             grad_grad_z.col(0) = grad_phi_z_recip.col(0).array()  *  (    prob[c].col(t).array()   )  ;  // correct
 
-            temp_L_Omega_x_grad_grad_z_sum_1 =    L_Omega_double[c](t + 1, t)   * grad_grad_z.col(0).array() ;  // correct
+            temp_L_Omega_x_grad_grad_z_sum_1 =    L_Omega_double[c](t + 1,
+                                                                 t)   * grad_grad_z.col(0).array() ; // correct
             grad_grad_bound_z.col(0) =  (  1 / L_Omega_double[c](t + 1, t + 1)  ) * ( -  temp_L_Omega_x_grad_grad_z_sum_1.array()  ) ;   // correct
             grad_phi_bound_z.col(0) = deriv_phi_Bound_Z[c].col(t + 1);
             grad_grad_Phi_bound_z.col(0) = deriv_phi_Bound_Z[c].col(t + 1).array() *   grad_bound_z.col(0).array() * grad_bound_z.col(0).array()  + phi_Bound_Z[c].col(t + 1).array() *    grad_grad_bound_z.col(0).array() ;
@@ -1033,7 +1063,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
       }
 
       // put it all together
-      u_hessian_diag(i) =      u_hessian_diag_array_wrt_constrained_wo_jac(n, t)  * du_wrt_duu(i)    +  u_grad_wrt_constrained_wo_jac_array(n, t)  * deriv_du_wrt_duu(i)   ;
+      u_hessian_diag(i) =      u_hessian_diag_array_wrt_constrained_wo_jac(n,
+                     t)  * du_wrt_duu(i)    +  u_grad_wrt_constrained_wo_jac_array(n,
+                     t)  * deriv_du_wrt_duu(i)   ;
       u_hessian_diag(i) +=     deriv_d_J_wrt_duu(i)  ;
 
       i += 1;

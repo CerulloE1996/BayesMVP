@@ -29,11 +29,11 @@
 // #include "MVP_helpers_migrated.hpp"
 
 //// =====================================================================================
-//// PART 0: (REMOVED — KernelChoice, kernel_choice_from_args, apply_col_inplace, Phi_col_inplace,
+//// PART 0: (REMOVED - KernelChoice, kernel_choice_from_args, apply_col_inplace, Phi_col_inplace,
 ////          inv_Phi_col_inplace all live in MVP_helpers_migrated.hpp; include that instead.)
 
 //// =====================================================================================
-//// PART A: fn_MVOP_compute_lp_GHK_cols — rewritten. Same outputs, same maths, no strings,
+//// PART A: fn_MVOP_compute_lp_GHK_cols - rewritten. Same outputs, same maths, no strings,
 ////         no temporaries. Note the pattern: copy the input column INTO the output column,
 ////         then transform the output column in place.
 //// =====================================================================================
@@ -55,20 +55,34 @@ inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
   ////
   //// ---- for exact Phi (Phi_type = "Phi") the right-side seam is removed by reflection.
   ////
-  //// Binary: identical to fn_MVP_compute_lp_GHK_cols_T (see the derivation there): prob = Phi(sign_y * B), sign_y = 1 - 2y,
-  ////         q = (y - (2y-1) u) prob, Z = sign_y * Phi^{-1}(q).
-  //// Ordinal: when BOTH bounds are positive (lower bound lb > 0), Phi(ub) - Phi(lb) is a difference of two numbers near 1
-  ////         (catastrophic cancellation near lb = +7.5, just inside overflow_threshold). Using Phi(x) = 1 - Phi(-x):
-  ////           reflect  = (lb > 0);  a = reflect ? -ub : lb;  b = reflect ? -lb : ub     (a < b; a = -Inf when ub = +Inf)
-  ////           prob     = Phi(b) - Phi(a)                       [ = Phi(-lb) - Phi(-ub) = Phi(ub) - Phi(lb) when reflecting ]
+  //// Binary: identical to fn_MVP_compute_lp_GHK_cols_T (see the derivation there): prob = Phi(sign_y * B),
+  ////         sign_y = 1 - 2y, q = (y - (2y-1) u) prob, Z = sign_y * Phi^{-1}(q).
+  //// Ordinal: when BOTH bounds are positive (lower bound lb > 0), Phi(ub) - Phi(lb) is a difference of two
+  ////         numbers near 1 (catastrophic cancellation near lb = +7.5, just inside overflow_threshold). Using
+  ////         Phi(x) = 1 - Phi(-x):
+  ////           reflect  = (lb > 0);  a = reflect ? -ub : lb;  b = reflect ? -lb : ub
+  ////                      (a < b; a = -Inf when ub = +Inf)
+  ////           prob     = Phi(b) - Phi(a)
+  ////                      [ = Phi(-lb) - Phi(-ub) = Phi(ub) - Phi(lb) when reflecting ]
   ////           q        = Phi(a) + w prob,  w = reflect ? (1 - u) : u
-  ////                      [ reflecting: q = u Phi(-ub) + (1 - u) Phi(-lb) = 1 - (Phi(lb) + u (Phi(ub) - Phi(lb))) = 1 - Phi_Z ]
+  ////                      [ reflecting: q = u Phi(-ub) + (1 - u) Phi(-lb)
+  ////                                      = 1 - (Phi(lb) + u (Phi(ub) - Phi(lb))) = 1 - Phi_Z ]
   ////           Z        = reflect ? -Phi^{-1}(q) : Phi^{-1}(q),  Phi_Z = reflect ? 1 - q : q
-  ////           Phi(lb)  = reflect ? 1 - Phi(b) : Phi(a)       (stored for completeness; only the Phi_approx derivative reads it)
-  ////         Non-reflected rows use exactly the old operations. The gradient code is unchanged: it uses the analytic
-  ////         derivatives phi(lb), phi(ub) (from the bounds) and 1/phi(Z) (from Z), which do not depend on how prob was formed.
+  ////           Phi(lb)  = reflect ? 1 - Phi(b) : Phi(a)
+  ////                      (stored for completeness; only the Phi_approx derivative reads it)
+  ////         Non-reflected rows use the direct operations. The gradient code uses the analytic derivatives
+  ////         phi(lb), phi(ub) (from the bounds) and 1/phi(Z) (from Z), which do not depend on how prob is
+  ////         formed.
   ////
-  if (!k.Phi_approx) {
+  //// Phi_approx (Phi_type = "Phi_approx") takes the same reflection, with its own kernels (Phi_col_inplace /
+  //// inv_Phi_col_inplace follow k): Phi_approx(-x) = 1 - Phi_approx(x) and inv_Phi_approx(1 - q) =
+  //// -inv_Phi_approx(q) hold as well. The original Phi_approx code below (commented out) formed
+  //// 1 - Phi_approx(B) and Phi_approx(ub) - Phi_approx(lb) near 1, which are exactly 0 once the bounds pass
+  //// ~7.1 (inside overflow_threshold = 7.5): log(prob) = -Inf and Z = +Inf there, and Z = +Inf then made the
+  //// bounds of every later test of the row infinite.
+  ////
+  // if (!k.Phi_approx) {
+  {
     
         if (is_binary) {
           
@@ -89,20 +103,25 @@ inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
           
               const Eigen::Array<bool, -1, 1> reflect_mask_col = (Bound_Z.col(t).array() > 0.0);                   //// lb > 0 (then ub > lb > 0)
               //// Phi(a) -> Bound_U_Phi_Bound_Z (temporarily), Phi(b) -> prob:
-              Bound_U_Phi_Bound_Z.col(t).array() = reflect_mask_col.select(-Upper_Bound_Z.col(t).array(), Bound_Z.col(t).array());
+              Bound_U_Phi_Bound_Z.col(t).array() = reflect_mask_col.select(-Upper_Bound_Z.col(t).array(),
+                                      Bound_Z.col(t).array());
               Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
-              prob.col(t).array() = reflect_mask_col.select(-Bound_Z.col(t).array(), Upper_Bound_Z.col(t).array());
+              prob.col(t).array() = reflect_mask_col.select(-Bound_Z.col(t).array(),
+                       Upper_Bound_Z.col(t).array());
               Phi_col_inplace<vec>(prob, t, k);
               prob.col(t).array() -= Bound_U_Phi_Bound_Z.col(t).array();                                               //// prob = Phi(b) - Phi(a)
               //// q = Phi(a) + w prob:
               Z_std_norm.col(t).array() = Bound_U_Phi_Bound_Z.col(t).array()
-                                        + reflect_mask_col.select(1.0 - u_array.col(t).array(), u_array.col(t).array()) * prob.col(t).array();
-              Phi_Z.col(t).array() = reflect_mask_col.select(1.0 - Z_std_norm.col(t).array(), Z_std_norm.col(t).array());
+                                        + reflect_mask_col.select(1.0 - u_array.col(t).array(),
+                                                                  u_array.col(t).array()) * prob.col(t).array();
+              Phi_Z.col(t).array() = reflect_mask_col.select(1.0 - Z_std_norm.col(t).array(),
+                        Z_std_norm.col(t).array());
               //// Phi(lb) = reflect ? 1 - Phi(b) = 1 - (Phi(a) + prob) : Phi(a):
               Bound_U_Phi_Bound_Z.col(t).array() = reflect_mask_col.select(1.0 - (Bound_U_Phi_Bound_Z.col(t).array() + prob.col(t).array()),
                                                                            Bound_U_Phi_Bound_Z.col(t).array());
               inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
-              Z_std_norm.col(t).array() = reflect_mask_col.select(-Z_std_norm.col(t).array(), Z_std_norm.col(t).array());
+              Z_std_norm.col(t).array() = reflect_mask_col.select(-Z_std_norm.col(t).array(),
+                             Z_std_norm.col(t).array());
               y1_log_prob.col(t) = prob.col(t);
               apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
           
@@ -112,59 +131,59 @@ inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
     
   }
 
-  //// ---- Phi_approx setting: original code below, unchanged ----
-  if (is_binary) {
+//   //// ---- Phi_approx setting: the original code below ----
+//   if (is_binary) {
 
-        //// Phi(BZ):
-        Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
-        Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
+//         //// Phi(BZ):
+//         Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
+//         Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
 
-        //// Phi_Z = y*Phi(BZ) + (y - Phi(BZ)) * (2y-1) * u      [(2y-1) written inline, no y_sign temp]
-        Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array()
-                             + (y_chunk.col(t).array() - Bound_U_Phi_Bound_Z.col(t).array())
-                             * ((2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array());
+//         //// Phi_Z = y*Phi(BZ) + (y - Phi(BZ)) * (2y-1) * u      [(2y-1) written inline, no y_sign temp]
+//         Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array()
+//                              + (y_chunk.col(t).array() - Bound_U_Phi_Bound_Z.col(t).array())
+//                              * ((2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array());
 
-        //// Z = inv_Phi(Phi_Z):
-        Z_std_norm.col(t) = Phi_Z.col(t);
-        inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
+//         //// Z = inv_Phi(Phi_Z):
+//         Z_std_norm.col(t) = Phi_Z.col(t);
+//         inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
 
-        //// prob = y*(1 - Phi(BZ)) + (y-1)*Phi(BZ)*(2y-1):
-        prob.col(t).array() = y_chunk.col(t).array() * (1.0 - Bound_U_Phi_Bound_Z.col(t).array())
-                            + (y_chunk.col(t).array() - 1.0) * Bound_U_Phi_Bound_Z.col(t).array()
-                            * (2.0 * y_chunk.col(t).array() - 1.0);
+//         //// prob = y*(1 - Phi(BZ)) + (y-1)*Phi(BZ)*(2y-1):
+//         prob.col(t).array() = y_chunk.col(t).array() * (1.0 - Bound_U_Phi_Bound_Z.col(t).array())
+//                             + (y_chunk.col(t).array() - 1.0) * Bound_U_Phi_Bound_Z.col(t).array()
+//                             * (2.0 * y_chunk.col(t).array() - 1.0);
 
-        //// log(prob):
-        y1_log_prob.col(t) = prob.col(t);
-        apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+//         //// log(prob):
+//         y1_log_prob.col(t) = prob.col(t);
+//         apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
 
-  } else {
+//   } else {
 
-        //// Phi(lower_bz) -> Bound_U_Phi_Bound_Z:
-        Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
-        Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
+//         //// Phi(lower_bz) -> Bound_U_Phi_Bound_Z:
+//         Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
+//         Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
 
-        //// prob = Phi(upper_bz) - Phi(lower_bz). Use prob.col(t) itself as the scratch for Phi(ub):
-        prob.col(t) = Upper_Bound_Z.col(t);
-        Phi_col_inplace<vec>(prob, t, k);
-        prob.col(t).array() -= Bound_U_Phi_Bound_Z.col(t).array();
+//         //// prob = Phi(upper_bz) - Phi(lower_bz). Use prob.col(t) itself as the scratch for Phi(ub):
+//         prob.col(t) = Upper_Bound_Z.col(t);
+//         Phi_col_inplace<vec>(prob, t, k);
+//         prob.col(t).array() -= Bound_U_Phi_Bound_Z.col(t).array();
 
-        //// Phi(Z) = Phi(lb) + u * prob:
-        Phi_Z.col(t).array() = Bound_U_Phi_Bound_Z.col(t).array() + u_array.col(t).array() * prob.col(t).array();
+//         //// Phi(Z) = Phi(lb) + u * prob:
+//         Phi_Z.col(t).array() = Bound_U_Phi_Bound_Z.col(t).array() + u_array.col(t).array() * prob.col(t).array();
 
-        //// Z = inv_Phi(Phi(Z)):
-        Z_std_norm.col(t) = Phi_Z.col(t);
-        inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
+//         //// Z = inv_Phi(Phi(Z)):
+//         Z_std_norm.col(t) = Phi_Z.col(t);
+//         inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
 
-        //// log(prob):
-        y1_log_prob.col(t) = prob.col(t);
-        apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+//         //// log(prob):
+//         y1_log_prob.col(t) = prob.col(t);
+//         apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
 
-  }
+//   }
 
 }
 
 //// =====================================================================================
-//// PART B: fn_MVOP_compute_phi_Bound_Z_cols — rewritten.
+//// PART B: fn_MVOP_compute_phi_Bound_Z_cols - rewritten.
 //// =====================================================================================
 template <Vec vec>
 inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
@@ -293,7 +312,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////       std::string vect_type_inv_Phi = ...;
 ////       std::string vect_type_inv_Phi_approx_from_logit_prob = ...;
 ////
-////     KEEP `vect_type` (strings(0)) — it is still used for vec_size in calculate_chunk_sizes.
+////     KEEP `vect_type` (strings(0)) - it is still used for vec_size in calculate_chunk_sizes.
 ////     Inside the chunk block, DELETE the nine `std::string vt_* = vect_type_*;` copies.
 ////
 //// D4. In the chunk loop, replace the helper calls:
@@ -322,7 +341,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////
 //// D5. Collapse the duplicated LAST-CHUNK block. With the masked tail, the remainder chunk
 ////     runs the SAME instantiation as the full chunks, so the entire
-////       "// LAST CHUNK (remainder) — processed serially with fallback SIMD" block
+////       "// LAST CHUNK (remainder) - processed serially with fallback SIMD" block
 ////     (the Model_args_last_chunk copy, the nine "Stan" string overrides, the duplicated
 ////     class/test/grad loops) is deleted. What remains is the workspace resize, which the driver
 ////     fold into the main loop by iterating to n_total_chunks instead of n_full_chunks:
@@ -344,7 +363,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////
 ////     Note `n_full_chunks < n_total_chunks` iff last_chunk_size > 0, so `is_last` is only
 ////     ever true when there is a remainder; no extra guard needed.
-////     Model_args_as_cpp_struct is passed to the un-migrated helpers for ALL chunks now —
+////     Model_args_as_cpp_struct is passed to the un-migrated helpers for ALL chunks now -
 ////     which is correct, because the masked tail means the AVX path handles any length.
 ////
 ////     (If the loop structure should remain unchanged: keep the last-chunk block but
@@ -358,7 +377,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 ////   1. Add fn_dispatch_templated.hpp + PART 0. Build. Export dispatch_self_test() to R, run it.
 ////   2. Add PART C (fn_MVP_compute_lp_GHK_cols<vec>) alongside the old one (different signature,
 ////      they coexist). Do D1, D2, D4 (just the GHK call + prob_n). Build. Run a model, compare lp
-////      against the AD path at one theta — they must agree to what they agreed before.
+////      against the AD path at one theta - they must agree to what they agreed before.
 ////   3. D3, D5. Build, same check.
 ////   4. Migrate the remaining helpers one by one (phi_Z_recip, phi_Bound_Z, nuisance, jac_u,
 ////      first_deriv, log_det_J, log_sum_exp_general), building after each.

@@ -354,7 +354,7 @@ model_obj <- BayesMVP::MVP_model$new(   Model_type = Model_type,
   n_superchains <- min(8, parallel::detectCores() / 2)  ## round(n_chains_sampling / n_chains_burnin) # Each superchain is a "group" or "nest" of chains. If using ~8 chains or less, set this to 1. 
   n_iter <- 1000                         
   n_burnin <- 500
-  n_nuisance_to_track <- 10 # set to some small number (< 10) if don't care about making inference on nuisance params (which is most of the time!)
+  nuisance_to_track <- "none" # "none" keeps no nuisance values; the names of nuisance blocks keep those blocks
 }
 
 #### ------ sample model using "  model_obj$sample()" --------- 
@@ -417,7 +417,7 @@ model_samples <-  model_obj$sample(  partitioned_HMC = partitioned_HMC,
                                       vect_type = "Stan",
                                      # vect_type = "AVX512",
                                      # vect_type = "AVX2",
-                                     n_nuisance_to_track = n_nuisance_to_track)   
+                                     nuisance_to_track = nuisance_to_track)   
 
 
 

@@ -30,7 +30,9 @@
             
               
               
+##
               ## -------------- USER Examples dir:
+##
               user_examples_dir <- file.path(user_BayesMVP_dir, "examples")
               cat("user_examples_dir =", user_examples_dir, "\n")
               
@@ -47,7 +49,9 @@
                 recursive = TRUE
               )
               
+##
               ## -------------- USER src dir:
+##
               user_src_dir <- file.path(user_BayesMVP_dir, "src")
               cat("user_src_dir =", user_src_dir, "\n")
               
@@ -66,7 +70,9 @@
                 )
               }
               
+##
               ## -------------- USER stan_models dir:
+##
               user_stan_models_dir <- file.path(user_BayesMVP_dir, "stan_models")
               cat("user_stan_models_dir =", user_stan_models_dir, "\n")
               

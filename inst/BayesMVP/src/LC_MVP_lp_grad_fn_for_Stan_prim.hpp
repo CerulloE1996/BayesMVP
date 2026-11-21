@@ -122,8 +122,10 @@
 
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_Stan.hpp"
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_Loop.hpp"
-#include "general_functions/fns_SIMD_and_wrappers/fast_and_approx_AVX2_fns.hpp" // will only compile if  AVX2 is available
-#include "general_functions/fns_SIMD_and_wrappers/fast_and_approx_AVX512_fns.hpp" // will only compile if  AVX-512 is available
+// will only compile if  AVX2 is available
+#include "general_functions/fns_SIMD_and_wrappers/nico_and_approx_AVX2_fns.hpp"
+// will only compile if  AVX-512 is available
+#include "general_functions/fns_SIMD_and_wrappers/nico_and_approx_AVX512_fns.hpp"
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_SIMD_AVX_general.hpp" // will only compile if AVX-512 (1st choice) or AVX2 available
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_overall.hpp"
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_log_sum_exp_dbl.hpp"
@@ -183,9 +185,10 @@
 
 
 //////////////-------- first determine SIMD (i.e. vectorisation) type to use as global static variable - will add more in future -------------------------------------------
-//// same conditions as the native dispatch (fn_SIMD_level_resolver.hpp: AVX512F+VL+DQ for the 8-lane kernels, AVX2+FMA for the
-//// 4-lane ones; "__AVX512F__ alone" used to select "AVX512", which the resolver now rejects on a build without VL/DQ). Compiling the
-//// Stan model with -DBAYESMVP_FORCE_AVX2 selects the 4-lane AVX2 kernels on an AVX-512 machine (as in stan_external_functions.hpp).
+//// same conditions as the native dispatch (fn_SIMD_level_resolver.hpp: AVX512F+VL+DQ for the 8-lane kernels,
+//// AVX2+FMA for the 4-lane ones; "__AVX512F__ alone" does not select "AVX512", which the resolver rejects on a
+//// build without VL/DQ). Compiling the Stan model with -DBAYESMVP_FORCE_AVX2 selects the 4-lane AVX2 kernels on
+//// an AVX-512 machine (as in stan_external_functions.hpp).
 static const std::string vect_type = [] {
       #if defined(__AVX512VL__) && defined(__AVX512F__) && defined(__AVX512DQ__) && !defined(BAYESMVP_FORCE_AVX2)
        return "AVX512";
@@ -345,7 +348,9 @@ double                           Stan_wrapper_lp_fn_LC_MVP_var(                 
   Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[5] = ub_corr;
   Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[6] = known_values;
   
-  std::vector<Eigen::Matrix<int, -1, -1>> known_values_indicator_int = vec_of_mats<int>(n_tests, n_tests, n_class);
+  std::vector<Eigen::Matrix<int, -1, -1>> known_values_indicator_int = vec_of_mats<int>(n_tests,
+                                                                                        n_tests,
+                                                                                        n_class);
   for (int c = 0; c < n_class; c++) {
     known_values_indicator_int[c] = known_values_indicator[0].cast<int>();
   } 

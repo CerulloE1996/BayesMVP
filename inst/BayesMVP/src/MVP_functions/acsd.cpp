@@ -164,6 +164,7 @@ inline void fn_MVP_compute_lp_GHK_cols(   const int t,
                                           const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
                                           const KernelChoice &k
 ) {
+
   Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
   Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
 
@@ -180,6 +181,7 @@ inline void fn_MVP_compute_lp_GHK_cols(   const int t,
 
   y1_log_prob.col(t) = prob.col(t);
   apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+
 }
 
 //// =====================================================================================

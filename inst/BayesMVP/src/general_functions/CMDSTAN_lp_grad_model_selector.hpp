@@ -164,12 +164,22 @@ inline  void  fn_lp_grad_InPlace(                Eigen::Ref<Eigen::Matrix<double
        
           if ((Model_type == "LC_MVP") || (Model_type == "MVP")) {
             
-                            fn_lp_grad_MVP_multi_attempts_InPlace_process(lp_and_grad_outs, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+                            fn_lp_grad_MVP_multi_attempts_InPlace_process(lp_and_grad_outs,
+                                                                          theta_main_vec_ref,
+                                                                          theta_us_vec_ref,
+                                                                          y_ref,
+                                                                          grad_option,
+                                                                          Model_args_as_cpp_struct);
             
           } else if (Model_type == "latent_trait") {
             
                        //// #if COMPILE_LATENT_TRAIT
-                           fn_lp_grad_LT_LC_multi_attempts_InPlace_process(lp_and_grad_outs, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+                           fn_lp_grad_LT_LC_multi_attempts_InPlace_process(lp_and_grad_outs,
+                                                                           theta_main_vec_ref,
+                                                                           theta_us_vec_ref,
+                                                                           y_ref,
+                                                                           grad_option,
+                                                                           Model_args_as_cpp_struct);
                        //// #endif
                            
           }

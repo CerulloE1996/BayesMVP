@@ -136,8 +136,10 @@ static std::atomic<long long> g_n_load{0};
 //// --------- BayesMVP includes - General functions
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_Stan.hpp"
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_Loop.hpp"
-#include "general_functions/fns_SIMD_and_wrappers/fast_and_approx_AVX2_fns.hpp" // will only compile if  AVX2 is available
-#include "general_functions/fns_SIMD_and_wrappers/fast_and_approx_AVX512_fns.hpp" // will only compile if  AVX-512 is available
+// will only compile if  AVX2 is available
+#include "general_functions/fns_SIMD_and_wrappers/nico_and_approx_AVX2_fns.hpp"
+// will only compile if  AVX-512 is available
+#include "general_functions/fns_SIMD_and_wrappers/nico_and_approx_AVX512_fns.hpp"
 // #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_SIMD_AVX2.hpp" // will only compile if AVX2 is available
 //// #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_SIMD_AVX2_test.hpp" ///////////  FOR DEBUG ONLY
 // #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_SIMD_AVX512.hpp" // will only compile if AVX-512 is available
@@ -153,6 +155,7 @@ static std::atomic<long long> g_n_load{0};
 #include <NicoStan/runtime/general_functions/array_creators_Eigen_fns.hpp>
 #include <NicoStan/runtime/general_functions/array_creators_other_fns.hpp>
 #include <NicoStan/runtime/general_functions/structures.hpp>
+#include <NicoStan/runtime/general_functions/message_of_the_first_failed_gradient_of_each_chain.hpp>
 #include <NicoStan/runtime/general_functions/classes.hpp>
 
 
@@ -285,7 +288,6 @@ static std::atomic<long long> g_n_load{0};
 
 
 using namespace Rcpp;
-using namespace Eigen;
 
 
 
@@ -328,7 +330,9 @@ extern bool g_debug_cutpoint_grads;
 
 // [[Rcpp::export]]
 void set_debug_cutpoint_grads(bool val) {
+
   g_debug_cutpoint_grads = val;
+
 }
 
 
@@ -340,6 +344,15 @@ double fn_get_stan_load_count()    { return (double)g_n_load.load(); }
 
 // [[Rcpp::export]]
 void fn_reset_stan_load_timer()    { g_t_load_us.store(0); g_n_load.store(0); }
+
+
+//// the positions (from 0) of the nuisance values each chain's nuisance trace keeps, from $sample()'s
+//// nuisance_to_track (empty: every nuisance value, or none when the trace has 0 rows)
+// [[Rcpp::export]]
+void Rcpp_fn_set_the_positions_of_the_nuisance_values_kept_in_the_trace(const Rcpp::IntegerVector positions_from_0) {
+      std::vector<int> &positions = nicostan_positions_of_the_nuisance_values_kept_in_the_trace();
+      positions.assign(positions_from_0.begin(), positions_from_0.end());
+}
 
 
 
@@ -357,6 +370,27 @@ bool fn_read_autodiff_fallback_option(const Rcpp::List &R_List) {
           Rcpp::stop("BayesMVP_autodiff_fallback must be a single TRUE or FALSE.");
      }
      return LOGICAL(fallback_option)[0] == TRUE;
+
+}
+
+//// The PartialLog chunk multiplier (list entry n_chunks_multiplier_for_PartialLog_log_scale_evaluation, set by
+//// sample()): a single positive whole number; 1 for a list without that entry.
+int fn_read_PartialLog_n_chunks_multiplier(const Rcpp::List &R_List) {
+
+     const std::string entry_name = "n_chunks_multiplier_for_PartialLog_log_scale_evaluation";
+     if (!R_List.containsElementNamed(entry_name.c_str())) return 1;
+     SEXP multiplier_value = R_List[entry_name];
+     const bool is_single_number = ( (TYPEOF(multiplier_value) == REALSXP) ||
+                                     (TYPEOF(multiplier_value) == INTSXP) ) &&
+                                   (Rf_xlength(multiplier_value) == 1);
+     const double multiplier = is_single_number ? Rf_asReal(multiplier_value) : NA_REAL;
+     if (!is_single_number || !std::isfinite(multiplier) || (multiplier < 1.0) ||
+         (multiplier != std::floor(multiplier)) || (multiplier > 1.0e6)) {
+
+          Rcpp::stop(entry_name + " must be a single positive whole number.");
+
+     }
+     return static_cast<int>(multiplier);
 
 }
 
@@ -422,6 +456,9 @@ Model_fn_args_struct   convert_R_List_to_Model_fn_args_struct(Rcpp::List R_List)
      model_arguments.autodiff_fallback = fn_read_autodiff_fallback_option(R_List);
      model_arguments.autodiff_fallback_option_is_set = R_List.containsElementNamed("autodiff_fallback") ||
          Rf_GetOption1(Rf_install("BayesMVP_autodiff_fallback")) != R_NilValue;
+     model_arguments.PartialLog_n_chunks_multiplier = fn_read_PartialLog_n_chunks_multiplier(R_List);
+     model_arguments.PartialLog_n_chunks_multiplier_option_is_set =
+         R_List.containsElementNamed("n_chunks_multiplier_for_PartialLog_log_scale_evaluation");
      return model_arguments;
 
 }
@@ -458,6 +495,7 @@ EHMC_Metric_struct convert_R_List_EHMC_Metric_struct(const Rcpp::List &R_List) {
                             M_us_vec,
                             theta_hat_us_vec,
                             metric_shape_main);
+
 }
 
 
@@ -502,6 +540,10 @@ EHMC_fn_args_struct convert_R_List_EHMC_fn_args_struct(Rcpp::List R_List) {
                                                      eps_us,
                                                      diffusion_HMC,
                                                      diffusion_HMC_integrator);
+        if (R_List.containsElementNamed("max_L") && !Rf_isNull(R_List["max_L"])) {
+          EHMC_args_as_cpp_struct.max_L =
+              fn_max_L_from_positive_whole_number(Rcpp::as<double>(R_List["max_L"]));
+        }
         
         //// burn-in only: one tau_ii per iteration shared by all chains (optional list element; FALSE if absent):
         if (R_List.containsElementNamed("share_tau_ii_across_chains")) {
@@ -521,6 +563,27 @@ EHMC_fn_args_struct convert_R_List_EHMC_fn_args_struct(Rcpp::List R_List) {
         if (R_List.containsElementNamed("store_log_lik_trace")) {
           EHMC_args_as_cpp_struct.store_log_lik_trace = Rcpp::as<bool>(R_List["store_log_lik_trace"]);
         }
+        //// debug = TRUE (optional list element; FALSE if absent): the sampling phase records each
+ //// iteration's own trajectory length and main-parameter proposal
+        if (R_List.containsElementNamed("debug")) {
+          EHMC_args_as_cpp_struct.debug = Rcpp::as<bool>(R_List["debug"]);
+        }
+        //// untimed iterations before each chain's timed iterations, for the timing of a layout in one call
+        //// (optional list element; 0 if absent):
+        if (R_List.containsElementNamed("n_untimed_iterations_before_timed_iterations")) {
+          EHMC_args_as_cpp_struct.n_untimed_iterations_before_timed_iterations =
+                Rcpp::as<int>(R_List["n_untimed_iterations_before_timed_iterations"]);
+        }
+        if (R_List.containsElementNamed("release_memory_of_the_Stan_model_after_sampling")) {
+          EHMC_args_as_cpp_struct.release_memory_of_the_Stan_model_after_sampling =
+                Rcpp::as<int>(R_List["release_memory_of_the_Stan_model_after_sampling"]);
+        }
+        //// the leapfrog steps of each untimed iteration (optional list element; 0 if absent: the same as the
+        //// timed iterations)
+        if (R_List.containsElementNamed("L_of_the_untimed_iterations_before_timed_iterations")) {
+          EHMC_args_as_cpp_struct.L_of_the_untimed_iterations_before_timed_iterations =
+                Rcpp::as<int>(R_List["L_of_the_untimed_iterations_before_timed_iterations"]);
+        }
         
         return EHMC_args_as_cpp_struct;
 
@@ -533,7 +596,8 @@ Rcpp::List Rcpp_fn_check_joint_trajectory(const Rcpp::List EHMC_args_as_Rcpp_Lis
         return Rcpp::List::create(
             Rcpp::Named("use_given_tau_main_ii") = arguments.use_given_tau_main_ii,
             Rcpp::Named("randomize_tau") = arguments.randomize_tau,
-            Rcpp::Named("L_main") = std::ceil(arguments.tau_main_ii / arguments.eps_main));
+            Rcpp::Named("L_main") = fn_number_of_leapfrog_steps_from_tau_eps_and_max_L(
+                arguments.tau_main_ii, arguments.eps_main, arguments.max_L));
 
 }
 
@@ -556,7 +620,7 @@ EHMC_burnin_struct convert_R_List_EHMC_burnin_struct(Rcpp::List R_List) {
   double tau_m_adam_main = (R_List["tau_m_adam_main"]);
   double tau_v_adam_main = (R_List["tau_v_adam_main"]);
   double eigen_max_main =  (R_List["eigen_max_main"]);
-  Eigen::VectorXi index_main = (R_List["index_main"]);
+  Eigen::Matrix<int, -1, 1> index_main = (R_List["index_main"]);
   Eigen::Matrix<double, -1, -1> M_dense_sqrt = (R_List["M_dense_sqrt"]);
   Eigen::Matrix<double, -1, 1>  snaper_m_vec_main = (R_List["snaper_m_vec_main"]);
   Eigen::Matrix<double, -1, 1>  snaper_s_vec_main_empirical = (R_List["snaper_s_vec_main_empirical"]);
@@ -571,7 +635,7 @@ EHMC_burnin_struct convert_R_List_EHMC_burnin_struct(Rcpp::List R_List) {
   double tau_m_adam_us = (R_List["tau_m_adam_us"]);
   double tau_v_adam_us = (R_List["tau_v_adam_us"]);
   double eigen_max_us =  (R_List["eigen_max_us"]);
-  Eigen::VectorXi index_us = (R_List["index_us"]);
+  Eigen::Matrix<int, -1, 1> index_us = (R_List["index_us"]);
   Eigen::Matrix<double, -1, 1>  sqrt_M_us_vec = (R_List["sqrt_M_us_vec"]);
   Eigen::Matrix<double, -1, 1>  snaper_m_vec_us = (R_List["snaper_m_vec_us"]);
   Eigen::Matrix<double, -1, 1>  snaper_s_vec_us_empirical = (R_List["snaper_s_vec_us_empirical"]);
@@ -620,6 +684,7 @@ EHMC_burnin_struct convert_R_List_EHMC_burnin_struct(Rcpp::List R_List) {
 #include <NicoStan/runtime/MCMC/EHMC_find_initial_eps_fns.hpp>
 #include <NicoStan/runtime/MCMC/EHMC_single_threaded_samp_fns.hpp>
 #include <NicoStan/runtime/MCMC/EHMC_burn_multi_thread_samp_fns_RCPP.hpp>
+#include <NicoStan/runtime/general_functions/fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp>
 #include <NicoStan/runtime/general_functions/burnin_exact_R_arithmetic_fns.hpp> //// exact R reductions for the resident burn-in interface
 #include <NicoStan/runtime/MCMC/EHMC_pb_multi_thread_samp_fns_RCPP.hpp>
 #if ENABLE_OPEN_MP == 1
@@ -863,7 +928,11 @@ Rcpp::List Rcpp_compute_chain_stats(const std::vector<Eigen::Matrix<double, -1, 
                                        mcmc_3D_array,
                                        output);
 
-  RcppParallel::parallelFor(0, n_params, parallel_worker);
+  RcppParallel::parallelFor(0,
+                            n_params,
+                            parallel_worker,
+                            1,
+                            n_threads);
 
   return Rcpp::List::create(Rcpp::Named("statistics") = output);
 
@@ -892,7 +961,11 @@ Rcpp::List  Rcpp_compute_MCMC_diagnostics(     const std::vector<Eigen::Matrix<d
                                                 output);
 
       //// Run parallelFor
-      RcppParallel::parallelFor(0, n_params, parallel_worker); // RCppParallel will distribute the load across the n_threads
+      RcppParallel::parallelFor(0,
+                                n_params,
+                                parallel_worker,
+                                1,
+                                n_threads); // RCppParallel will distribute the load across the n_threads
 
       //// output
       return Rcpp::List::create(Rcpp::Named("diagnostics") = output);
@@ -984,9 +1057,10 @@ Rcpp::List    fn_Rcpp_compute_PD_Hessian_main(        const double shrinkage_fac
  
 
 // [[Rcpp::export]]
-Rcpp::List    fn_Rcpp_wrapper_update_M_dense_main_Hessian(            Eigen::Matrix<double, -1, -1> M_dense_main,  /// to be updated
-                                                                      Eigen::Matrix<double, -1, -1> M_inv_dense_main, /// to be updated
-                                                                      Eigen::Matrix<double, -1, -1> M_inv_dense_main_chol, /// to be updated
+Rcpp::List    fn_Rcpp_wrapper_update_M_dense_main_Hessian(            Eigen::Matrix<double, -1, -1> M_dense_main,
+                                                           /* to be updated */
+                                                                      Eigen::Matrix<double, -1, -1> M_inv_dense_main, /* to be updated */
+                                                                      Eigen::Matrix<double, -1, -1> M_inv_dense_main_chol, /* to be updated */
                                                                       const double shrinkage_factor,
                                                                       const double ratio_Hess_main,
                                                                       const int interval_width,
@@ -1099,8 +1173,9 @@ Rcpp::List    fn_Rcpp_compute_PD_Hessian_diag(     const double shrinkage_factor
 
 
 // [[Rcpp::export]]
-Rcpp::List    fn_Rcpp_wrapper_update_M_diag_Hessian(      Eigen::Matrix<double, -1, 1> M_main_vec,  /// to be updated
-                                                          Eigen::Matrix<double, -1, 1> M_inv_main_vec, /// to be updated
+Rcpp::List    fn_Rcpp_wrapper_update_M_diag_Hessian(      Eigen::Matrix<double, -1, 1> M_main_vec,
+                                                     /* to be updated */
+                                                          Eigen::Matrix<double, -1, 1> M_inv_main_vec, /* to be updated */
                                                           const double shrinkage_factor,
                                                           const double ratio_Hess_main,
                                                           const int interval_width,
@@ -1178,7 +1253,7 @@ Rcpp::List                         fn_find_initial_eps_main_and_us(           Ei
                                                                               const bool  multi_attempts,
                                                                               Eigen::Matrix<int, -1, -1> y_ref,
                                                                               const Rcpp::List Model_args_as_Rcpp_List,
-                                                                              Rcpp::List  EHMC_args_as_Rcpp_List, /// pass by ref. to modify (???)
+                                                                              Rcpp::List  EHMC_args_as_Rcpp_List, /* pass by ref. to modify (???) */
                                                                               const Rcpp::List   EHMC_Metric_as_Rcpp_List,
                                                                               const int n_threads = 1
 ) {
@@ -1229,12 +1304,12 @@ Rcpp::List                         fn_find_initial_eps_main_and_us(           Ei
 
 
 // [[Rcpp::export]]
-Eigen::Matrix<double, -1, 1>     fn_Rcpp_wrapper_adapt_eps_ADAM(   double eps,   //// updating this
-                                                                   double eps_m_adam,   //// updating this
-                                                                   double eps_v_adam,  //// updating this
+Eigen::Matrix<double, -1, 1>     fn_Rcpp_wrapper_adapt_eps_ADAM(   double eps,   /* updating this */
+                                                                   double eps_m_adam,   /* updating this */
+                                                                   double eps_v_adam,  /* updating this */
                                                                    const int iter,
                                                                    const int n_burnin,
-                                                                   const double LR,  /// ADAM learning rate
+                                                                   const double LR,  /* ADAM learning rate */
                                                                    const double p_jump,
                                                                    const double adapt_delta,
                                                                    const double beta1_adam,
@@ -1270,9 +1345,10 @@ Eigen::Matrix<double, -1, 1>     fn_Rcpp_wrapper_adapt_eps_ADAM(   double eps,  
 
 
 // [[Rcpp::export]]
-Eigen::Matrix<double, -1, -1>  fn_update_snaper_m_and_s(     Eigen::Matrix<double, -1, 1> snaper_m,  // to be updated
-                                                             Eigen::Matrix<double, -1, 1> snaper_s_empirical,   // to be updated
-                                                             const Eigen::Matrix<double, -1, 1>  theta_vec_mean,  // mean theta_vec across all K chains
+Eigen::Matrix<double, -1, -1>  fn_update_snaper_m_and_s(     Eigen::Matrix<double, -1, 1> snaper_m,
+                                                         /* to be updated */
+                                                             Eigen::Matrix<double, -1, 1> snaper_s_empirical,   /* to be updated */
+                                                             const Eigen::Matrix<double, -1, 1>  theta_vec_mean,  /* mean theta_vec across all K chains */
                                                              const double ii
 ) {
 
@@ -1311,7 +1387,8 @@ Eigen::Matrix<double, -1, -1>  fn_update_snaper_m_and_s(     Eigen::Matrix<doubl
 
 
 // [[Rcpp::export]]
-Eigen::Matrix<double, -1, 1> fn_update_snaper_w_dense_M(    Eigen::Matrix<double, -1, 1>  snaper_w_vec,    //// NOT const as updating!
+Eigen::Matrix<double, -1, 1> fn_update_snaper_w_dense_M(    Eigen::Matrix<double, -1, 1>  snaper_w_vec,
+                                                         /* NOT const as updating! */
                                                             const Eigen::Matrix<double, -1, 1>  eigen_vector,
                                                             const double eigen_max,
                                                             const Eigen::Matrix<double, -1, 1>  theta_vec,
@@ -1346,7 +1423,8 @@ Eigen::Matrix<double, -1, 1> fn_update_snaper_w_dense_M(    Eigen::Matrix<double
 
 
 // [[Rcpp::export]]
-Eigen::Matrix<double, -1, 1>  fn_update_snaper_w_diag_M(       Eigen::Matrix<double, -1, 1>  snaper_w_vec,    //// NOT const as updating!
+Eigen::Matrix<double, -1, 1>  fn_update_snaper_w_diag_M(       Eigen::Matrix<double, -1, 1>  snaper_w_vec,
+                                                         /* NOT const as updating! */
                                                                const Eigen::Matrix<double, -1, 1>  eigen_vector,
                                                                const double eigen_max,
                                                                const Eigen::Matrix<double, -1, 1>  theta_vec,
@@ -1419,13 +1497,13 @@ Eigen::Matrix<double, -1, 1> fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(   const E
                                                                          const Eigen::Matrix<double, -1, 1> snaper_m_vec,
                                                                          const Eigen::Matrix<double, -1, 1> velocity_prop,
                                                                          const Eigen::Matrix<double, -1, 1> velocity_0,
-                                                                         double tau,  /// updating this
+                                                                         double tau,  /* updating this */
                                                                          const double LR,
                                                                          const double ii,
                                                                          const double n_burnin, 
                                                                          const Eigen::Matrix<double, -1, 1> sqrt_M_vec,
-                                                                         double tau_m_adam,   /// updating this
-                                                                         double tau_v_adam,  /// updating this
+                                                                         double tau_m_adam,   /* updating this */
+                                                                         double tau_v_adam,  /* updating this */
                                                                          const double tau_ii,
                                                                          const double beta1_adam,
                                                                          const double beta2_adam,
@@ -1472,13 +1550,13 @@ Eigen::Matrix<double, -1, 1> fn_Rcpp_wrapper_update_tau_w_diag_M_ADAM(   const E
                                                                            const Eigen::Matrix<double, -1, 1> snaper_m_vec,
                                                                            const Eigen::Matrix<double, -1, 1> velocity_prop,
                                                                            const Eigen::Matrix<double, -1, 1> velocity_0,
-                                                                           double tau,   /// updating this
+                                                                           double tau,   /* updating this */
                                                                            const double LR,
                                                                            const double ii,
                                                                            const double n_burnin,
                                                                            const Eigen::Matrix<double, -1, -1> M_dense_sqrt,
-                                                                           double tau_m_adam,   /// updating this
-                                                                           double tau_v_adam,  /// updating this
+                                                                           double tau_m_adam,   /* updating this */
+                                                                           double tau_v_adam,  /* updating this */
                                                                            const double tau_ii,
                                                                            const double beta1_adam,
                                                                            const double beta2_adam,
@@ -1806,11 +1884,20 @@ Rcpp::List    fn_compute_param_constrain_from_trace_parallel(   const std::vecto
                                    + std::to_string(unc_params_trace_input_nuisance.size()) + " chains, expected "
                                    + std::to_string(n_chains) + ".");
         }
+        //// (a trace of the blocks named in nuisance_to_track only has one row per kept position; the worker
+        ////  puts each row back at its position and sets the untracked values to 0)
+        const int n_kept = static_cast<int>(nicostan_positions_of_the_nuisance_values_kept_in_the_trace().size());
+        const int n_rows_expected = (n_kept > 0) ? n_kept : n_nuisance;
+        if (n_kept > 0 && n_kept < n_nuisance) {
+          std::cout << "fn_compute_param_constrain_from_trace_parallel: only " << n_kept << " of the " << n_nuisance
+                    << " nuisance values were kept (nuisance_to_track); the others are set to 0 for param_constrain."
+                    << std::endl;
+        }
         for (int i = 0; i < n_chains; ++i) {
-          if (unc_params_trace_input_nuisance[i].rows() != n_nuisance) {
+          if (unc_params_trace_input_nuisance[i].rows() != n_rows_expected) {
             throw std::runtime_error("fn_compute_param_constrain_from_trace_parallel: nuisance trace rows ("
                                      + std::to_string(unc_params_trace_input_nuisance[i].rows())
-                                     + ") != n_nuisance (" + std::to_string(n_nuisance) + ").");
+                                     + ") != the kept nuisance values (" + std::to_string(n_rows_expected) + ").");
           }
           if (unc_params_trace_input_nuisance[i].cols() != n_iter) {
             throw std::runtime_error("fn_compute_param_constrain_from_trace_parallel: nuisance trace iterations mismatch.");
@@ -2057,8 +2144,8 @@ Rcpp::List fn_compute_param_constrain_from_trace_v2(  const std::vector<Eigen::M
 //     std::string out_path = trace_dir + "/chain_" + std::to_string(kk) + "_constrained.bin";
 //     std::ofstream out_file(out_path, std::ios::binary);
 //     
-//     Eigen::VectorXd theta_unc(n_params);
-//     Eigen::VectorXd theta_con(n_params_full);
+//     Eigen::Matrix<double, -1, 1> theta_unc(n_params);
+//     Eigen::Matrix<double, -1, 1> theta_con(n_params_full);
 //     
 //     for (int ii = 0; ii < n_iter; ++ii) {
 //       
@@ -2257,7 +2344,7 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
                                                const Eigen::Matrix<double, -1, -1> theta_main_vectors_all_chains_input_from_R,
                                                const Eigen::Matrix<double, -1, -1> theta_us_vectors_all_chains_input_from_R,
                                                const Eigen::Matrix<int, -1, -1> y_Eigen_R,
-                                               const Rcpp::List Model_args_as_Rcpp_List,  ///// ALWAYS read-only
+                                               const Rcpp::List Model_args_as_Rcpp_List,  /* ALWAYS read-only */
                                                const Rcpp::List EHMC_args_as_Rcpp_List,
                                                const Rcpp::List EHMC_Metric_as_Rcpp_List,
                                                const bool use_disk,
@@ -2294,7 +2381,9 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
     std::vector<Eigen::Matrix<double, -1, -1>> trace_output_log_lik; // = vec_of_mats<double>(N, n_iter_R, n_threads_R);  //// possibly dummy
   
     //// data copies:
-    std::vector<Eigen::Matrix<int, -1, -1>> y_copies_R = vec_of_mats<int>(y_Eigen_R.rows(), y_Eigen_R.cols(), n_threads_R);
+    std::vector<Eigen::Matrix<int, -1, -1>> y_copies_R = vec_of_mats<int>(y_Eigen_R.rows(),
+                                                                          y_Eigen_R.cols(),
+                                                                          n_threads_R);
     for (int kk = 0; kk < n_threads_R; ++kk) {
        y_copies_R[kk] = y_Eigen_R;
     }
@@ -2346,10 +2435,38 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
     //// Call parallelFor:
     // tbb::task_arena arena(n_threads_R);
     // arena.execute([&]() {
-      RcppParallel::parallelFor(0, n_threads_R, parallel_hmc_sampling);
+      // RcppParallel::parallelFor(0, n_threads_R, parallel_hmc_sampling);
+      //// (built-in models: each chain on a fixed thread made for this call, so that its WCP OpenMP team is
+      ////  built once and given back at the end:
+      ////  fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+      if (fn_run_each_chain_of_this_model_on_a_fixed_thread_of_its_own(Model_type_R)) {
+            // fn_run_each_chain_on_a_fixed_thread_for_this_call(n_threads_R, parallel_hmc_sampling);
+            //// (on the fixed threads kept for the whole process: ending them crashed TBB, see
+            ////  fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+            fn_run_every_chain_on_the_fixed_threads_kept_for_the_whole_process(
+                  n_threads_R,
+                  [&parallel_hmc_sampling](const int chain_index) {
+
+                        parallel_hmc_sampling(static_cast<std::size_t>(chain_index),
+                                              static_cast<std::size_t>(chain_index) + 1);
+
+                  });
+      } else {
+            RcppParallel::parallelFor(0, n_threads_R, parallel_hmc_sampling);
+      }
     // });
 
     const auto chains_done_time = std::chrono::steady_clock::now();
+
+ //// debug = TRUE: each iteration's own trajectory length and main-parameter proposal, copied
+    //// before move_results_to_output() clears the chains' outputs:
+    Eigen::Matrix<double, -1, -1> tau_main_ii_output;
+    Eigen::Matrix<int, -1, -1> L_main_ii_output;
+    std::vector<Eigen::Matrix<double, -1, -1>> proposal_main_output;
+    if (EHMC_args_as_cpp_struct.debug) {
+        parallel_hmc_sampling.copy_debug_record_to_output(tau_main_ii_output, L_main_ii_output,
+                                                          proposal_main_output);
+    }
 
     ////  copy / store trace:
     Eigen::Matrix<double, -1, -1> p_jump_main_output, p_jump_nuisance_output;
@@ -2366,6 +2483,19 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
     const double zero_dbl = 0.0;
    
     //// Return results:
+ //// sampling diagnostics: the acceptance probabilities and, with debug = TRUE, each iteration's
+    //// own trajectory length (iterations x chains), the step size of every sampling trajectory and each chain's
+    //// main-parameter proposals (parameters x iterations):
+    Rcpp::List sampling_diagnostics = Rcpp::List::create(
+        Rcpp::Named("p_jump_main") = p_jump_main_output,
+        Rcpp::Named("p_jump_nuisance") = p_jump_nuisance_output);
+    if (EHMC_args_as_cpp_struct.debug) {
+        sampling_diagnostics["tau_main_ii"] = tau_main_ii_output;
+        sampling_diagnostics["L_main_ii"] = L_main_ii_output;
+        sampling_diagnostics["eps_main"] = EHMC_args_as_cpp_struct.eps_main;
+        sampling_diagnostics["proposal_main"] = proposal_main_output;
+    }
+
     Rcpp::List sampling_results_list = Rcpp::List::create( trace_output,
                                trace_output_divs,
                                trace_output_nuisance,
@@ -2373,9 +2503,12 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
                                zero_dbl,
                                trace_output_log_lik,
                                // Append only: existing positional result entries 1 .. 6 are unchanged.
-                               Rcpp::Named("sampling_diagnostics") = Rcpp::List::create(
-                                   Rcpp::Named("p_jump_main") = p_jump_main_output,
-                                   Rcpp::Named("p_jump_nuisance") = p_jump_nuisance_output)
+                               // Rcpp::Named("sampling_diagnostics") = Rcpp::List::create(
+                               //     Rcpp::Named("p_jump_main") = p_jump_main_output,
+                               //     Rcpp::Named("p_jump_nuisance") = p_jump_nuisance_output)
+                               // );
+ //// (the same list, built above, with the debug record)
+                               Rcpp::Named("sampling_diagnostics") = sampling_diagnostics
                                );
 
     //// ---- where the sampling wall time went. Chain start/end times are relative to the start of parallelFor;
@@ -2384,7 +2517,9 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
         const auto converted_to_R_time = std::chrono::steady_clock::now();
         auto seconds_between = [](const std::chrono::steady_clock::time_point &from_time,
                                   const std::chrono::steady_clock::time_point &to_time) {
+
             return std::chrono::duration<double>(to_time - from_time).count();
+
         };
         const double parallel_start_seconds = std::chrono::duration<double>(worker_constructed_time.time_since_epoch()).count();
         std::vector<double> chain_start_relative_seconds(n_threads_R), chain_end_relative_seconds(n_threads_R);
@@ -2392,8 +2527,29 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
             chain_start_relative_seconds[chain_index] = parallel_hmc_sampling.chain_start_seconds[chain_index] - parallel_start_seconds;
             chain_end_relative_seconds[chain_index]   = parallel_hmc_sampling.chain_end_seconds[chain_index]   - parallel_start_seconds;
         }
+        //// (the seconds of each chain's timed iterations, i.e. after its untimed ones: the timing of a layout in
+        ////  one call; the whole chain when there are no untimed iterations)
+        std::vector<double> seconds_of_timed_iterations_of_each_chain(n_threads_R);
+        for (int chain_index = 0; chain_index < n_threads_R; ++chain_index) {
+            // seconds_of_timed_iterations_of_each_chain[chain_index] =
+            //       parallel_hmc_sampling.chain_end_seconds[chain_index] -
+            //       parallel_hmc_sampling.chain_timed_start_seconds[chain_index];
+            //// (up to the end of the timed iterations, before the release of the Stan model's memory)
+            seconds_of_timed_iterations_of_each_chain[chain_index] =
+                  parallel_hmc_sampling.chain_timed_end_seconds[chain_index] -
+                  parallel_hmc_sampling.chain_timed_start_seconds[chain_index];
+        }
+        //// (the seconds of each chain's release of the Stan model's memory and the rest of its work after its timed
+        ////  iterations: returned on their own, never counted in the timed seconds)
+        std::vector<double> seconds_after_the_timed_iterations_of_each_chain(n_threads_R);
+        for (int chain_index = 0; chain_index < n_threads_R; ++chain_index) {
+            seconds_after_the_timed_iterations_of_each_chain[chain_index] =
+                  parallel_hmc_sampling.chain_end_seconds[chain_index] -
+                  parallel_hmc_sampling.chain_timed_end_seconds[chain_index];
+        }
         std::sort(chain_end_relative_seconds.begin(), chain_end_relative_seconds.end());
-        const double last_chain_start_seconds = *std::max_element(chain_start_relative_seconds.begin(), chain_start_relative_seconds.end());
+        const double last_chain_start_seconds = *std::max_element(chain_start_relative_seconds.begin(),
+                                                                  chain_start_relative_seconds.end());
         char timing_message[640];
         std::snprintf(timing_message, sizeof(timing_message),
                       "sampling call timing (s): setup %.2f | worker construction %.2f | chains %.2f "
@@ -2409,6 +2565,28 @@ Rcpp::List Rcpp_fn_RcppParallel_EHMC_sampling( const int n_threads_R,
                       seconds_between(results_collected_time, converted_to_R_time),
                       seconds_between(sampling_call_start_time, converted_to_R_time));
         Rcpp::Rcout << timing_message;
+        //// (the same seconds, returned to R as sampling_call_timing, so that a layout can be timed by the
+        ////  seconds of its chains alone, without the setup of the call, which varies by seconds with many chains
+        ////  at large N)
+        sampling_results_list["sampling_call_timing"] = Rcpp::List::create(
+            Rcpp::Named("setup_seconds")                = seconds_between(sampling_call_start_time,
+                                                                          setup_done_time),
+            Rcpp::Named("worker_construction_seconds")  = seconds_between(setup_done_time,
+                                                                          worker_constructed_time),
+            Rcpp::Named("chains_seconds")               = seconds_between(worker_constructed_time,
+                                                                          chains_done_time),
+            Rcpp::Named("last_chain_start_seconds")     = last_chain_start_seconds,
+            Rcpp::Named("chain_end_seconds_sorted")     = chain_end_relative_seconds,
+            Rcpp::Named("collect_seconds")              = seconds_between(chains_done_time,
+                                                                          results_collected_time),
+            Rcpp::Named("convert_to_R_seconds")         = seconds_between(results_collected_time,
+                                                                          converted_to_R_time),
+            Rcpp::Named("seconds_of_timed_iterations_of_each_chain") = seconds_of_timed_iterations_of_each_chain,
+            Rcpp::Named("seconds_after_the_timed_iterations_of_each_chain") = seconds_after_the_timed_iterations_of_each_chain,
+            Rcpp::Named("n_untimed_iterations_before_timed_iterations") =
+                  EHMC_args_as_cpp_struct.n_untimed_iterations_before_timed_iterations,
+            Rcpp::Named("L_of_the_untimed_iterations_before_timed_iterations") =
+                  EHMC_args_as_cpp_struct.L_of_the_untimed_iterations_before_timed_iterations);
     }
 
     return sampling_results_list;
@@ -2470,7 +2648,7 @@ Rcpp::List                                        fn_R_RcppParallel_EHMC_single_
                                                                                               Eigen::Matrix<double, -1, -1>  theta_us_vectors_all_chains_input_from_R,
                                                                                               Eigen::Matrix<double, -1, -1>  velocity_us_vectors_all_chains_input_from_R,
                                                                                               const Eigen::Matrix<int, -1, -1> y_Eigen_R,
-                                                                                              const Rcpp::List Model_args_as_Rcpp_List,  ///// ALWAYS read-only
+                                                                                              const Rcpp::List Model_args_as_Rcpp_List,  /* ALWAYS read-only */
                                                                                               Rcpp::List EHMC_args_as_Rcpp_List,
                                                                                               Rcpp::List EHMC_Metric_as_Rcpp_List,
                                                                                               Rcpp::List EHMC_burnin_as_Rcpp_List,
@@ -2504,21 +2682,27 @@ Rcpp::List                                        fn_R_RcppParallel_EHMC_single_
         // const std::vector<EHMC_burnin_struct>   EHMC_burnin_as_cpp_struct_copies_R =    replicate_EHMC_burnin_struct(   EHMC_burnin_as_cpp_struct, n_threads_R); // read-only
 
         ///// data copies
-        std::vector<Eigen::Matrix<int, -1, -1>> y_copies_R = vec_of_mats<int>(y_Eigen_R.rows(), y_Eigen_R.cols(), n_threads_R);
+        std::vector<Eigen::Matrix<int, -1, -1>> y_copies_R = vec_of_mats<int>(y_Eigen_R.rows(),
+                                                                              y_Eigen_R.cols(),
+                                                                              n_threads_R);
         for (int kk = 0; kk < n_threads_R; ++kk) {
           y_copies_R[kk] = y_Eigen_R;
         }
         // const Eigen::Matrix<int, -1, -1> y_copy_R = y_Eigen_R;
 
         /////// containers for burnin outputs ONLY (not needed for sampling) - stores: theta_0, theta_prop, velocity_0, velocity_prop
-        Rcpp::NumericMatrix  theta_main_0_burnin_tau_adapt_all_chains_input_from_R(n_params_main, n_threads_R);  // write to this
+        Rcpp::NumericMatrix  theta_main_0_burnin_tau_adapt_all_chains_input_from_R(n_params_main,
+                                                                                   n_threads_R); // write to this
         Rcpp::NumericMatrix  theta_main_prop_burnin_tau_adapt_all_chains_input_from_R(n_params_main, n_threads_R);  // write to this
         Rcpp::NumericMatrix  velocity_main_0_burnin_tau_adapt_all_chains_input_from_R(n_params_main, n_threads_R); // write to this
         Rcpp::NumericMatrix  velocity_main_prop_burnin_tau_adapt_all_chains_input_from_R(n_params_main, n_threads_R); // write to this
         ////
-        Rcpp::NumericMatrix  theta_us_0_burnin_tau_adapt_all_chains_input_from_R(n_nuisance, n_threads_R); // write to this
-        Rcpp::NumericMatrix  theta_us_prop_burnin_tau_adapt_all_chains_input_from_R(n_nuisance, n_threads_R); // write to this
-        Rcpp::NumericMatrix  velocity_us_0_burnin_tau_adapt_all_chains_input_from_R(n_nuisance, n_threads_R); // write to this
+        Rcpp::NumericMatrix  theta_us_0_burnin_tau_adapt_all_chains_input_from_R(n_nuisance,
+                                                                                 n_threads_R); // write to this
+        Rcpp::NumericMatrix  theta_us_prop_burnin_tau_adapt_all_chains_input_from_R(n_nuisance,
+                                                                                    n_threads_R); // write to this
+        Rcpp::NumericMatrix  velocity_us_0_burnin_tau_adapt_all_chains_input_from_R(n_nuisance,
+                                                                                    n_threads_R); // write to this
         Rcpp::NumericMatrix  velocity_us_prop_burnin_tau_adapt_all_chains_input_from_R(n_nuisance, n_threads_R); // write to this
 
         int n_iter_for_fn_call = n_iter_R;
@@ -2646,6 +2830,19 @@ Rcpp::List                                        fn_R_RcppParallel_EHMC_single_
 //// Exported interface for burnin:
 //// ---------------------------------------------------------------------------------------------------
 
+// //// (the finaliser of the worker: the fixed threads of its chains end first, then the worker is deleted)
+// void fn_delete_persistent_burnin_worker_and_end_the_fixed_threads_of_its_chains(PersistentBurninState *st) {
+//         fn_end_the_fixed_threads_of_the_chains_of_burnin_worker(st);
+//         delete st;
+// }
+//// (the finaliser of the worker: the worker is deleted; the fixed threads of its chains are kept for the whole
+////  process, see fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+void fn_delete_persistent_burnin_worker(PersistentBurninState *st) {
+
+        delete st;
+
+}
+
 // [[Rcpp::export]]
 SEXP fn_create_persistent_burnin_worker(   const int n_threads_R,
                                            const bool partitioned_HMC_R,
@@ -2675,7 +2872,11 @@ SEXP fn_create_persistent_burnin_worker(   const int n_threads_R,
                                                                 EHMC_Metric_as_Rcpp_List,
                                                                 n_threads_WCP);
         
-        Rcpp::XPtr<PersistentBurninState> ptr(st, true);  //// true => delete on R garbage collection
+        // Rcpp::XPtr<PersistentBurninState> ptr(st, true);  //// true => delete on R garbage collection
+        //// (true => deleted on R garbage collection, with the fixed threads of its chains: see
+        ////  fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+        Rcpp::XPtr<PersistentBurninState, Rcpp::PreserveStorage,
+                   fn_delete_persistent_burnin_worker> ptr(st, true);
         return ptr;
   
 }
@@ -2736,25 +2937,67 @@ struct BurninOutputCopyWorker : public RcppParallel::Worker {
                                     double *matrix_data,
                                     const std::size_t chain_index,
                                     const int column_length) {
+
             const Eigen::Index n_to_copy = std::min<Eigen::Index>(source_vector.size(), column_length);
-            std::copy_n(source_vector.data(), n_to_copy, matrix_data + chain_index * static_cast<std::size_t>(column_length));
+            std::copy_n(source_vector.data(),
+                        n_to_copy,
+                        matrix_data + chain_index * static_cast<std::size_t>(column_length));
+
       }
       
       void operator()(std::size_t begin, std::size_t end) {
+
             for (std::size_t i = begin; i < end; ++i) {
-                  copy_into_column(st.HMC_inputs[i].main_theta_vec(),             theta_main_out_data,         i, n_params_main);
-                  copy_into_column(st.HMC_inputs[i].main_theta_vec_0(),           theta_main_0_out_data,       i, n_params_main);
-                  copy_into_column(st.HMC_inputs[i].main_theta_vec_proposed(),    theta_main_prop_out_data,    i, n_params_main);
-                  copy_into_column(st.HMC_inputs[i].main_velocity_vec(),          velocity_main_out_data,      i, n_params_main);
-                  copy_into_column(st.HMC_inputs[i].main_velocity_0_vec(),        velocity_main_0_out_data,    i, n_params_main);
-                  copy_into_column(st.HMC_inputs[i].main_velocity_vec_proposed(), velocity_main_prop_out_data, i, n_params_main);
-                  copy_into_column(st.HMC_inputs[i].us_theta_vec(),               theta_us_out_data,           i, n_nuisance);
-                  copy_into_column(st.HMC_inputs[i].us_theta_vec_0(),             theta_us_0_out_data,         i, n_nuisance);
-                  copy_into_column(st.HMC_inputs[i].us_theta_vec_proposed(),      theta_us_prop_out_data,      i, n_nuisance);
-                  copy_into_column(st.HMC_inputs[i].us_velocity_vec(),            velocity_us_out_data,        i, n_nuisance);
-                  copy_into_column(st.HMC_inputs[i].us_velocity_0_vec(),          velocity_us_0_out_data,      i, n_nuisance);
-                  copy_into_column(st.HMC_inputs[i].us_velocity_vec_proposed(),   velocity_us_prop_out_data,   i, n_nuisance);
+                  copy_into_column(st.HMC_inputs[i].main_theta_vec(),
+                                   theta_main_out_data,
+                                   i,
+                                   n_params_main);
+                  copy_into_column(st.HMC_inputs[i].main_theta_vec_0(),
+                                   theta_main_0_out_data,
+                                   i,
+                                   n_params_main);
+                  copy_into_column(st.HMC_inputs[i].main_theta_vec_proposed(),
+                                   theta_main_prop_out_data,
+                                   i,
+                                   n_params_main);
+                  copy_into_column(st.HMC_inputs[i].main_velocity_vec(),
+                                   velocity_main_out_data,
+                                   i,
+                                   n_params_main);
+                  copy_into_column(st.HMC_inputs[i].main_velocity_0_vec(),
+                                   velocity_main_0_out_data,
+                                   i,
+                                   n_params_main);
+                  copy_into_column(st.HMC_inputs[i].main_velocity_vec_proposed(),
+                                   velocity_main_prop_out_data,
+                                   i,
+                                   n_params_main);
+                  copy_into_column(st.HMC_inputs[i].us_theta_vec(),
+                                   theta_us_out_data,
+                                   i,
+                                   n_nuisance);
+                  copy_into_column(st.HMC_inputs[i].us_theta_vec_0(),
+                                   theta_us_0_out_data,
+                                   i,
+                                   n_nuisance);
+                  copy_into_column(st.HMC_inputs[i].us_theta_vec_proposed(),
+                                   theta_us_prop_out_data,
+                                   i,
+                                   n_nuisance);
+                  copy_into_column(st.HMC_inputs[i].us_velocity_vec(),
+                                   velocity_us_out_data,
+                                   i,
+                                   n_nuisance);
+                  copy_into_column(st.HMC_inputs[i].us_velocity_0_vec(),
+                                   velocity_us_0_out_data,
+                                   i,
+                                   n_nuisance);
+                  copy_into_column(st.HMC_inputs[i].us_velocity_vec_proposed(),
+                                   velocity_us_prop_out_data,
+                                   i,
+                                   n_nuisance);
             }
+
       }
   
 };
@@ -2777,9 +3020,35 @@ Rcpp::List fn_persistent_burnin_run_one_iter_impl(   SEXP worker_ptr,
         const auto parallel_start = profile_burnin ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
         
         //// ---- run the iteration (all chains in parallel, state resident):
-        BurninIterWorker worker(&st, seed_R, current_iter_R, profile_burnin ? &chain_profiles : nullptr, parallel_start,
+        BurninIterWorker worker(&st,
+                                seed_R,
+                                current_iter_R,
+                                profile_burnin ? &chain_profiles : nullptr,
+                                parallel_start,
+                                
                                  tau_main_ii_overrides, tau_us_ii_overrides);
-        parallelFor(0, n_threads, worker);
+        // parallelFor(0, n_threads, worker);
+        //// (built-in models: each chain on a fixed thread of its own, so that its WCP OpenMP team is built once
+        ////  and kept: fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+        if (fn_run_each_chain_of_this_model_on_a_fixed_thread_of_its_own(st.Model_type)) {
+              // fn_fixed_threads_of_the_chains_of_burnin_worker(&st, n_threads).fn_run_every_chain(
+              //       [&worker](const int chain_index) {
+              //             worker(static_cast<std::size_t>(chain_index),
+              //                    static_cast<std::size_t>(chain_index) + 1);
+              //       });
+              //// (on the fixed threads kept for the whole process: ending them crashed TBB, see
+              ////  fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+              fn_run_every_chain_on_the_fixed_threads_kept_for_the_whole_process(
+                    n_threads,
+                    [&worker](const int chain_index) {
+
+                          worker(static_cast<std::size_t>(chain_index),
+                                 static_cast<std::size_t>(chain_index) + 1);
+
+                    });
+        } else {
+              parallelFor(0, n_threads, worker);
+        }
         const auto parallel_end = profile_burnin ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
         
         //// ---- build outputs -- SAME names as fn_R_RcppParallel_EHMC_single_iter_burnin so the
@@ -2821,7 +3090,8 @@ Rcpp::List fn_persistent_burnin_run_one_iter_impl(   SEXP worker_ptr,
           other_main_out(5, i) = st.EHMC_args_copies[i].tau_main_ii;
           other_main_out(8, i) = st.EHMC_args_copies[i].eps_main;
           if (st.sample_nuisance == true) {
-            other_us_out(0, i) = st.HMC_outputs[i].diagnostics_p_jump_us().sum() / static_cast<double>(n_iter_local);
+            other_us_out(0,
+                         i) = st.HMC_outputs[i].diagnostics_p_jump_us().sum() / static_cast<double>(n_iter_local);
             other_us_out(1, i) = static_cast<double>(st.HMC_outputs[i].diagnostics_div_us().sum());
             other_us_out(4, i) = st.EHMC_args_copies[i].tau_us;
             other_us_out(5, i) = st.EHMC_args_copies[i].tau_us_ii;
@@ -2860,17 +3130,34 @@ Rcpp::List fn_persistent_burnin_run_one_iter_impl(   SEXP worker_ptr,
           //// Diagnostic packaging is outside both component timers but inside the unchanged R call timer.
           Rcpp::NumericVector chain_seconds(n_threads), chain_start_offsets(n_threads);
           Rcpp::IntegerVector chain_leapfrog_steps(n_threads);
+          Rcpp::NumericVector chain_thread_CPU_seconds(n_threads);
+          Rcpp::IntegerVector chain_CPU_at_start(n_threads), chain_CPU_at_end(n_threads);
+          Rcpp::NumericVector chain_involuntary_context_switches(n_threads), chain_minor_page_faults(n_threads);
+          Rcpp::IntegerVector chain_ran_on_the_calling_thread(n_threads);
           for (int i = 0; i < n_threads; ++i) {
             chain_seconds[i] = chain_profiles[i].elapsed_seconds;
             chain_start_offsets[i] = chain_profiles[i].start_offset_seconds;
             chain_leapfrog_steps[i] = chain_profiles[i].n_leapfrog_steps;
+            chain_thread_CPU_seconds[i] = chain_profiles[i].thread_CPU_seconds;
+            chain_CPU_at_start[i] = chain_profiles[i].CPU_at_start;
+            chain_CPU_at_end[i] = chain_profiles[i].CPU_at_end;
+            chain_involuntary_context_switches[i] =
+                  static_cast<double>(chain_profiles[i].involuntary_context_switches);
+            chain_minor_page_faults[i] = static_cast<double>(chain_profiles[i].minor_page_faults);
+            chain_ran_on_the_calling_thread[i] = chain_profiles[i].ran_on_the_calling_thread;
           }
           outputs["burnin_profile"] = Rcpp::List::create(
             Rcpp::Named("parallel_seconds") = std::chrono::duration<double>(parallel_end - parallel_start).count(),
             Rcpp::Named("output_seconds") = std::chrono::duration<double>(outputs_end - parallel_end).count(),
             Rcpp::Named("chain_seconds") = chain_seconds,
             Rcpp::Named("chain_start_offset_seconds") = chain_start_offsets,
-            Rcpp::Named("n_leapfrog_steps") = chain_leapfrog_steps);
+            Rcpp::Named("n_leapfrog_steps") = chain_leapfrog_steps,
+            Rcpp::Named("chain_thread_CPU_seconds") = chain_thread_CPU_seconds,
+            Rcpp::Named("chain_CPU_at_start") = chain_CPU_at_start,
+            Rcpp::Named("chain_CPU_at_end") = chain_CPU_at_end,
+            Rcpp::Named("chain_involuntary_context_switches") = chain_involuntary_context_switches,
+            Rcpp::Named("chain_minor_page_faults") = chain_minor_page_faults,
+            Rcpp::Named("chain_ran_on_the_calling_thread") = chain_ran_on_the_calling_thread);
         }
         return outputs;
   
@@ -2878,12 +3165,18 @@ Rcpp::List fn_persistent_burnin_run_one_iter_impl(   SEXP worker_ptr,
 
 // [[Rcpp::export]]
 Rcpp::List fn_persistent_burnin_run_one_iter(SEXP worker_ptr, const int seed_R, const int current_iter_R) {
+
     return fn_persistent_burnin_run_one_iter_impl(worker_ptr, seed_R, current_iter_R, false, nullptr, nullptr);
+
 }
 
 // [[Rcpp::export]]
-Rcpp::List fn_persistent_burnin_run_one_iter_profiled(SEXP worker_ptr, const int seed_R, const int current_iter_R) {
+Rcpp::List fn_persistent_burnin_run_one_iter_profiled(SEXP worker_ptr,
+                                                      const int seed_R,
+                                                      const int current_iter_R) {
+
     return fn_persistent_burnin_run_one_iter_impl(worker_ptr, seed_R, current_iter_R, true, nullptr, nullptr);
+
 }
 
 
@@ -2966,7 +3259,9 @@ static void fn_persistent_burnin_copy_state_into(   PersistentBurninState &st,
         for (int i = 0; i < st.n_threads; ++i) {
               const Eigen::Matrix<double, -1, 1> &source_vector = (st.HMC_inputs[i].*accessor)();
               const Eigen::Index n_to_copy = std::min<Eigen::Index>(source_vector.size(), n_rows);
-              std::copy_n(source_vector.data(), n_to_copy, destination + static_cast<std::size_t>(i) * static_cast<std::size_t>(n_rows));
+              std::copy_n(source_vector.data(),
+                          n_to_copy,
+                          destination + static_cast<std::size_t>(i) * static_cast<std::size_t>(n_rows));
         }
 
 }
@@ -3014,12 +3309,30 @@ static Rcpp::List fn_persistent_burnin_main_only_outputs(PersistentBurninState &
         Rcpp::NumericMatrix other_main_out(10, n_threads);
         Rcpp::NumericMatrix other_us_out(10, n_threads);
 
-        fn_persistent_burnin_copy_state_into(st, &HMCResult::main_theta_vec,             n_params_main, theta_main_out.begin());
-        fn_persistent_burnin_copy_state_into(st, &HMCResult::main_velocity_vec,          n_params_main, velocity_main_out.begin());
-        fn_persistent_burnin_copy_state_into(st, &HMCResult::main_theta_vec_0,           n_params_main, theta_main_0_out.begin());
-        fn_persistent_burnin_copy_state_into(st, &HMCResult::main_theta_vec_proposed,    n_params_main, theta_main_prop_out.begin());
-        fn_persistent_burnin_copy_state_into(st, &HMCResult::main_velocity_0_vec,        n_params_main, velocity_main_0_out.begin());
-        fn_persistent_burnin_copy_state_into(st, &HMCResult::main_velocity_vec_proposed, n_params_main, velocity_main_prop_out.begin());
+        fn_persistent_burnin_copy_state_into(st,
+                                             &HMCResult::main_theta_vec,
+                                             n_params_main,
+                                             theta_main_out.begin());
+        fn_persistent_burnin_copy_state_into(st,
+                                             &HMCResult::main_velocity_vec,
+                                             n_params_main,
+                                             velocity_main_out.begin());
+        fn_persistent_burnin_copy_state_into(st,
+                                             &HMCResult::main_theta_vec_0,
+                                             n_params_main,
+                                             theta_main_0_out.begin());
+        fn_persistent_burnin_copy_state_into(st,
+                                             &HMCResult::main_theta_vec_proposed,
+                                             n_params_main,
+                                             theta_main_prop_out.begin());
+        fn_persistent_burnin_copy_state_into(st,
+                                             &HMCResult::main_velocity_0_vec,
+                                             n_params_main,
+                                             velocity_main_0_out.begin());
+        fn_persistent_burnin_copy_state_into(st,
+                                             &HMCResult::main_velocity_vec_proposed,
+                                             n_params_main,
+                                             velocity_main_prop_out.begin());
 
         for (int i = 0; i < n_threads; ++i) {
 
@@ -3030,7 +3343,8 @@ static Rcpp::List fn_persistent_burnin_main_only_outputs(PersistentBurninState &
           other_main_out(5, i) = st.EHMC_args_copies[i].tau_main_ii;
           other_main_out(8, i) = st.EHMC_args_copies[i].eps_main;
           if (st.sample_nuisance == true) {
-            other_us_out(0, i) = st.HMC_outputs[i].diagnostics_p_jump_us().sum() / static_cast<double>(n_iter_local);
+            other_us_out(0,
+                         i) = st.HMC_outputs[i].diagnostics_p_jump_us().sum() / static_cast<double>(n_iter_local);
             other_us_out(1, i) = static_cast<double>(st.HMC_outputs[i].diagnostics_div_us().sum());
             other_us_out(4, i) = st.EHMC_args_copies[i].tau_us;
             other_us_out(5, i) = st.EHMC_args_copies[i].tau_us_ii;
@@ -3079,9 +3393,35 @@ Rcpp::List fn_persistent_burnin_run_one_iter_main_only_impl(   SEXP worker_ptr,
         const auto parallel_start = profile_burnin ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 
         //// ---- run the iteration: the same worker and the same parallelFor as fn_persistent_burnin_run_one_iter_impl:
-        BurninIterWorker worker(&st, seed_R, current_iter_R, profile_burnin ? &chain_profiles : nullptr, parallel_start,
+        BurninIterWorker worker(&st,
+                                seed_R,
+                                current_iter_R,
+                                profile_burnin ? &chain_profiles : nullptr,
+                                parallel_start,
+                                
                                  tau_main_ii_overrides, tau_us_ii_overrides);
-        parallelFor(0, n_threads, worker);
+        // parallelFor(0, n_threads, worker);
+        //// (built-in models: each chain on a fixed thread of its own, so that its WCP OpenMP team is built once
+        ////  and kept: fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+        if (fn_run_each_chain_of_this_model_on_a_fixed_thread_of_its_own(st.Model_type)) {
+              // fn_fixed_threads_of_the_chains_of_burnin_worker(&st, n_threads).fn_run_every_chain(
+              //       [&worker](const int chain_index) {
+              //             worker(static_cast<std::size_t>(chain_index),
+              //                    static_cast<std::size_t>(chain_index) + 1);
+              //       });
+              //// (on the fixed threads kept for the whole process: ending them crashed TBB, see
+              ////  fixed_thread_of_each_chain_so_that_its_OpenMP_WCP_team_is_kept.hpp)
+              fn_run_every_chain_on_the_fixed_threads_kept_for_the_whole_process(
+                    n_threads,
+                    [&worker](const int chain_index) {
+
+                          worker(static_cast<std::size_t>(chain_index),
+                                 static_cast<std::size_t>(chain_index) + 1);
+
+                    });
+        } else {
+              parallelFor(0, n_threads, worker);
+        }
         const auto parallel_end = profile_burnin ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point();
 
         //// ---- main-sized outputs only (the nuisance-sized state stays resident):
@@ -3092,30 +3432,65 @@ Rcpp::List fn_persistent_burnin_run_one_iter_main_only_impl(   SEXP worker_ptr,
           //// Same diagnostics as fn_persistent_burnin_run_one_iter_impl; output_seconds now covers the main-sized outputs only.
           Rcpp::NumericVector chain_seconds(n_threads), chain_start_offsets(n_threads);
           Rcpp::IntegerVector chain_leapfrog_steps(n_threads);
+          Rcpp::NumericVector chain_thread_CPU_seconds(n_threads);
+          Rcpp::IntegerVector chain_CPU_at_start(n_threads), chain_CPU_at_end(n_threads);
+          Rcpp::NumericVector chain_involuntary_context_switches(n_threads), chain_minor_page_faults(n_threads);
+          Rcpp::IntegerVector chain_ran_on_the_calling_thread(n_threads);
           for (int i = 0; i < n_threads; ++i) {
             chain_seconds[i] = chain_profiles[i].elapsed_seconds;
             chain_start_offsets[i] = chain_profiles[i].start_offset_seconds;
             chain_leapfrog_steps[i] = chain_profiles[i].n_leapfrog_steps;
+            chain_thread_CPU_seconds[i] = chain_profiles[i].thread_CPU_seconds;
+            chain_CPU_at_start[i] = chain_profiles[i].CPU_at_start;
+            chain_CPU_at_end[i] = chain_profiles[i].CPU_at_end;
+            chain_involuntary_context_switches[i] =
+                  static_cast<double>(chain_profiles[i].involuntary_context_switches);
+            chain_minor_page_faults[i] = static_cast<double>(chain_profiles[i].minor_page_faults);
+            chain_ran_on_the_calling_thread[i] = chain_profiles[i].ran_on_the_calling_thread;
           }
           outputs["burnin_profile"] = Rcpp::List::create(
             Rcpp::Named("parallel_seconds") = std::chrono::duration<double>(parallel_end - parallel_start).count(),
             Rcpp::Named("output_seconds") = std::chrono::duration<double>(outputs_end - parallel_end).count(),
             Rcpp::Named("chain_seconds") = chain_seconds,
             Rcpp::Named("chain_start_offset_seconds") = chain_start_offsets,
-            Rcpp::Named("n_leapfrog_steps") = chain_leapfrog_steps);
+            Rcpp::Named("n_leapfrog_steps") = chain_leapfrog_steps,
+            Rcpp::Named("chain_thread_CPU_seconds") = chain_thread_CPU_seconds,
+            Rcpp::Named("chain_CPU_at_start") = chain_CPU_at_start,
+            Rcpp::Named("chain_CPU_at_end") = chain_CPU_at_end,
+            Rcpp::Named("chain_involuntary_context_switches") = chain_involuntary_context_switches,
+            Rcpp::Named("chain_minor_page_faults") = chain_minor_page_faults,
+            Rcpp::Named("chain_ran_on_the_calling_thread") = chain_ran_on_the_calling_thread);
         }
         return outputs;
 
 }
 
 // [[Rcpp::export]]
-Rcpp::List fn_persistent_burnin_run_one_iter_main_only(SEXP worker_ptr, const int seed_R, const int current_iter_R) {
-    return fn_persistent_burnin_run_one_iter_main_only_impl(worker_ptr, seed_R, current_iter_R, false, nullptr, nullptr);
+Rcpp::List fn_persistent_burnin_run_one_iter_main_only(SEXP worker_ptr,
+                                                       const int seed_R,
+                                                       const int current_iter_R) {
+
+    return fn_persistent_burnin_run_one_iter_main_only_impl(worker_ptr,
+                                                            seed_R,
+                                                            current_iter_R,
+                                                            false,
+                                                            nullptr,
+                                                            nullptr);
+
 }
 
 // [[Rcpp::export]]
-Rcpp::List fn_persistent_burnin_run_one_iter_main_only_profiled(SEXP worker_ptr, const int seed_R, const int current_iter_R) {
-    return fn_persistent_burnin_run_one_iter_main_only_impl(worker_ptr, seed_R, current_iter_R, true, nullptr, nullptr);
+Rcpp::List fn_persistent_burnin_run_one_iter_main_only_profiled(SEXP worker_ptr,
+                                                                const int seed_R,
+                                                                const int current_iter_R) {
+
+    return fn_persistent_burnin_run_one_iter_main_only_impl(worker_ptr,
+                                                            seed_R,
+                                                            current_iter_R,
+                                                            true,
+                                                            nullptr,
+                                                            nullptr);
+
 }
 
 
@@ -3133,12 +3508,16 @@ Rcpp::List fn_persistent_burnin_run_one_iter_tau_jitter(   SEXP worker_ptr,
         const PersistentBurninState &st = *ptr;
         if (st.n_threads <= 0 || static_cast<int>(tau_main_ii_R.size()) != st.n_threads ||
             static_cast<int>(tau_us_ii_R.size()) != st.n_threads) {
+
             Rcpp::stop("Burn-in tau jitter must have one main and one nuisance value per chain.");
+
         }
         for (int i = 0; i < st.n_threads; ++i) {
             if (!std::isfinite(tau_main_ii_R[i]) || tau_main_ii_R[i] < 0.0 ||
                 !std::isfinite(tau_us_ii_R[i]) || tau_us_ii_R[i] < 0.0) {
+
                 Rcpp::stop("Burn-in tau jitter values must be finite and non-negative.");
+
             }
             if (!st.EHMC_args_copies[i].randomize_tau) {
                 Rcpp::stop("The burn-in tau jitter entry point requires randomize_tau = TRUE.");
@@ -3148,11 +3527,17 @@ Rcpp::List fn_persistent_burnin_run_one_iter_tau_jitter(   SEXP worker_ptr,
             }
             if (st.EHMC_args_copies[i].share_tau_ii_across_chains &&
                 (tau_main_ii_R[i] != tau_main_ii_R[0] || tau_us_ii_R[i] != tau_us_ii_R[0])) {
+
                 Rcpp::stop("Shared burn-in tau jitter must be identical across chains.");
+
             }
         }
         if (main_only_R) {
-            return fn_persistent_burnin_run_one_iter_main_only_impl(worker_ptr, seed_R, current_iter_R, profile_burnin_R,
+            return fn_persistent_burnin_run_one_iter_main_only_impl(worker_ptr,
+                                                                    seed_R,
+                                                                    current_iter_R,
+                                                                    profile_burnin_R,
+                                                                    
                                                                     &tau_main_ii_R, &tau_us_ii_R);
         }
         return fn_persistent_burnin_run_one_iter_impl(worker_ptr, seed_R, current_iter_R, profile_burnin_R,
@@ -3278,7 +3663,9 @@ void fn_persistent_burnin_init_resident_statistics(   SEXP worker_ptr,
 
         if (snaper_m_vec_us.size() != n_nuisance || snaper_s_vec_us_empirical.size() != n_nuisance ||
             snaper_m_prop_vec_us.size() != n_nuisance || var_draws_us.size() != n_nuisance) {
+
               Rcpp::stop("fn_persistent_burnin_init_resident_statistics: every vector must have length n_nuisance (" + std::to_string(st.n_nuisance) + ").");
+
         }
 
         st.resident_snaper_m_vec_us           = snaper_m_vec_us;
@@ -3361,7 +3748,8 @@ Rcpp::NumericMatrix fn_persistent_burnin_get_state(   SEXP worker_ptr,
         Rcpp::XPtr<PersistentBurninState> ptr(worker_ptr);
         PersistentBurninState &st = *ptr;
         bool is_nuisance_state = false;
-        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R, is_nuisance_state);
+        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R,
+                                                                                    is_nuisance_state);
         const int n_rows = is_nuisance_state ? st.n_nuisance : st.n_params_main;
 
         Rcpp::NumericMatrix out(Rcpp::no_init(n_rows, st.n_threads));
@@ -3388,7 +3776,8 @@ void fn_persistent_burnin_fill_state(   SEXP worker_ptr,
         PersistentBurninState &st = *ptr;
         if (TYPEOF(buffer_env_R) != ENVSXP) Rcpp::stop("fn_persistent_burnin_fill_state: buffer_env_R must be an environment.");
         bool is_nuisance_state = false;
-        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R, is_nuisance_state);
+        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R,
+                                                                                    is_nuisance_state);
         const int n_rows = is_nuisance_state ? st.n_nuisance : st.n_params_main;
         const int n_cols = st.n_threads;
 
@@ -3428,7 +3817,8 @@ void fn_persistent_burnin_set_state(   SEXP worker_ptr,
         Rcpp::XPtr<PersistentBurninState> ptr(worker_ptr);
         PersistentBurninState &st = *ptr;
         bool is_nuisance_state = false;
-        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R, is_nuisance_state);
+        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R,
+                                                                                    is_nuisance_state);
         const int n_rows = is_nuisance_state ? st.n_nuisance : st.n_params_main;
 
         if (values.rows() != n_rows || values.cols() != st.n_threads) {
@@ -3457,12 +3847,16 @@ Rcpp::NumericVector fn_persistent_burnin_state_row_means_resident(   SEXP worker
         Rcpp::XPtr<PersistentBurninState> ptr(worker_ptr);
         PersistentBurninState &st = *ptr;
         bool is_nuisance_state = false;
-        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R, is_nuisance_state);
+        const HMCResultStateAccessor accessor = fn_persistent_burnin_state_accessor(state_name_R,
+                                                                                    is_nuisance_state);
         const int n_rows = is_nuisance_state ? st.n_nuisance : st.n_params_main;
 
         const std::vector<const double *> columns = st.state_columns(accessor, n_rows);
         Rcpp::NumericVector out(Rcpp::no_init(n_rows));
-        fn_exact_R_rowMeans_of_columns(columns.data(), st.n_threads, static_cast<std::size_t>(n_rows), out.begin());
+        fn_exact_R_rowMeans_of_columns(columns.data(),
+                                       st.n_threads,
+                                       static_cast<std::size_t>(n_rows),
+                                       out.begin());
         return out;
 
 }
@@ -3553,7 +3947,10 @@ Rcpp::List fn_persistent_burnin_update_snaper_m_and_s_resident(   SEXP worker_pt
         Eigen::Matrix<double, -1, 1> theta_vec_current_mean_us(n_nuisance);
         {
               const std::vector<const double *> columns = st.state_columns(&HMCResult::us_theta_vec, n_nuisance);
-              fn_exact_R_rowMeans_of_columns(columns.data(), st.n_threads, static_cast<std::size_t>(n_nuisance), theta_vec_current_mean_us.data());
+              fn_exact_R_rowMeans_of_columns(columns.data(),
+                                             st.n_threads,
+                                             static_cast<std::size_t>(n_nuisance),
+                                             theta_vec_current_mean_us.data());
         }
 
         if (!joint_layout_R) {
@@ -3682,7 +4079,10 @@ Rcpp::List fn_persistent_burnin_update_snaper_m_prop_resident(   SEXP worker_ptr
         } else {
 
               const std::vector<const double *> columns = st.state_columns(&HMCResult::us_theta_vec, n_nuisance);
-              fn_exact_R_rowMeans_of_columns(columns.data(), st.n_threads, static_cast<std::size_t>(n_nuisance), proposal_weighted_mean.data());
+              fn_exact_R_rowMeans_of_columns(columns.data(),
+                                             st.n_threads,
+                                             static_cast<std::size_t>(n_nuisance),
+                                             proposal_weighted_mean.data());
               proposal_weighted_mean.tail(n_params_main) = theta_vec_current_mean_main;
 
         }
@@ -3861,7 +4261,11 @@ static void fn_persistent_burnin_stage_joint_matrix(   const PersistentBurninSta
         for (int k = 0; k < st.n_threads; ++k) {
               double *column = staging.data() + static_cast<std::size_t>(k) * n_all;
               std::copy_n(main_data + static_cast<std::size_t>(k) * n_main, n_main, column);
-              fn_exact_R_nuisance_rows_in_metric_coordinates(us_state_columns[k], centre_us, factor_us, n_us, column + n_main);
+              fn_exact_R_nuisance_rows_in_metric_coordinates(us_state_columns[k],
+                                                             centre_us,
+                                                             factor_us,
+                                                             n_us,
+                                                             column + n_main);
         }
 
 }
@@ -3960,8 +4364,14 @@ int fn_persistent_burnin_joint_direction_update_snaper_resident(   SEXP worker_p
         fn_persistent_burnin_check_main_matrix(X_main_metric, st, "fn_persistent_burnin_joint_direction_update_snaper_resident: X_main_metric");
         fn_persistent_burnin_check_vector_length(factor_us, st.n_nuisance, "fn_persistent_burnin_joint_direction_update_snaper_resident: factor_us");
 
-        const std::vector<const double *> theta_us_columns = st.state_columns(&HMCResult::us_theta_vec, st.n_nuisance);
-        fn_persistent_burnin_stage_joint_matrix(st, X_main_metric, theta_us_columns, st.resident_snaper_m_vec_us.data(), REAL(factor_us),
+        const std::vector<const double *> theta_us_columns = st.state_columns(&HMCResult::us_theta_vec,
+                                                                              st.n_nuisance);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                X_main_metric,
+                                                theta_us_columns,
+                                                st.resident_snaper_m_vec_us.data(),
+                                                REAL(factor_us),
+                                                
                                                 st.resident_joint_staging_initial);
 
         return fn_exact_R_update_snaper_w_minibatch(   st.resident_joint_staging_initial.data(),
@@ -4016,7 +4426,8 @@ Rcpp::List fn_persistent_burnin_joint_position_reductions_resident(   SEXP worke
 
         const int n_chains = st.n_threads;
         const Eigen::Index n_us = st.n_nuisance;
-        const std::vector<const double *> theta_initial_us_columns  = st.state_columns(&HMCResult::us_theta_vec_0, n_us);
+        const std::vector<const double *> theta_initial_us_columns  = st.state_columns(&HMCResult::us_theta_vec_0,
+                                                                                       n_us);
         const std::vector<const double *> theta_proposed_us_columns = st.state_columns(use_proposals_R ? static_cast<HMCResultStateAccessor>(&HMCResult::us_theta_vec_proposed) : static_cast<HMCResultStateAccessor>(&HMCResult::us_theta_vec), n_us);
         const std::vector<const double *> velocity_us_columns       = st.state_columns(use_proposals_R ? static_cast<HMCResultStateAccessor>(&HMCResult::us_velocity_vec_proposed) : static_cast<HMCResultStateAccessor>(&HMCResult::us_velocity_vec), n_us);
         const double *mean_initial_us  = st.resident_snaper_m_vec_us.data();
@@ -4025,7 +4436,10 @@ Rcpp::List fn_persistent_burnin_joint_position_reductions_resident(   SEXP worke
         if (!projection_R) {
 
               Rcpp::NumericVector column_sums_proposed_sq(n_chains), column_sums_initial_sq(n_chains), column_sums_proposed_velocity(n_chains);
-              fn_exact_R_joint_position_column_sums(   REAL(initial_main), REAL(proposed_main), REAL(velocity_main),
+              fn_exact_R_joint_position_column_sums(   REAL(initial_main),
+                                                    REAL(proposed_main),
+                                                    REAL(velocity_main),
+                                                    
                                                        static_cast<std::size_t>(st.n_params_main),
                                                        theta_initial_us_columns, theta_proposed_us_columns, velocity_us_columns,
                                                        mean_initial_us, mean_proposed_us, REAL(factor_us),
@@ -4049,9 +4463,24 @@ Rcpp::List fn_persistent_burnin_joint_position_reductions_resident(   SEXP worke
               }
         }
 
-        fn_persistent_burnin_stage_joint_matrix(st, initial_main, theta_initial_us_columns, mean_initial_us, REAL(factor_us), st.resident_joint_staging_initial);
-        fn_persistent_burnin_stage_joint_matrix(st, proposed_main, theta_proposed_us_columns, mean_proposed_us, REAL(factor_us), st.resident_joint_staging_proposed);
-        fn_persistent_burnin_stage_joint_matrix(st, velocity_main, velocity_us_columns, nullptr, REAL(factor_us), st.resident_joint_staging_velocity);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                initial_main,
+                                                theta_initial_us_columns,
+                                                mean_initial_us,
+                                                REAL(factor_us),
+                                                st.resident_joint_staging_initial);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                proposed_main,
+                                                theta_proposed_us_columns,
+                                                mean_proposed_us,
+                                                REAL(factor_us),
+                                                st.resident_joint_staging_proposed);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                velocity_main,
+                                                velocity_us_columns,
+                                                nullptr,
+                                                REAL(factor_us),
+                                                st.resident_joint_staging_velocity);
 
         Rcpp::NumericVector projection_initial(n_chains), projection_proposed(n_chains), projection_velocity(n_chains);
         const double *direction = st.resident_snaper_direction_joint.data();
@@ -4059,7 +4488,9 @@ Rcpp::List fn_persistent_burnin_joint_position_reductions_resident(   SEXP worke
         if ((fn_exact_R_crossprod_vector_matrix(direction, st.resident_joint_staging_initial.data(),  n_rows, n_chains, projection_initial.begin())  != 0) ||
             (fn_exact_R_crossprod_vector_matrix(direction, st.resident_joint_staging_proposed.data(), n_rows, n_chains, projection_proposed.begin()) != 0) ||
             (fn_exact_R_crossprod_vector_matrix(direction, st.resident_joint_staging_velocity.data(), n_rows, n_chains, projection_velocity.begin()) != 0)) {
+
               return Rcpp::List::create(Rcpp::Named("status") = 2);
+
         }
         return Rcpp::List::create(
           Rcpp::Named("status") = 0,
@@ -4114,7 +4545,8 @@ Rcpp::List fn_persistent_burnin_joint_position_two_ended_reductions_resident(   
 
         const int n_chains = st.n_threads;
         const Eigen::Index n_us = st.n_nuisance;
-        const std::vector<const double *> theta_initial_us_columns  = st.state_columns(&HMCResult::us_theta_vec_0, n_us);
+        const std::vector<const double *> theta_initial_us_columns  = st.state_columns(&HMCResult::us_theta_vec_0,
+                                                                                       n_us);
         const std::vector<const double *> theta_proposed_us_columns = st.state_columns(
                 use_proposals_R ? static_cast<HMCResultStateAccessor>(&HMCResult::us_theta_vec_proposed) :
                                   static_cast<HMCResultStateAccessor>(&HMCResult::us_theta_vec), n_us);
@@ -4129,7 +4561,10 @@ Rcpp::List fn_persistent_burnin_joint_position_two_ended_reductions_resident(   
 
               Rcpp::NumericVector column_sums_proposed_sq(n_chains), column_sums_initial_sq(n_chains),
                                     column_sums_proposed_velocity(n_chains), column_sums_initial_velocity(n_chains);
-              fn_exact_R_joint_position_column_sums(   REAL(initial_main), REAL(proposed_main), REAL(velocity_main),
+              fn_exact_R_joint_position_column_sums(   REAL(initial_main),
+                                                    REAL(proposed_main),
+                                                    REAL(velocity_main),
+                                                    
                                                        static_cast<std::size_t>(st.n_params_main),
                                                        theta_initial_us_columns, theta_proposed_us_columns, velocity_us_columns,
                                                        mean_initial_us, mean_proposed_us, REAL(factor_us),
@@ -4175,11 +4610,31 @@ Rcpp::List fn_persistent_burnin_joint_position_two_ended_reductions_resident(   
               }
         }
 
-        fn_persistent_burnin_stage_joint_matrix(st, initial_main, theta_initial_us_columns, mean_initial_us, REAL(factor_us), st.resident_joint_staging_initial);
-        fn_persistent_burnin_stage_joint_matrix(st, proposed_main, theta_proposed_us_columns, mean_proposed_us, REAL(factor_us), st.resident_joint_staging_proposed);
-        fn_persistent_burnin_stage_joint_matrix(st, velocity_main, velocity_us_columns, nullptr, REAL(factor_us), st.resident_joint_staging_velocity);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                initial_main,
+                                                theta_initial_us_columns,
+                                                mean_initial_us,
+                                                REAL(factor_us),
+                                                st.resident_joint_staging_initial);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                proposed_main,
+                                                theta_proposed_us_columns,
+                                                mean_proposed_us,
+                                                REAL(factor_us),
+                                                st.resident_joint_staging_proposed);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                velocity_main,
+                                                velocity_us_columns,
+                                                nullptr,
+                                                REAL(factor_us),
+                                                st.resident_joint_staging_velocity);
         std::vector<double> initial_velocity_staging;
-        fn_persistent_burnin_stage_joint_matrix(st, velocity_initial_main, velocity_initial_us_columns, nullptr, REAL(factor_us), initial_velocity_staging);
+        fn_persistent_burnin_stage_joint_matrix(st,
+                                                velocity_initial_main,
+                                                velocity_initial_us_columns,
+                                                nullptr,
+                                                REAL(factor_us),
+                                                initial_velocity_staging);
 
         Rcpp::NumericVector projection_initial(n_chains), projection_proposed(n_chains), projection_velocity(n_chains), projection_initial_velocity(n_chains);
         const double *direction = st.resident_snaper_direction_joint.data();
@@ -4188,7 +4643,9 @@ Rcpp::List fn_persistent_burnin_joint_position_two_ended_reductions_resident(   
             (fn_exact_R_crossprod_vector_matrix(direction, st.resident_joint_staging_proposed.data(), n_rows, n_chains, projection_proposed.begin()) != 0) ||
             (fn_exact_R_crossprod_vector_matrix(direction, st.resident_joint_staging_velocity.data(), n_rows, n_chains, projection_velocity.begin()) != 0) ||
             (fn_exact_R_crossprod_vector_matrix(direction, initial_velocity_staging.data(), n_rows, n_chains, projection_initial_velocity.begin()) != 0)) {
+
               return Rcpp::List::create(Rcpp::Named("status") = 2);
+
         }
         return Rcpp::List::create(
           Rcpp::Named("status") = 0,
@@ -4223,8 +4680,12 @@ Rcpp::List fn_persistent_burnin_joint_kinetic_energy_sums_us_resident(   SEXP wo
 
         Rcpp::NumericVector sum_initial(st.n_threads), sum_end(st.n_threads);
         for (int k = 0; k < st.n_threads; ++k) {
-              sum_initial[k] = fn_exact_R_sum_of_squares_times_mass(velocity_initial_columns[k], REAL(mass_us_vec), static_cast<std::size_t>(n_us));
-              sum_end[k]     = fn_exact_R_sum_of_squares_times_mass(velocity_end_columns[k],     REAL(mass_us_vec), static_cast<std::size_t>(n_us));
+              sum_initial[k] = fn_exact_R_sum_of_squares_times_mass(velocity_initial_columns[k],
+                          REAL(mass_us_vec),
+                          static_cast<std::size_t>(n_us));
+              sum_end[k]     = fn_exact_R_sum_of_squares_times_mass(velocity_end_columns[k],
+                      REAL(mass_us_vec),
+                      static_cast<std::size_t>(n_us));
         }
         return Rcpp::List::create(
           Rcpp::Named("sum_initial") = sum_initial,
@@ -4531,7 +4992,7 @@ Rcpp::List                                   Rcpp_fn_OpenMP_EHMC_sampling(      
                                                                                   const Eigen::Matrix<double, -1, -1>  theta_main_vectors_all_chains_input_from_R,
                                                                                   const Eigen::Matrix<double, -1, -1>  theta_us_vectors_all_chains_input_from_R,
                                                                                   const Eigen::Matrix<int, -1, -1> y_Eigen_R,
-                                                                                  const Rcpp::List Model_args_as_Rcpp_List,  //// ALWAYS read-only
+                                                                                  const Rcpp::List Model_args_as_Rcpp_List,  /* ALWAYS read-only */
                                                                                   const Rcpp::List EHMC_args_as_Rcpp_List,
                                                                                   const Rcpp::List EHMC_Metric_as_Rcpp_List,
                                                                                   const int n_threads_WCP
@@ -4557,13 +5018,19 @@ Rcpp::List                                   Rcpp_fn_OpenMP_EHMC_sampling(      
 
             ///// Traces:
             const int N = Model_args_as_cpp_struct.N;
-            std::vector<Eigen::Matrix<double, -1, -1>> trace_output =  vec_of_mats<double>(n_params_main, n_iter_R, n_threads_R);
-            std::vector<Eigen::Matrix<double, -1, -1>> trace_output_divs =  vec_of_mats<double>(1, n_iter_R, n_threads_R);
+            std::vector<Eigen::Matrix<double, -1, -1>> trace_output =  vec_of_mats<double>(n_params_main,
+                                                                                           n_iter_R,
+                                                                                           n_threads_R);
+            std::vector<Eigen::Matrix<double, -1, -1>> trace_output_divs =  vec_of_mats<double>(1,
+                                                                                                n_iter_R,
+                                                                                                n_threads_R);
             std::vector<Eigen::Matrix<double, -1, -1>> trace_output_nuisance =  vec_of_mats<double>(n_nuisance_to_track, n_iter_R, n_threads_R);
             std::vector<Eigen::Matrix<double, -1, -1>> trace_output_log_lik = vec_of_mats<double>(N, n_iter_R, n_threads_R);  //// possibly dummy
 
             ///// data copies:
-            std::vector<Eigen::Matrix<int, -1, -1>> y_copies_R = vec_of_mats<int>(y_Eigen_R.rows(), y_Eigen_R.cols(), n_threads_R);
+            std::vector<Eigen::Matrix<int, -1, -1>> y_copies_R = vec_of_mats<int>(y_Eigen_R.rows(),
+                                                                                  y_Eigen_R.cols(),
+                                                                                  n_threads_R);
             for (int kk = 0; kk < n_threads_R; ++kk) {
               y_copies_R[kk] = y_Eigen_R;
             }
@@ -4580,6 +5047,10 @@ Rcpp::List                                   Rcpp_fn_OpenMP_EHMC_sampling(      
             // PinningObserver pin_observer(core_ids);
 
             Eigen::Matrix<double, -1, -1> p_jump_main_output, p_jump_nuisance_output;
+ //// debug = TRUE: each iteration's own trajectory length and main-parameter proposal
+            Eigen::Matrix<double, -1, -1> tau_main_ii_output;
+            Eigen::Matrix<int, -1, -1> L_main_ii_output;
+            std::vector<Eigen::Matrix<double, -1, -1>> proposal_main_output;
             EHMC_sampling_OpenMP(    n_threads_R,
                                      global_seed_R_uint64_t,
                                      n_iter_R,
@@ -4607,6 +5078,9 @@ Rcpp::List                                   Rcpp_fn_OpenMP_EHMC_sampling(      
                                      trace_output_log_lik,
                                      p_jump_main_output,
                                      p_jump_nuisance_output,
+                                     tau_main_ii_output,
+                                     L_main_ii_output,
+                                     proposal_main_output,
                                      ////
                                      n_threads_WCP);
 
@@ -4615,6 +5089,19 @@ Rcpp::List                                   Rcpp_fn_OpenMP_EHMC_sampling(      
           //
           // //// Reset everything:
           // parallel_hmc_sampling.reset();
+
+ //// sampling diagnostics: the acceptance probabilities and, with debug = TRUE, each
+          //// iteration's own trajectory length, the sampling step size and each chain's main-parameter
+          //// proposals:
+          Rcpp::List sampling_diagnostics = Rcpp::List::create(
+              Rcpp::Named("p_jump_main") = p_jump_main_output,
+              Rcpp::Named("p_jump_nuisance") = p_jump_nuisance_output);
+          if (EHMC_args_as_cpp_struct.debug) {
+              sampling_diagnostics["tau_main_ii"] = tau_main_ii_output;
+              sampling_diagnostics["L_main_ii"] = L_main_ii_output;
+              sampling_diagnostics["eps_main"] = EHMC_args_as_cpp_struct.eps_main;
+              sampling_diagnostics["proposal_main"] = proposal_main_output;
+          }
 
           const double zero_dbl = 0.0;
 
@@ -4626,9 +5113,11 @@ Rcpp::List                                   Rcpp_fn_OpenMP_EHMC_sampling(      
                                      zero_dbl,
                                      trace_output_log_lik,
                                      // Append only: same diagnostic layout as the RcppParallel backend.
-                                     Rcpp::Named("sampling_diagnostics") = Rcpp::List::create(
-                                         Rcpp::Named("p_jump_main") = p_jump_main_output,
-                                         Rcpp::Named("p_jump_nuisance") = p_jump_nuisance_output));
+                                     // Rcpp::Named("sampling_diagnostics") = Rcpp::List::create(
+                                     //     Rcpp::Named("p_jump_main") = p_jump_main_output,
+                                     //     Rcpp::Named("p_jump_nuisance") = p_jump_nuisance_output));
+       //// (the same list, built above, with the debug record)
+                                     Rcpp::Named("sampling_diagnostics") = sampling_diagnostics);
 
 }
 

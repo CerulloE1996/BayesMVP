@@ -11,7 +11,6 @@
 // [[Rcpp::plugins(cpp17)]]
 
 using namespace Rcpp;
-using namespace Eigen;
 
 
 //' Compute Se/Sp at custom baseline covariate values for LC-MVOP models
@@ -37,7 +36,8 @@ using namespace Eigen;
 //' ORIGINAL test order, with the binary and ordinal tests in any positions.
 //'
 // [[Rcpp::export]]
-List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,       // Flattened 3D array [n_iter, n_chains, n_beta_params]
+List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
+                                          // Flattened 3D array [n_iter, n_chains, n_beta_params]
                                            IntegerVector beta_dims,             // c(n_iter, n_chains, n_beta_params)
                                            CharacterVector beta_names,          // e.g. "beta[1,1,1]", "beta[2,1,3]"
                                            NumericVector trace_C_flat,          // Flattened 3D array [n_iter, n_chains, n_C_params]
@@ -62,9 +62,9 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          const int n_tests    = n_binary_tests + n_ordinal_tests;
          const int n_samples  = n_iter * n_chains;
          
-         // ---- Slot maps. Every per-test read used to assume that the binary tests come first in the traces
-         //      (t < n_binary_tests; t_ord = t - n_binary_tests; ordinal test t = n_binary_tests + t_ord),
-         //      and the outputs were in trace order. Now: the type of each TRACE slot comes from
+         // ---- Slot maps. The binary tests need not come first in the traces (so not
+         //      t < n_binary_tests; t_ord = t - n_binary_tests; ordinal test t = n_binary_tests + t_ord), and the
+         //      outputs are not in trace order: the type of each TRACE slot comes from
          //      n_cat_per_test_in_trace_order, and the outputs are indexed by ORIGINAL test, whose trace slot is
          //      trace_slot_of_original_test[t] (the inverse of test_perm):
          //
@@ -131,7 +131,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          //   if (n_thr_per_ord_test[t_ord] > n_thr_max)
          //     n_thr_max = n_thr_per_ord_test[t_ord];
          // }
-         //// n_thr per ORIGINAL test (1 for a binary test); n_thr_max over the ordinal tests, as before:
+         //// n_thr per ORIGINAL test (1 for a binary test); n_thr_max over the ordinal tests:
          for (int t = 0; t < n_tests; t++) {
            const int ordinal_slot = ordinal_slot_of_trace_slot[trace_slot_of_original_test[t]];
            n_thr(t) = (ordinal_slot < 0) ? 1 : n_thr_per_ord_test[ordinal_slot];
@@ -155,8 +155,8 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          //   First n_samples entries = param 0, next n_samples = param 1, etc.
          //   Eigen ColMajor Map: column p = entries [p*n_samples .. (p+1)*n_samples-1] ✓
          
-         Map<const Eigen::Matrix<double, -1, -1>> beta_mat(trace_beta_flat.begin(), n_samples, n_beta_p);
-         Map<const Eigen::Matrix<double, -1, -1>> C_mat(trace_C_flat.begin(), n_samples, n_C_p);
+         Eigen::Map<const Eigen::Matrix<double, -1, -1>> beta_mat(trace_beta_flat.begin(), n_samples, n_beta_p);
+         Eigen::Map<const Eigen::Matrix<double, -1, -1>> C_mat(trace_C_flat.begin(), n_samples, n_C_p);
          
          // ---- Build parameter name -> column index maps ----
          std::map<std::string, int> beta_map;
@@ -244,17 +244,23 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
          for (int t = 0; t < n_tests; t++) {
            NumericVector rvec_nd = baseline_case_nd[t];
            NumericVector rvec_d  = baseline_case_d[t];
-           // X_nd[t] = Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[t]);
-           // X_d[t]  = Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[t]);
+           // X_nd[t] = Eigen::Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[t]);
+           // X_d[t]  = Eigen::Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[t]);
            const int trace_slot = trace_slot_of_original_test[t];
-           X_nd[t] = Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[trace_slot]);
-           X_d[t]  = Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[trace_slot]);
+           X_nd[t] = Eigen::Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[trace_slot]);
+           X_d[t]  = Eigen::Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[trace_slot]);
          }
          
          // ---- Allocate output: [n_samples, n_total_slots] ----
-         Eigen::Matrix<double, -1, -1> Se_out = Eigen::Matrix<double, -1, -1>::Constant(n_samples, n_total_slots, -1.0);
-         Eigen::Matrix<double, -1, -1> Sp_out = Eigen::Matrix<double, -1, -1>::Constant(n_samples, n_total_slots, -1.0);
-         Eigen::Matrix<double, -1, -1> Fp_out = Eigen::Matrix<double, -1, -1>::Constant(n_samples, n_total_slots, -1.0);
+         Eigen::Matrix<double, -1, -1> Se_out = Eigen::Matrix<double, -1, -1>::Constant(n_samples,
+                                                                                        n_total_slots,
+                                                                                        -1.0);
+         Eigen::Matrix<double, -1, -1> Sp_out = Eigen::Matrix<double, -1, -1>::Constant(n_samples,
+                                                                                        n_total_slots,
+                                                                                        -1.0);
+         Eigen::Matrix<double, -1, -1> Fp_out = Eigen::Matrix<double, -1, -1>::Constant(n_samples,
+                                                                                        n_total_slots,
+                                                                                        -1.0);
          
          // ---- Vectorised computation per test ----
          for (int t = 0; t < n_tests; t++) {
@@ -519,7 +525,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,      
                    for (int t2 = t1 + 1; t2 < n_ordinal_tests; t2++) {
                      AUC_diff.col(pair) = AUC_out.col(t1) - AUC_out.col(t2);
                      
-                     const VectorXd& diff_col = AUC_diff.col(pair);
+                     const Eigen::Matrix<double, -1, 1>& diff_col = AUC_diff.col(pair);
                      const double mean_val = diff_col.mean();
                      const double sd_val   = std::sqrt((diff_col.array() - mean_val).square().sum() /
                                                        static_cast<double>(n_samples - 1));

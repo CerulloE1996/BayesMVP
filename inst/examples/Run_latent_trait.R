@@ -26,7 +26,7 @@ n_superchains <-  2L
 burnin_algorithm <-  "CHESSR"
 n_threads_WCP_burnin <-  1L
 n_threads_WCP_sampling <-  1L
-n_nuisance_to_track <-  0L
+nuisance_to_track <-  0
 
 ## ---- Generate binary data with two latent classes and trait effects ----------------------------------------------------------------
 set.seed(seed, kind = "L'Ecuyer-CMRG")
@@ -112,7 +112,7 @@ fit <-  model$sample( init_lists_per_chain = init_lists_per_chain,
                       n_threads_WCP_sampling = n_threads_WCP_sampling,
                       n_refresh = 100L,
                       adapt_delta = 0.90,
-                      n_nuisance_to_track = n_nuisance_to_track,
+                      nuisance_to_track = nuisance_to_track,
                       seed = seed,
                       stream = seed
 )

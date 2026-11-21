@@ -83,6 +83,12 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
           cat("C param names (first 20):",    head(dimnames(trace_C)[[3]], 20), "\n")
         }
         
+        ##
+        ## ---- n_cat_per_test and test_perm as integers for the C++ (NULL when not given):
+        ##
+        n_cat_per_test_as_integer <-  if (is.null(n_cat_per_test)) NULL else as.integer(n_cat_per_test)
+        test_perm_as_integer      <-  if (is.null(test_perm)) NULL else as.integer(test_perm)
+
         ## ---- Call Eigen-based Rcpp function ----
         rcpp_out <- Rcpp_compute_LC_MVOP_Se_Sp_baseline( trace_beta_flat    = as.vector(trace_beta),
                                                         beta_dims          = dim(trace_beta),
@@ -98,12 +104,8 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
                                                         n_ordinal_tests    = n_ordinal_tests,
                                                         n_thr_per_ord_test = n_thr_per_ord_test,
                                                         C_param_name       = C_param_name,
-                                                        n_cat_per_test_in_trace_order =
-                                                              if (is.null(n_cat_per_test)) NULL else
-                                                                    as.integer(n_cat_per_test),
-                                                        test_perm          =
-                                                              if (is.null(test_perm)) NULL else
-                                                                    as.integer(test_perm))
+                                                        n_cat_per_test_in_trace_order = n_cat_per_test_as_integer,
+                                                        test_perm          = test_perm_as_integer)
         
         ## ---- Reshape 4D arrays and add dimnames ----
         n_thr_max <- rcpp_out$n_thr_max
@@ -119,7 +121,9 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
         #     if (n_ordinal_tests > 0) paste0("Ord", 1:n_ordinal_tests) else character(0)
         #   )
         # }
+##
         ## ---- default names in ORIGINAL test order (Bin1, Bin2, ... and Ord1, Ord2, ... wherever they sit):
+##
         if (is.null(test_names)) {
               test_names <-  character(n_tests)
               test_names[!is_ordinal_original_test] <-  paste0("Bin", seq_len(sum(!is_ordinal_original_test)))

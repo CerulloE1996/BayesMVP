@@ -259,7 +259,8 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_accumulate_grad(  const Eigen::Ref<cons
  //   prev_unconstrained_grad_vec(c) = prev_grad_vec(c) * deriv_p_wrt_pu_double;
  //   prev_unconstrained_grad_vec(0) = prev_unconstrained_grad_vec(1) - prev_unconstrained_grad_vec(0) - 2*tanh_u_prev[1];
  //
-ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double, -1, -1> &prev_grad_mat,  // n_pops × n_class
+ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double, -1, -1> &prev_grad_mat,
+                                                     // n_pops × n_class
                                                      const Eigen::Matrix<double, -1, 1>  &tanh_u,         // n_pops
                                                      const Eigen::Matrix<double, -1, 1>  &deriv_p_wrt_u,  // n_pops
                                                      const int n_pops,
@@ -286,8 +287,8 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double,
  // 6. Convenience: single-population backward-compatible wrapper
  // ============================================================================
  //
- // If n_pops == 1 and the aim is to the old interface, this wraps the multi-pop
- // functions. But use n_pops = 1 with the multi-pop code.
+ // For n_pops == 1 with the old interface, this wraps the multi-pop
+ // functions. But n_pops = 1 can be used with the multi-pop code directly.
  //
  
  
@@ -380,7 +381,7 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double,
  //    out_mat.segment(prev_start, n_pops) += prev_unc_grad;
  //    ```
  //
- // 8. CUTPOINT OFFSET: everywhere appears `(n_class - 1)` as the offset
+ // 8. CUTPOINT OFFSET: everywhere `(n_class - 1)` appears as the offset
  //    past the coefficients, replace with `n_pops`:
  //    ```
  //    // Old: int i = n_corrs + n_covariates_total + (n_class - 1);

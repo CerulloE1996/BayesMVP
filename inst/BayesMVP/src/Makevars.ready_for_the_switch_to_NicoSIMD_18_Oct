@@ -1,0 +1,483 @@
+##
+####### -----  Clear include and library paths -------------------------------------------------------------------------------------
+INCLUDE_PATH=
+LIBRARY_PATH=
+##
+####### -----  BayesMVP  paths -----------------------------------------------------------------------------------------------------
+$(info R_HOME is: $(R_HOME))
+##
+override PKG_SRC_PATH=$(shell pwd) ## this only works on UNIX (not windows)
+override PKG_PATH=$(patsubst %/src, %, $(PKG_SRC_PATH))
+##
+$(info PKG_SRC_PATH is: $(PKG_SRC_PATH))
+$(info PKG_PATH is: $(PKG_PATH))
+##
+override PKG_LIB_PATH=$(PKG_PATH)/lib
+override PKG_INST_PATH=$(PKG_PATH)/inst
+override PKG_R_PATH=$(PKG_PATH)/R
+##
+$(info PKG_LIB_PATH is: $(PKG_LIB_PATH))
+$(info PKG_INST_PATH is: $(PKG_INST_PATH))
+$(info PKG_LIB_ARCH_PATH is: $(PKG_LIB_ARCH_PATH))
+##
+####### ----- CCACHE / ccache path -------------------------------------------------------------------------------------------------  
+##
+## Find ccache path:
+## Find ccache path:
+override CCACHE_PATH=$(shell which ccache 2>/dev/null)
+override HAVE_CCACHE=$(if $(CCACHE_PATH),YES,)
+
+## Set CCACHE prefix only if available
+ifneq (,$(HAVE_CCACHE))
+ override CCACHE=$(CCACHE_PATH)
+else
+ override CCACHE=
+endif
+##
+# override CCACHE=
+##
+## new:
+$(info CCACHE_PATH is: $(CCACHE_PATH)) 
+##
+## Custom user-supplied flags (if supplied):
+## ifneq ($(USER_SUPPLIED_CCACHE_PATH),) ## i.e. if user supplies "USER_SUPPLIED_CCACHE_PATH" variable
+## 	override CCACHE="$(USER_SUPPLIED_CCACHE_PATH)"
+## endif
+##
+####### ----- Compiler settings (clang preffered [AMD AOCC clang if available], then gcc/g++ [2nd or 3rd choice] --------------------
+## First, check if AMD AOCC-clang compiler is availabnle (AMD CPU's only), otherwise use "standard" clang, and if not then use gcc/g++:
+override AMD_AOCC_PATH = $(shell ls -d /opt/AMD/aocc-compiler-* 2>/dev/null | sort -rV | head -n1)
+##
+ifneq ($(AMD_AOCC_PATH),)
+  override AMD_AOCC_CXX_COMPILER=$(AMD_AOCC_PATH)/bin/clang++
+  override AMD_AOCC_CPP_COMPILER=$(AMD_AOCC_PATH)/bin/clang
+endif
+##
+override CLANG_CXX_COMPILER=clang++
+override CLANG_CPP_COMPILER=clang
+##
+override GCC_CXX_COMPILER=g++
+override GCC_CPP_COMPILER=gcc
+##
+##  
+# ifneq (,$(wildcard $(AMD_AOCC_CXX_COMPILER))) ## if AOCC-clang is available (AMD only)
+#     override CXX_COMPILER = "$(AMD_AOCC_CXX_COMPILER)"
+#     override CPP_COMPILER = "$(AMD_AOCC_CPP_COMPILER)"
+#     override CXX_STD = CXX17 # Use C++17
+#     # override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
+#     override CPU_BASE_FLAGS = -O3  -march=znver4  -mtune=znver4
+#     ## CPU_BASE_FLAGS = -O3  -march=$(AMD_ZEN_VER)  -mtune=$(AMD_ZEN_VER)
+# else ifneq (,$(wildcard $(CLANG_CXX_COMPILER))) ## if "standard" clang++/clang is available
+#     override CXX_COMPILER = "$(CLANG_CXX_COMPILER)"
+#     override CPP_COMPILER = "$(CLANG_CPP_COMPILER)"
+#     override CXX_STD = CXX17 # Use C++17
+#     override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
+# else ifneq (,$(wildcard $(GCC_CXX_COMPILER))) ## otherwise, use gcc/g++
+#     override CXX_COMPILER = "$(GCC_CXX_COMPILER)"
+#     override CPP_COMPILER = "$(GCC_CPP_COMPILER)"
+#     override CXX_STD = -std=gnu++17 # Use C++17
+#     override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
+# endif
+# #### ---- To force AMD AOCC / Zen version 4 CPU's: ## ---- BOOKMARK
+# override CXX_COMPILER = "$(AMD_AOCC_CXX_COMPILER)"
+# override CPP_COMPILER = "$(AMD_AOCC_CPP_COMPILER)"
+# override CXX_STD = CXX17 # Use C++17
+# override CPU_BASE_FLAGS = -O3  -march=znver4  -mtune=znver4 ## BOOKMARK
+##
+## ---- To force gcc/g++: ## ---- BOOKMARK
+##
+override CXX_COMPILER = $(GCC_CXX_COMPILER)  ## ---- BOOKMARK
+override CPP_COMPILER = $(GCC_CPP_COMPILER)  ## ---- BOOKMARK
+##
+override CXX_STD = -std=gnu++17 # Use C++17
+##
+override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
+##
+## On a 64-bit ARM CPU (e.g. Apple Silicon, Snapdragon, AWS Graviton; NEON, no AVX), -mcpu=native instead
+## (-march=native is not accepted on ARM by every compiler):
+override MACHINE_OF_THIS_CPU=$(shell "$(R_HOME)/bin/Rscript" -e "cat(Sys.info()[['machine']])")
+ifneq ($(filter aarch64 arm64,$(MACHINE_OF_THIS_CPU)),)
+  override CPU_BASE_FLAGS = -O3  -mcpu=native
+endif
+##
+##
+## BASE_FLAGS +=  -mllvm   ### --openmp-opt-shared-limit=96  ### -inlinehint-threshold=20000000 # for clang++
+##
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_CXX_COMPILER),) ## i.e. if user-supplied variable is available
+	override CXX_COMPILER=$(USER_SUPPLIED_CXX_COMPILER)
+endif
+##
+ifneq ($(USER_SUPPLIED_CPP_COMPILER),) ## i.e. if user-supplied variable is available
+	override CPP_COMPILER=$(USER_SUPPLIED_CPP_COMPILER)
+endif
+##
+ifneq ($(USER_SUPPLIED_CXX_STD),) ## i.e. if user-supplied variable is available
+	override CXX_STD=$(USER_SUPPLIED_CXX_STD)
+endif
+##
+ifneq ($(USER_SUPPLIED_CPU_BASE_FLAGS),) ## i.e. if user-supplied variable is available
+	override CPU_BASE_FLAGS=$(USER_SUPPLIED_CPU_BASE_FLAGS)
+endif
+##
+####### ----- CPU Feature Detection (i.e., AVX, FMA, etc) -------------------------------------------------------------------------
+##
+override HAS_FMA=$(shell "$(R_HOME)/bin/Rscript" "$(PWD)/R_script_has_FMA.R")
+override HAS_AVX=$(shell "$(R_HOME)/bin/Rscript" "$(PWD)/R_script_has_AVX.R")
+override HAS_AVX2=$(shell "$(R_HOME)/bin/Rscript" "$(PWD)/R_script_has_AVX2.R")
+override HAS_AVX512=$(shell "$(R_HOME)/bin/Rscript" "$(PWD)/R_script_has_AVX_512.R")
+##
+
+##
+$(info CPU Features detected:)
+$(info HAS_FMA: $(HAS_FMA))
+$(info HAS_AVX: $(HAS_AVX))
+$(info HAS_AVX2: $(HAS_AVX2))
+$(info HAS_AVX512: $(HAS_AVX512))
+##
+####### ----- CPU flags - FMA  ---------------------------------------------------------------------------------------------------
+## Initialize empty flags:
+override FMA_FLAGS=
+##
+ifeq ($(HAS_FMA),1)
+  override FMA_FLAGS+=-mfma
+endif
+##
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_FMA_FLAGS),) ## i.e. if user-supplied variable is available
+	override FMA_FLAGS="$(USER_SUPPLIED_FMA_FLAGS)"
+endif
+##
+####### ----- CPU flags - AVX  ---------------------------------------------------------------------------------------------------
+##
+## Initialize empty flags
+override AVX_FLAGS=
+##
+## Only set AVX flags if using Clang (not GCC)
+ifeq ($(HAS_AVX512),1)
+  override AVX_FLAGS += -mavx -mavx2 -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl
+else ifeq ($(HAS_AVX2),1)
+  override AVX_FLAGS += -mavx -mavx2
+else ifeq ($(HAS_AVX),1)
+  override AVX_FLAGS += -mavx
+endif
+##
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_AVX_FLAGS),) ## i.e. if user-supplied variable is available
+	override AVX_FLAGS="$(USER_SUPPLIED_AVX_FLAGS)"
+endif
+##
+####### ----- OpenMP flags  ---------------------------------------------------------------------------------------------------------
+##
+override OMP_LIB_FLAGS=$(shell "$(R_HOME)/bin/Rscript" "$(PWD)/R_script_load_OMP_Linux.R")
+override LD_LIBRARY_PATH+="$(OMP_LIB_FLAGS)"
+override OMP_SO=$(OMP_LIB_FLAGS)
+##
+## Initialize empty flags:
+override OMP_FLAGS=
+##
+ifneq ($(OMP_LIB_FLAGS),0)
+  override OMP_FLAGS+=-fopenmp
+endif
+##
+##
+## PKG_LIBS += -L"/opt/AMD/aocc-compiler-5.0.0/lib" -lomp ## for AMD AOCC clang++
+## PKG_LIBS += /opt/AMD/aocc-compiler-5.0.0/lib/libomp.so
+## BASE_FLAGS +=  -fopenmp -fopenmp-simd ## for AMD AOCC clang++
+## PKG_LIBS = -L/usr/lib/gcc/x86_64-linux-gnu/11 -lgomp  ### for g++
+## BASE_FLAGS +=  -fopenmp ### for g++
+##
+## OpenMP configuration based on compiler type:
+# override OMP_FLAGS =
+# override OMP_LIB_PATH =
+# override OMP_LIB_FLAGS =
+# ifneq (,$(wildcard $(AMD_AOCC_CXX_COMPILER))) ## if using AOCC-clang (AMD only) (1st choice)
+#   override OMP_LIB_PATH = $(AMD_AOCC_PATH)/lib
+#   override OMP_FLAGS = -fopenmp
+#   override OMP_LIB_FLAGS += -L"$(OMP_LIB_PATH)" -lomp
+#   override OMP_LIB_FLAGS += -Wl,-rpath,"$(OMP_LIB_PATH)" $(OMP_LIB_PATH)/libomp.so
+#     ## override OMP_LIB_FLAGS += $(OMP_LIB_PATH)/libomp.so
+# else ifneq (,$(wildcard $(CLANG_CXX_COMPILER))) ## if using "standard" clang (2nd choice)
+#   # Try to find system libomp:
+#   override OMP_LIB_PATH = $(shell \
+#     for p in /usr/lib /usr/lib64 /usr/local/lib; do \
+#       if [ -f $$p/libomp.so ]; then echo $$p; break; fi; \
+#     done)
+#   ifneq ($(OMP_LIB_PATH),)
+#     override OMP_FLAGS = -fopenmp
+#     override OMP_LIB_FLAGS += -L"$(OMP_LIB_PATH)" -lomp
+#   endif
+# else ##  if using GCC OpenMP
+#   override OMP_FLAGS = -fopenmp
+#   override OMP_LIB_FLAGS += -lgomp
+# endif
+##
+## override OMP_FLAGS = -fopenmp
+## override OMP_LIB_FLAGS += -lgomp
+##
+## ##  ------ BOOKMARK:
+## override OMP_LIB_PATH=/usr/lib/gcc/x86_64-linux-gnu/11
+## override OMP_SO=$(OMP_LIB_PATH)/libgomp.so
+## override OMP_LIB_FLAGS=$(OMP_SO)
+## override OMP_FLAGS = -fopenmp
+# ##  ------ BOOKMARK:
+# override OMP_LIB_PATH=$(AMD_AOCC_PATH)/lib
+# override OMP_SO=$(OMP_LIB_PATH)/libomp.so
+# override OMP_LIB_FLAGS=$(OMP_SO)
+# override OMP_FLAGS = -fopenmp
+##
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_OMP_FLAGS),) ## i.e. if user-supplied variable is available
+	override OMP_FLAGS="$(USER_SUPPLIED_OMP_FLAGS)"
+endif
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_OMP_LIB_PATH),) ## i.e. if user-supplied variable is available
+	override OMP_LIB_PATH="$(USER_SUPPLIED_OMP_LIB_PATH)"
+endif
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_OMP_LIB_FLAGS),) ## i.e. if user-supplied variable is available
+	override OMP_LIB_FLAGS="$(USER_SUPPLIED_OMP_LIB_FLAGS)"
+endif
+##
+override SHLIB_OPENMP_CFLAGS = $(OMP_FLAGS)
+override SHLIB_OPENMP_CXXFLAGS = $(SHLIB_OPENMP_CFLAGS)
+## Print OpenMP info:
+#### $(info OMP_LIB_PATH is: $(OMP_LIB_PATH))
+$(info OMP_LIB_FLAGS is: $(OMP_LIB_FLAGS))
+$(info OMP_FLAGS is: $(OMP_FLAGS))
+$(info SHLIB_OPENMP_CFLAGS is: $(SHLIB_OPENMP_CFLAGS))
+$(info SHLIB_OPENMP_CXXFLAGS is: $(SHLIB_OPENMP_CXXFLAGS))
+####### ----- set MATH_FLAGS ---------------------------------------------------------------------------------------------------------
+##
+## override MATH_FLAGS = -fno-math-errno -fno-signed-zeros ## These 2 are usually "safe" flags to use
+override MATH_FLAGS = -fno-math-errno -fno-signed-zeros -fno-trapping-math
+$(info MATH_FLAGS: $(MATH_FLAGS))
+##
+####### ----- set UNIX_FLAGS  (if any) ---------------------------------------------------------------------------------------------------------
+##
+# override UNIX_FLAGS = -ftls-model=global-dynamic ## Need this? ---- BOOKMARK
+# $(info UNIX_FLAGS: $(UNIX_FLAGS))
+##
+####### ----- set BASE_FLAGS -----------------------------------------------------------------------------------------------------
+##
+## ifneq (,$(wildcard $(MINGW_CXX_COMPILER))) ## if clang (RTools "clang64") is NOT available (so only g++/gcc)
+##   RTOOLS_INCLUDE_PATHS+=-I"$(RTOOLS_MINGW_GCC_INCLUDE_PATH)" ## this is needed for gcc/g++ as "omp.h" resides here 
+## endif
+##
+override CPU_FLAGS = $(CPU_BASE_FLAGS) $(FMA_FLAGS) $(AVX_FLAGS)
+##
+## ## GCC/Clang compiler flags to disable AVX (for debugging / testing on systems with no AVX):
+## override CPU_FLAGS = $(CPU_BASE_FLAGS) -mno-avx -mno-avx2 -mno-avx512f -mno-avx512cd -mno-avx512bw -mno-avx512dq -mno-avx512vl
+## ## Flags to disable FMA:
+## override CPU_FLAGS += -mno-fma
+##
+override BASE_FLAGS =   $(CPU_FLAGS) \
+                        $(SHLIB_OPENMP_CFLAGS) \
+                        $(MATH_FLAGS) \
+                        $(UNIX_FLAGS) \
+                        -Wno-error=ignored-attributes \
+                        -Wno-error=implicit-function-declaration \
+                        -Wno-pragma-pack \
+                        -Wno-parentheses-equality \
+                        -fPIC \
+                        -D_REENTRANT -DSTAN_THREADS -pthread \
+                        -DNDEBUG \
+                        -fpermissive
+##
+##                      PKG_CXXFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
+## PKG_LIBS += -fsanitize=address,undefined
+##
+##                        -fpermissive \
+#### -fno-math-errno    -fno-signed-zeros  -fno-trapping-math  ### oordered from safest ( -fno-math-errno ) tto least-safe ( -fno-trapping-math)
+## BASE_FLAGS += -DEIGEN_VECTORIZE
+## BASE_FLAGS += -fopenmp
+####### ----- CmdStan path(s) ----------------------------------------------------------------------------------------------------
+override CMDSTAN_PATH := $(shell "${R_HOME}/bin/Rscript" R_script_find_cmdstan_path.R)
+##
+## Define base directories
+override STAN_ROOT = $(CMDSTAN_PATH)/stan
+override STAN_SRC = $(CMDSTAN_PATH)/stan/src
+override STAN_BASE = $(CMDSTAN_PATH)/stan/src/stan
+override STAN_LIB = $(CMDSTAN_PATH)/stan/lib
+override STAN_MATH = $(CMDSTAN_PATH)/stan/lib/stan_math
+override STAN_MATH_LIB = $(CMDSTAN_PATH)/stan/lib/stan_math/lib
+override TBB_PATH = $(STAN_MATH_LIB)/tbb
+
+##
+## Print CmDStan paths:
+$(info CMDSTAN_PATH found: $(CMDSTAN_PATH))
+$(info STAN_ROOT is: $(STAN_ROOT))
+$(info STAN_SRC is: $(STAN_SRC))
+$(info STAN_BASE is: $(STAN_BASE))
+$(info STAN_LIB is: $(STAN_LIB))
+$(info STAN_MATH is: $(STAN_MATH))
+$(info STAN_MATH_LIB is: $(STAN_MATH_LIB))
+##
+####### ----- BridgeStan path(s) -------------------------------------------------------------------------------------------------
+## Find BridgeStan path:
+override BRIDGESTAN_PATH := $(shell "${R_HOME}/bin/Rscript" R_script_find_bridgestan_path.R)
+## Set other BridgeStan paths:
+override BRIDGESTAN_SRC = $(BRIDGESTAN_PATH)/src
+##
+## Print BridgeStan paths:
+$(info BRIDGESTAN_PATH is: $(BRIDGESTAN_PATH))
+$(info BRIDGESTAN_PATH is: $(BRIDGESTAN_PATH))
+$(info BRIDGESTAN_SRC is: $(BRIDGESTAN_SRC))
+##
+##### RNG paths: ---------------------------------------------------------------------------------------------------------------
+#### ## BOOKMARK:
+#### override RNG_PATH=/home/enzocerullo/pcg_lib/include
+#### ##
+####### PKG_CPPFLAGS / PKG_CXXFLAGS / CPPFLAGS / CXXFLAGS -----------------------------------------------------------------------
+override PKG_CPPFLAGS = $(BASE_FLAGS) \
+    -I"$(STAN_MATH_LIB)/eigen_3.4.0" \
+    -I"$(STAN_MATH_LIB)/boost_1.84.0" \
+    -I"$(STAN_MATH_LIB)/sundials_6.1.1/include" \
+    -I"$(STAN_MATH_LIB)/sundials_6.1.1/src/sundials" \
+    -I"$(TBB_PATH)" \
+    -I"$(STAN_LIB)/rapidjson_1.1.0" \
+    -I"$(STAN_LIB)/rapidjson_1.1.0/rapidjson" \
+    -I"$(CMDSTAN_PATH)" \
+    -I"$(STAN_ROOT)" \
+    -I"$(STAN_SRC)" \
+    -I"$(STAN_MATH)" \
+    -I"$(STAN_BASE)" \
+    -I"$(STAN_LIB)" \
+    -I"$(STAN_MATH_LIB)" \
+    -I"$(STAN_BASE)/model" \
+    -I"$(STAN_BASE)/services" \
+    -I"$(STAN_BASE)/io" \
+    -I"$(STAN_BASE)/mcmc" \
+    -I"$(STAN_BASE)/analyze" \
+    -I"$(BRIDGESTAN_SRC)"
+
+    
+##     -fsanitize=address,undefined -fno-omit-frame-pointer
+override PKG_CXXFLAGS = $(PKG_CPPFLAGS) 
+override CPPFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out)
+override CXXFLAGS = $(PKG_CPPFLAGS) ## ---- (commented out)
+##
+ifeq ($(HAVE_CCACHE),YES)
+  override CC  = $(CCACHE) $(CPP_COMPILER)
+  override CXX = $(CCACHE) $(CXX_COMPILER)
+else
+  override CC  = $(CPP_COMPILER)
+  override CXX = $(CXX_COMPILER)
+endif
+##
+override CFLAGS =  $(CPPFLAGS)
+##
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_PKG_CPPFLAGS),) ## i.e. if user-supplied variable is available
+	override PKG_CPPFLAGS="$(USER_SUPPLIED_PKG_CPPFLAGS)"
+endif
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_PKG_CXXFLAGS),) ## i.e. if user-supplied variable is available
+	override PKG_CXXFLAGS="$(USER_SUPPLIED_PKG_CXXFLAGS)"
+endif
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_CPPFLAGS),) ## i.e. if user-supplied variable is available
+	override CPPFLAGS="$(USER_SUPPLIED_CPPFLAGS)"
+endif
+## Custom user-supplied flags (if supplied):
+ifneq ($(USER_SUPPLIED_CXXFLAGS),) ## i.e. if user-supplied variable is available
+	override CXXFLAGS="$(USER_SUPPLIED_CXXFLAGS)"
+endif
+##
+override CC14 = $(CC)
+override C14FLAGS = $(CPPFLAGS)
+override CC17 = $(CC)
+override C17FLAGS = $(CPPFLAGS)
+override CC23 =  $(CC)
+override C23FLAGS =  $(CPPFLAGS)
+override CC90 =  $(CC)
+override C90FLAGS = $(CPPFLAGS)
+override CC99 =  $(CC)
+override 99FLAGS = $(CPPFLAGS)
+##
+override CXXPICFLAGS = -fpic
+override CXX11  =  $(CXX)
+override CXX11FLAGS = $(CXXFLAGS)
+override CXX11PICFLAGS = -fpic
+override CXX14  =   $(CXX)
+override CXX14FLAGS = $(CXXFLAGS)
+override CXX14PICFLAGS = -fpic
+override CXX17  =  $(CXX)
+override CXX17FLAGS =  $(CXXFLAGS)
+override CXX17PICFLAGS = -fpic
+override CXX20  = $(CXX)
+override CXX20FLAGS =   $(CXXFLAGS)
+override CXX20PICFLAGS = -fpic
+override CXX23  =  $(CXX)
+override CXX23FLAGS =   $(CXXFLAGS)
+override CXX23PICFLAGS = -fpic
+##
+##  ---------------------  Configure package libs ---------------------------------------------------------------------
+## override LD = $(CXX_COMPILER_TYPE) ## not needed for Linux / Mac OS ??
+## override SHLIB_LD = $(CXX_COMPILER_TYPE) ## not needed for Linux / Mac OS ??
+##
+## ---------------------  Initial link paths and libraries (PKG_LIBS) --------------
+override TBB_SO = $(TBB_PATH)/libtbb.so
+override PKG_LIBS = $(TBB_SO) -Wl,-rpath,$(TBB_PATH) $(OMP_LIB_FLAGS)
+## BLAS library (dgemv_ in burnin_exact_R_arithmetic_fns.hpp) and Fortran runtime, as required by Writing R Extensions (section 1.2.1)
+override PKG_LIBS += $(BLAS_LIBS) $(FLIBS)
+####override PKG_LIBS = -L$(TBB_PATH) -ltbb -Wl,-rpath,$(TBB_PATH) $(OMP_LIB_FLAGS)
+##
+## Custom user-supplied flags (if supplied) - here its "+=" as NOT over-writing PKG_LIBS or may not compile
+ifneq ($(USER_SUPPLIED_PKG_LIBS),) ## i.e. if user-supplied variable is available
+	override PKG_LIBS+="$(USER_SUPPLIED_PKG_LIBS)"
+endif
+##
+override GCC13_LIBDIR=$(shell $(CXX_COMPILER) -print-file-name=libstdc++.so.6 | xargs dirname)
+override PKG_LIBS += -Wl,-rpath,$(GCC13_LIBDIR)
+##
+##  ---------------------  TBB libs --------------------------------
+## seperate section for this not needed on linux?
+## 
+##  ---------------------  Dummy model libs --------------------------------
+## Find dummy model .so file (.dll NOT needed for Linux / Mac OS)
+override DUMMY_MODEL_SO=$(PKG_INST_PATH)/dummy_stan_model_model.so
+$(info DUMMY_MODEL_SO is: $(DUMMY_MODEL_SO))
+## override PKG_LIBS+=$(DUMMY_MODEL_SO)
+##
+##  ---------------------  SHLIB / linking ----------------------------------------------------------------------------
+## First, create .BayesMVP directory and copy model file in users' home directory:
+## Keep the copied dummy model in a stable user-local package directory.  The
+## previous migration-specific path made the compiled extension depend on the
+## developer's temporary source tree name.
+override COPY_DIR_PATH=$(HOME)/BayesMVP
+$(info COPY_DIR_PATH is: $(COPY_DIR_PATH))
+$(shell mkdir -p $(COPY_DIR_PATH))
+##
+$(shell cp -f $(DUMMY_MODEL_SO) $(COPY_DIR_PATH) 2>/dev/null || true)
+##
+override USER_HOME_DUMMY_MODEL_SO=$(COPY_DIR_PATH)/dummy_stan_model_model.so
+$(info DUMMY_MODEL_SO is: $(USER_HOME_DUMMY_MODEL_SO))
+override PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO)
+##
+#### PKG_LIBS+=-fsanitize=address,undefined ##
+##
+## Link to permanent location:
+override PKG_LIBS+=$(USER_HOME_DUMMY_MODEL_SO) -Wl,-rpath,$(COPY_DIR_PATH) -Wl,-rpath,$(TBB_PATH),--no-as-needed
+##
+##
+
+
+##
+## ---- RcppParallel runtime symbols ---------------------------------------------------------------
+## RcppParallel's compiled package code (RcppParallel.so in its own libs dir) exports
+## RcppParallel::tbbParallelFor. The BayesMVP .so references it and, historically, relied on
+## RcppParallel's DLL already being loaded in the session (which makes R CMD INSTALL's
+## test-load phase, and any vanilla session, fail with "undefined symbol"). Link it
+## explicitly so the package loads cleanly everywhere:
+override RCPP_PARALLEL_LIB_DIR:=$(shell "$(R_HOME)/bin/Rscript" --vanilla -e 'cat(system.file("libs", package = "RcppParallel"))')
+override PKG_LIBS += $(RCPP_PARALLEL_LIB_DIR)/RcppParallel.so -Wl,-rpath,$(RCPP_PARALLEL_LIB_DIR)
+
+# Package-local provider headers and the canonical installed NicoStan runtime.
+override PKG_CPPFLAGS += -I. -I../inst/include
+##
+## ---- NicoSIMD: the one home of every AVX2 / AVX-512 kernel (BayesMVP's C++ includes
+##      <NicoSIMD/math/fast_and_approx_AVX2_fns.hpp> and <NicoSIMD/math/fast_and_approx_AVX512_fns.hpp>);
+##      the include folder of the installed NicoSIMD (also given by LinkingTo: NicoSIMD):
+override NICOSIMD_INCLUDE_PATH:=$(shell "$(R_HOME)/bin/Rscript" --vanilla -e 'cat(system.file("include", package = "NicoSIMD"))')
+override PKG_CPPFLAGS += -I"$(NICOSIMD_INCLUDE_PATH)"

@@ -216,13 +216,20 @@ compute_tail_category_distance_from_latent_mean_per_test <-  function( theta_mai
         ##
         ## ---- log probability of the latent interval (lower, upper] under N(0, 1), stable in both tails:
         ##
-        fn_log_probability_of_standard_normal_interval <-  function(lower, upper) {
+        fn_log_probability_of_standard_normal_interval <-  function( lower,
+                                                                     upper) {
+
               lower_tail <-  (upper <= 0)
-              log_upper_part <-  ifelse(lower_tail, stats::pnorm(upper, log.p = TRUE),
-                                                    stats::pnorm(lower, lower.tail = FALSE, log.p = TRUE))
-              log_lower_part <-  ifelse(lower_tail, stats::pnorm(lower, log.p = TRUE),
-                                                    stats::pnorm(upper, lower.tail = FALSE, log.p = TRUE))
+              ##
+              log_upper_part <-  ifelse( lower_tail,
+                                         stats::pnorm(upper, log.p = TRUE),
+                                         stats::pnorm(lower, lower.tail = FALSE, log.p = TRUE))
+              log_lower_part <-  ifelse( lower_tail,
+                                         stats::pnorm(lower, log.p = TRUE),
+                                         stats::pnorm(upper, lower.tail = FALSE, log.p = TRUE))
+              ##
               return(log_upper_part + log1p(-exp(log_lower_part - log_upper_part)))
+
         }
         ##
         n_corrs <-  n_class * n_tests * (n_tests - 1) / 2
@@ -235,26 +242,39 @@ compute_tail_category_distance_from_latent_mean_per_test <-  function( theta_mai
                     coefficients <-  theta_main[coefficient_index + seq_len(n_coefficients)]
                     coefficient_index <-  coefficient_index + n_coefficients
                     ##
-                    latent_means <-  if (is.null(X) || (n_coefficients == 1)) {
-                          coefficients[1]
+                    if (is.null(X) || (n_coefficients == 1)) {
+                          latent_means <-  coefficients[1]
                     } else {
-                          as.vector(X[[class_index]][[test_index]][, seq_len(n_coefficients), drop = FALSE] %*%
-                                    coefficients)
+                          covariates <-  X[[class_index]][[test_index]][, seq_len(n_coefficients), drop = FALSE]
+                          latent_means <-  as.vector(covariates %*% coefficients)
                     }
+                    ##
                     cutpoints <-  cutpoints_per_class_and_test[[class_index]][[test_index]]
                     lower_cuts <-  c(-Inf, cutpoints)
                     upper_cuts <-  c(cutpoints, Inf)
                     ##
-                    distance_per_person <-  vapply(latent_means, function(latent_mean) {
+                    ## ---- for each person, the mean distance of the tail categories, weighted by their
+                    ##      probabilities (0 when no category is a tail category):
+                    ##
+                    distance_per_person <-  numeric(length(latent_means))
+                    ##
+                    for (person_index in seq_along(latent_means)) {
+
+                          latent_mean <-  latent_means[person_index]
                           distance_to_category <-  pmax(0, lower_cuts - latent_mean, latent_mean - upper_cuts)
                           is_tail_category <-  (distance_to_category > 0)
-                          if (!any(is_tail_category)) return(0)
-                          log_probability <-  fn_log_probability_of_standard_normal_interval(
-                                                    lower_cuts[is_tail_category] - latent_mean,
-                                                    upper_cuts[is_tail_category] - latent_mean)
-                          weights <-  exp(log_probability - max(log_probability))
-                          return(sum(weights * distance_to_category[is_tail_category]) / sum(weights))
-                    }, numeric(1))
+                          ##
+                          if (any(is_tail_category)) {
+                                log_probability <-  fn_log_probability_of_standard_normal_interval(
+                                                          lower = lower_cuts[is_tail_category] - latent_mean,
+                                                          upper = upper_cuts[is_tail_category] - latent_mean)
+                                weights <-  exp(log_probability - max(log_probability))
+                                weighted_distance <-  sum(weights * distance_to_category[is_tail_category])
+                                distance_per_person[person_index] <-  weighted_distance / sum(weights)
+                          }
+
+                    }
+                    ##
                     tail_category_distance_per_test[test_index] <-  tail_category_distance_per_test[test_index] +
                                                                     mean(distance_per_person)
               }
@@ -286,33 +306,56 @@ extract_cutpoints_per_class_and_test_via_bridgestan <-  function( bs_model,
                                                                   n_thr_per_ord_test
 ) {
 
-        cutpoints_per_class_and_test <-  lapply(seq_len(n_class), function(class_index) {
-              lapply(seq_len(n_tests), function(test_index) 0)
-        })
-        if (!any(n_cat_per_test > 2)) return(cutpoints_per_class_and_test)   ## binary tests only
-        constrained_values <-  bs_model$param_constrain(theta_main, include_tp = TRUE, include_gq = FALSE)
-        parameter_names <-  bs_model$param_names(include_tp = TRUE, include_gq = FALSE)
-        is_C_vec <-  (sub("(\\.|\\[).*$", "", parameter_names) == "C_vec")
+        ##
+        ## ---- every test starts with the single cut 0 of a binary test (the ordinal tests are filled in below):
+        ##
+        cutpoints_per_class_and_test <-  list()
+        for (class_index in seq_len(n_class)) {
+              cutpoints_per_class_and_test[[class_index]] <-  list()
+              for (test_index in seq_len(n_tests)) {
+                    cutpoints_per_class_and_test[[class_index]][[test_index]] <-  0
+              }
+        }
+        ##
+        if (!any(n_cat_per_test > 2)) {   ## binary tests only
+              return(cutpoints_per_class_and_test)
+        }
+        ##
+        constrained_values <-  bs_model$param_constrain( theta_main,
+                                                         include_tp = TRUE,
+                                                         include_gq = FALSE)
+        parameter_names <-  bs_model$param_names( include_tp = TRUE,
+                                                  include_gq = FALSE)
+        ##
+        parameter_names_without_indices <-  sub("(\\.|\\[).*$", "", parameter_names)
+        is_C_vec <-  (parameter_names_without_indices == "C_vec")
         if (!any(is_C_vec)) {
               stop("extract_cutpoints_per_class_and_test_via_bridgestan: no transformed parameter C_vec.")
         }
         ##
-        ## ---- C_vec[c, j] (j = position in the concatenation of the ordinal slots' cutpoints):
+        ## ---- C_vec[c, j] (j = position in the concatenation of the ordinal slots' cutpoints); C_vec_indices has
+        ##      one row (c, j) per entry of C_vec:
         ##
-        indices <-  do.call(rbind, lapply(regmatches(parameter_names[is_C_vec],
-                                                    gregexpr("[0-9]+", parameter_names[is_C_vec])), as.integer))
+        C_vec_names <-  parameter_names[is_C_vec]
         C_vec_values <-  constrained_values[is_C_vec]
+        ##
+        numbers_in_each_C_vec_name <-  regmatches(C_vec_names, gregexpr("[0-9]+", C_vec_names))
+        C_vec_indices <-  do.call(rbind, lapply(numbers_in_each_C_vec_name, as.integer))
+        ##
         end_of_slot <-  cumsum(n_thr_per_ord_test)
         start_of_slot <-  c(1, utils::head(end_of_slot, -1) + 1)
         ordinal_tests <-  which(n_cat_per_test > 2)
+        ##
         for (class_index in seq_len(n_class)) {
-              cutpoints_of_class <-  C_vec_values[indices[, 1] == class_index][order(indices[indices[, 1] ==
-                                                                                             class_index, 2])]
+              is_entry_of_class <-  (C_vec_indices[, 1] == class_index)
+              cutpoints_of_class <-  C_vec_values[is_entry_of_class][order(C_vec_indices[is_entry_of_class, 2])]
+              ##
               for (ordinal_slot in seq_along(ordinal_tests)) {
                     cutpoints_per_class_and_test[[class_index]][[ordinal_tests[ordinal_slot]]] <-
                           cutpoints_of_class[start_of_slot[ordinal_slot]:end_of_slot[ordinal_slot]]
               }
         }
+        ##
         return(cutpoints_per_class_and_test)
 
 }
@@ -335,10 +378,14 @@ compute_test_order_with_most_nearly_deterministic_test_last <-  function( Omega_
         most_nearly_deterministic_test <-  which.max(tail_extremeness_per_test)
         other_tests <-  setdiff(seq_len(n_tests), most_nearly_deterministic_test)
         ##
-        Omega_hat_list_other_tests <-  lapply(Omega_hat_list,
-                                              function(Omega_hat) {
-                                                    Omega_hat[other_tests, other_tests, drop = FALSE]
-                                              })
+        ## ---- the correlation matrix of each class without the most nearly deterministic test:
+        ##
+        Omega_hat_list_other_tests <-  list()
+        for (class_index in seq_along(Omega_hat_list)) {
+              Omega_hat <-  Omega_hat_list[[class_index]]
+              Omega_hat_list_other_tests[[class_index]] <-  Omega_hat[other_tests, other_tests, drop = FALSE]
+        }
+        ##
         order_of_other_tests <-  other_tests[compute_optimal_test_order(Omega_hat_list_other_tests)]
         ##
         return(c(order_of_other_tests, most_nearly_deterministic_test))
@@ -362,34 +409,40 @@ compute_test_order_with_most_nearly_deterministic_test_last <-  function( Omega_
 #' @param bs_model BridgeStan model object
 #' @return list(n_class, n_tests, n_found) - all NULL/0 if no "Omega" parameter exists
 #' @export
-infer_Omega_dims_from_bs_model <- function(bs_model) {
+infer_Omega_dims_from_bs_model <-  function(bs_model) {
 
-        pnames <- tryCatch(bs_model$param_names(include_tp = TRUE, include_gq = TRUE),
-                           error = function(e) character(0))
+        parameter_names <-  tryCatch( bs_model$param_names(include_tp = TRUE, include_gq = TRUE),
+                                      error = function(e) character(0))
         ##
-        ## exact name "Omega" only - a bare grepl("Omega") also matched Omega_unconstrained_vec, L_Omega, Omega_orig, ...
-        omega_names <- pnames[sub("(\\.|\\[).*$", "", pnames) == "Omega"]
+        ## ---- the entries of the parameter named exactly "Omega" (grepl("Omega") would also match
+        ##      Omega_unconstrained_vec, L_Omega, Omega_orig, ...):
+        ##
+        parameter_names_without_indices <-  sub("(\\.|\\[).*$", "", parameter_names)
+        omega_names <-  parameter_names[parameter_names_without_indices == "Omega"]
         ##
         if (length(omega_names) == 0) {
-          return(list(n_class = NULL, n_tests = NULL, n_found = 0L))
+              return(list( n_class = NULL,
+                           n_tests = NULL,
+                           n_found = length(omega_names)))
         }
         ##
-        n_class <- 1L
-        n_tests <- 1L
+        n_class <-  1
+        n_tests <-  1
         ##
-        for (nm in omega_names) {
-              nums <- as.integer(regmatches(nm, gregexpr("[0-9]+", nm))[[1]])
-              if (length(nums) == 3) {
-                n_class <- max(n_class, nums[1])
-                n_tests <- max(n_tests, nums[2], nums[3])
-              } else if (length(nums) == 2) {
-                n_tests <- max(n_tests, nums[1], nums[2])
+        for (omega_name in omega_names) {
+              indices_in_name <-  as.integer(regmatches(omega_name, gregexpr("[0-9]+", omega_name))[[1]])
+              ##
+              if (length(indices_in_name) == 3) {          ## Omega[c, i, j]
+                    n_class <-  max(n_class, indices_in_name[1])
+                    n_tests <-  max(n_tests, indices_in_name[2], indices_in_name[3])
+              } else if (length(indices_in_name) == 2) {   ## Omega[i, j]
+                    n_tests <-  max(n_tests, indices_in_name[1], indices_in_name[2])
               }
         }
         ##
-        list(n_class = as.integer(n_class),
-             n_tests = as.integer(n_tests),
-             n_found = length(omega_names))
+        return(list( n_class = as.integer(n_class),
+                     n_tests = as.integer(n_tests),
+                     n_found = length(omega_names)))
 
 }
 
@@ -410,14 +463,36 @@ infer_Omega_dims_from_bs_model <- function(bs_model) {
 #' @param Stan_data_list the user-supplied Stan data list
 #' @return TRUE if reordering may proceed, FALSE if it must be disabled
 #' @export
-check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
+check_reorder_cols_MVP_for_Stan <-  function(Stan_data_list) {
 
         ##
-        ## ---- Caveat banner - printed whenever reordering is REQUESTED for an
-        ## external Stan model, whether or not it ends up being used:
+        ## ---- A Stan model whose data has the field 'latent_test_order' (a permutation of 1:n_tests; e.g. the
+        ##      four-class LC-MVOP model) sets the conditioning order of the tests' latent variables itself:
+        ##      reordering changes latent_test_order ONLY, and the data, the per-test entries and the outputs all
+        ##      stay in the original test order. So neither the caveats nor the refusal below apply (the sampler
+        ##      also checks that the model declares latent_test_order):
+        ##
+        if (!is.null(Stan_data_list$latent_test_order)) {
+              ##
+              latent_test_order <-  as.integer(Stan_data_list$latent_test_order)
+              ##
+              if (!identical(sort(latent_test_order), seq_along(latent_test_order))) {
+                    stop("reorder_cols_MVP: 'latent_test_order' in the Stan data must be a permutation of ",
+                         "1:n_tests.")
+              }
+              ##
+              message("reorder_cols_MVP (Stan): the data has 'latent_test_order', so the test order chosen ",
+                      "after the pre-burnin is set there; nothing else in the Stan data is permuted.")
+              ##
+              return(TRUE)
+        }
+        ##
+        ## ---- Caveat banner - printed whenever reordering is REQUESTED for an external Stan model, whether or
+        ##      not it ends up being used:
         ##
         big_warning_banner(
-              title = "this only has been tested to work and/or be beneficial for multivariate probit-based models",
+              title = paste0("this only has been tested to work and/or be beneficial for ",
+                             "multivariate probit-based models"),
               body = c("'reorder_cols_MVP = TRUE' with Model_type = 'Stan' reorders the columns of the",
                        "outcome matrix 'y' in the Stan data (Dissmann pair-first ordering of the",
                        "estimated correlation matrix), then re-initialises and fits the model on the",
@@ -434,7 +509,7 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
                        "Any user-supplied test-indexed INITIAL VALUES are likewise left un-permuted."),
               warn = FALSE)
         ##
-        y <- Stan_data_list$y
+        y <-  Stan_data_list$y
         ##
         if (is.null(y)) {
               big_warning_banner(
@@ -450,14 +525,19 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
               return(FALSE)
         }
         ##
-        if (!(is.matrix(y) || (is.array(y) && length(dim(y)) == 2L)) || (ncol(y) < 2L)) {
+        ## ---- y must be an N x n_tests matrix with at least 2 columns:
+        ##
+        y_is_a_matrix <-  is.matrix(y) || (is.array(y) && length(dim(y)) == 2)
+        ##
+        if (!y_is_a_matrix || (ncol(y) < 2)) {
+              y_dims <-  if (is.null(dim(y))) length(y) else dim(y)
               big_warning_banner(
                     title = "y must be supplied",
                     body = c("'reorder_cols_MVP = TRUE' was requested with Model_type = 'Stan', and a variable",
                              "called 'y' WAS found in the Stan data - but it is not an N x n_tests matrix",
                              "with at least 2 columns.",
                              paste0("    found: class = ", paste(class(y), collapse = "/"),
-                                    ", dim = ", paste(if (is.null(dim(y))) length(y) else dim(y), collapse = " x ")),
+                                    ", dim = ", paste(y_dims, collapse = " x ")),
                              "",
                              "Column reordering needs the outcome matrix with one COLUMN per test/outcome.",
                              "",
@@ -466,53 +546,53 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
               return(FALSE)
         }
         ##
-        ## ---- REFUSAL: any OTHER entry in the Stan data with a dimension of n_tests may
-        ## be test-indexed - per-test priors, covariates, flags, correlation bounds, the
-        ## induced-Dirichlet alpha, and so on. BayesMVP permutes 'y' and NOTHING else,
-        ## because for an external model it cannot know which of the user's data objects
-        ## are indexed by test nor along which margin. If any such entry exists, reordering
-        ## 'y' alone would silently DESYNC the responses from their own metadata - test j's
-        ## data scored against test k's priors - which is far worse than not reordering at
-        ## all. So this is refused outright rather than warned about.
+        ## ---- REFUSAL: any OTHER entry in the Stan data with a dimension of n_tests may be test-indexed -
+        ##      per-test priors, covariates, flags, correlation bounds, the induced-Dirichlet alpha, and so on.
+        ##      BayesMVP permutes 'y' and NOTHING else, because for an external model it cannot know which of
+        ##      the user's data objects are indexed by test nor along which margin. If any such entry exists,
+        ##      reordering 'y' alone would silently DESYNC the responses from their own metadata - test j's data
+        ##      scored against test k's priors - which is far worse than not reordering at all. So this is
+        ##      refused outright rather than warned about.
         ##
-        ## The scan is deliberately conservative: it flags anything merely SHAPED like
-        ## n_tests (so e.g. a matrix whose n_class happens to equal n_tests is flagged
-        ## too). Over-flagging costs a reordering; under-flagging corrupts a fit.
+        ##      The scan is deliberately conservative: it flags anything merely SHAPED like n_tests (so e.g. a
+        ##      matrix whose n_class happens to equal n_tests is flagged too). Over-flagging costs a reordering;
+        ##      under-flagging corrupts a fit.
         ##
-        n_tests <- ncol(y)
+        n_tests <-  ncol(y)
         ##
-        candidate_names <- character(0)
-        candidate_descriptions <- character(0)
+        candidate_names <-  character(0)
+        candidate_descriptions <-  character(0)
         ##
         for (entry_name in setdiff(x = names(x = Stan_data_list), y = "y")) {
 
-              entry <- Stan_data_list[[entry_name]]
+              entry <-  Stan_data_list[[entry_name]]
               ##
-              entry_dim <- if (is.null(x = dim(x = entry))) length(x = entry) else dim(x = entry)
+              entry_dim <-  if (is.null(x = dim(x = entry))) length(x = entry) else dim(x = entry)
               ##
               if (any(entry_dim == n_tests)) {
-                    candidate_names <- c(candidate_names, entry_name)
-                    candidate_descriptions <- c( candidate_descriptions,
-                                                 paste0("    ", entry_name, "  [",
-                                                        paste(entry_dim, collapse = " x "), "]"))
+                    candidate_names <-  c(candidate_names, entry_name)
+                    candidate_descriptions <-  c( candidate_descriptions,
+                                                  paste0("    ", entry_name, "  [",
+                                                         paste(entry_dim, collapse = " x "), "]"))
               }
 
         }
         ##
-        if (length(x = candidate_names) > 0L) {
+        if (length(x = candidate_names) > 0) {
 
-              shown_descriptions <- utils::head(x = candidate_descriptions, n = 12L)
+              shown_descriptions <-  utils::head(x = candidate_descriptions, n = 12)
               ##
-              if (length(x = candidate_descriptions) > 12L) {
-                shown_descriptions <- c( shown_descriptions,
-                                         paste0("    ... and ",
-                                                length(x = candidate_descriptions) - 12L, " more"))
+              if (length(x = candidate_descriptions) > 12) {
+                    n_descriptions_not_shown <-  length(x = candidate_descriptions) -
+                                                 length(x = shown_descriptions)
+                    shown_descriptions <-  c( shown_descriptions,
+                                              paste0("    ... and ", n_descriptions_not_shown, " more"))
               }
               ##
               big_warning_banner(
                     title = "reorder_cols_MVP: other test-indexed data would be left behind",
-                    body = c( paste0("Reordering permutes the columns of 'y' and NOTHING ELSE. The Stan data has ",
-                                     length(x = candidate_names), " other"),
+                    body = c( paste0("Reordering permutes the columns of 'y' and NOTHING ELSE. ",
+                                     "The Stan data has ", length(x = candidate_names), " other"),
                               paste0("entries shaped like n_tests = ", n_tests,
                                      ", any of which may be indexed by test:"),
                               "",
@@ -533,7 +613,7 @@ check_reorder_cols_MVP_for_Stan <- function(Stan_data_list) {
 
         }
         ##
-        TRUE
+        return(TRUE)
 
 }
 
@@ -560,10 +640,10 @@ extract_Omega_via_bridgestan <- function(bs_model,
         
         # Find the Omega entries by name
         # Typical naming: "Omega[c,i,j]" for 3D array or "Omega.c.i.j"
-        # Match the variable named EXACTLY "Omega". A bare grepl("Omega") also matches
-        # Omega_unconstrained_vec, L_Omega, Omega_orig and L_Omega_orig; the last of these
-        # (a Cholesky factor, not a correlation matrix) overwrote the others, so the test
-        # order was computed from Cholesky entries instead of correlations.
+        # Match the variable named exactly "Omega": grepl("Omega") would also match
+        # Omega_unconstrained_vec, L_Omega, Omega_orig and L_Omega_orig (L_Omega_orig is a
+        # Cholesky factor, not a correlation matrix, so the test order would be computed from
+        # Cholesky entries instead of correlations).
         omega_mask <- sub("(\\.|\\[).*$", "", pnames) == "Omega"
 
         if (sum(omega_mask) == 0) {
@@ -619,70 +699,101 @@ extract_Omega_via_bridgestan <- function(bs_model,
 #' @param vect_type the vectorisation string the C++ reads (Model_args_strings[1])
 #' @return N x n_tests integer matrix; entry [n, t] is the 1-based position of (n, t) in the nuisance vector
 #' @keywords internal
-fn_nuisance_chunk_layout_positions <- function( N,
-                                                n_tests,
-                                                n_chunks,
-                                                vect_type) {
+fn_nuisance_chunk_layout_positions <-  function( N,
+                                                 n_tests,
+                                                 n_chunks,
+                                                 vect_type
+) {
 
+        ##
         ## ---- chunk sizes, exactly as calculate_chunk_sizes() in src/general_functions/structures.hpp:
         ##
-        vec_size <- switch(as.character(vect_type), "AVX512" = 8L, "AVX2" = 4L, "AVX" = 2L, 1L)
-        N        <- as.integer(N)
-        n_tests  <- as.integer(n_tests)
-        effective_n_chunks <- max(as.integer(n_chunks), 1L)
+        vec_size <-  switch( as.character(vect_type),
+                             "AVX512" = 8,
+                             "AVX2"   = 4,
+                             "AVX"    = 2,
+                             1)
+        N <-  as.integer(N)
+        n_tests <-  as.integer(n_tests)
+        effective_n_chunks <-  max(as.integer(n_chunks), 1)
         ##
-        normal_chunk_size <- vec_size * (N %/% (vec_size * effective_n_chunks))
-        if (normal_chunk_size == 0L) normal_chunk_size <- (N %/% vec_size) * vec_size
+        normal_chunk_size <-  vec_size * ((N %/% vec_size) %/% effective_n_chunks)
+        if ((normal_chunk_size == 0) && (N >= vec_size)) {
+              normal_chunk_size <-  vec_size
+        }
         ##
-        if (normal_chunk_size == 0L) {   ## N < vec_size: one scalar chunk
-          chunk_row_starts <- 0L
-          chunk_sizes      <- N
+        if (normal_chunk_size == 0) {   ## N < vec_size: one scalar chunk
+              chunk_row_starts <-  0
+              chunk_sizes <-  N
         } else {
-          n_full_chunks    <- N %/% normal_chunk_size
-          last_chunk_size  <- N - n_full_chunks * normal_chunk_size
-          chunk_row_starts <- (seq_len(n_full_chunks) - 1L) * normal_chunk_size
-          chunk_sizes      <- rep(normal_chunk_size, n_full_chunks)
-          if (last_chunk_size > 0L) {
-            chunk_row_starts <- c(chunk_row_starts, n_full_chunks * normal_chunk_size)
-            chunk_sizes      <- c(chunk_sizes, last_chunk_size)
-          }
+              n_full_chunks <-  N %/% normal_chunk_size
+              last_chunk_size <-  N - n_full_chunks * normal_chunk_size
+              chunk_row_starts <-  (seq_len(n_full_chunks) - 1) * normal_chunk_size
+              chunk_sizes <-  rep(normal_chunk_size, n_full_chunks)
+              ##
+              if (last_chunk_size > 0) {
+                    chunk_row_starts <-  c(chunk_row_starts, n_full_chunks * normal_chunk_size)
+                    chunk_sizes <-  c(chunk_sizes, last_chunk_size)
+              }
         }
         ##
         ## ---- chunk c holds rows [row_start, row_start + chunk_size) as a column-major (chunk_size x n_tests)
         ##      block starting at position row_start * n_tests of the nuisance vector:
         ##
-        position_of_observation_and_test <- matrix(NA_integer_, nrow = N, ncol = n_tests)
+        position_of_observation_and_test <-  matrix(NA, nrow = N, ncol = n_tests)
+        ##
         for (chunk_index in seq_along(chunk_row_starts)) {
-              chunk_row_start <- chunk_row_starts[chunk_index]
-              chunk_size      <- chunk_sizes[chunk_index]
-              rows_in_chunk   <- chunk_row_start + seq_len(chunk_size)
+              chunk_row_start <-  chunk_row_starts[chunk_index]
+              chunk_size <-  chunk_sizes[chunk_index]
+              rows_in_chunk <-  chunk_row_start + seq_len(chunk_size)
+              ##
               for (test_index in seq_len(n_tests)) {
-                position_of_observation_and_test[rows_in_chunk, test_index] <- chunk_row_start * n_tests + (test_index - 1L) * chunk_size + seq_len(chunk_size)
+                    position_before_chunk_of_test <-  chunk_row_start * n_tests + (test_index - 1) * chunk_size
+                    positions_of_test_in_chunk <-  position_before_chunk_of_test + seq_len(chunk_size)
+                    position_of_observation_and_test[rows_in_chunk, test_index] <-  positions_of_test_in_chunk
               }
         }
-        stopifnot(!anyNA(position_of_observation_and_test), !anyDuplicated(as.vector(position_of_observation_and_test)))
-        position_of_observation_and_test
+        ##
+        ## ---- every position of the nuisance vector must appear exactly once:
+        ##
+        stopifnot(!anyNA(position_of_observation_and_test),
+                  !anyDuplicated(as.vector(position_of_observation_and_test)))
+        ##
+        ## ---- the positions are returned as an integer matrix:
+        ##
+        storage.mode(position_of_observation_and_test) <-  "integer"
+        ##
+        return(position_of_observation_and_test)
 
 }
 
 
 #' Permutation taking a nuisance vector from one chunk layout to another
 #'
-#' Returns remap_index such that nuisance_vec_in_new_layout <- nuisance_vec_in_old_layout[remap_index]; apply it to
-#' every nuisance-indexed quantity when the number of chunks changes (e.g. between burn-in and sampling).
+#' Returns remap_index such that nuisance_vec_in_new_layout <- nuisance_vec_in_old_layout[remap_index]; apply it
+#' to every nuisance-indexed quantity when the number of chunks changes (e.g. between burn-in and sampling).
 #' Identity when the two layouts agree.
 #' @keywords internal
-fn_nuisance_chunk_remap_index <- function( N,
-                                           n_tests,
-                                           n_chunks_from,
-                                           n_chunks_to,
-                                           vect_type) {
+fn_nuisance_chunk_remap_index <-  function( N,
+                                            n_tests,
+                                            n_chunks_from,
+                                            n_chunks_to,
+                                            vect_type
+) {
 
-        positions_in_old_layout <- fn_nuisance_chunk_layout_positions(N = N, n_tests = n_tests, n_chunks = n_chunks_from, vect_type = vect_type)
-        positions_in_new_layout <- fn_nuisance_chunk_layout_positions(N = N, n_tests = n_tests, n_chunks = n_chunks_to,   vect_type = vect_type)
-        remap_index <- integer(N * n_tests)
-        remap_index[as.vector(positions_in_new_layout)] <- as.vector(positions_in_old_layout)
-        remap_index
+        positions_in_old_layout <-  fn_nuisance_chunk_layout_positions( N = N,
+                                                                        n_tests = n_tests,
+                                                                        n_chunks = n_chunks_from,
+                                                                        vect_type = vect_type)
+        positions_in_new_layout <-  fn_nuisance_chunk_layout_positions( N = N,
+                                                                        n_tests = n_tests,
+                                                                        n_chunks = n_chunks_to,
+                                                                        vect_type = vect_type)
+        ##
+        remap_index <-  integer(N * n_tests)
+        remap_index[as.vector(positions_in_new_layout)] <-  as.vector(positions_in_old_layout)
+        ##
+        return(remap_index)
 
 }
 
@@ -700,7 +811,8 @@ fn_nuisance_chunk_remap_index <- function( N,
 #' @param test_perm fitted slot j holds original test test_perm[j].
 #' @keywords internal
 fn_permute_test_pair_matrix_reading_its_lower_triangle <-  function( test_pair_matrix_in_original_order,
-                                                                     test_perm) {
+                                                                     test_perm
+) {
 
         test_pair_matrix_symmetric_from_its_lower_triangle <-  test_pair_matrix_in_original_order
         ##
@@ -842,7 +954,9 @@ validate_y_tests_ordinal <- function(y) {
         
         for (t in seq_len(n_tests)) {
           
-              vals <- sort(unique(y[, t]))
+              # vals <- sort(unique(y[, t]))
+              ## (the observed results only: y = -1 is a missing result, handled in the C++ by the GHK method)
+              vals <- sort(unique(y[y[, t] != -1, t]))
               
               if (length(vals) == 2 && all(vals == c(0, 1))) {
                 is_binary[t] <- TRUE
@@ -855,7 +969,8 @@ validate_y_tests_ordinal <- function(y) {
               }
               
               if (0 %in% vals) {
-                stop(paste0("Column ", t, " contains 0. Ordinal outcomes must be coded 1, 2, ..., K (not 0-indexed)."))
+                stop(paste0("Column ", t, " contains 0. ",
+                            "Ordinal outcomes must be coded 1, 2, ..., K (not 0-indexed)."))
               }
               
               K <- max(vals)
@@ -1024,6 +1139,7 @@ get_dims_for_internal_models <- function( y,
           
               ##
               ## ---- n_cat_per_ord_test MUST be supplied by the user. It CANNOT be inferred:
+##
               ##      the observed max UNDERCOUNTS whenever the top category is unobserved, and
               ##      n_params_main depends on it -- so an inferred value silently produces a
               ##      parameter vector that is SHORT and mismatches the Stan skeleton.
@@ -1077,7 +1193,10 @@ process_covariates_X <- function(Model_type,
                                  X, 
                                  N,
                                  n_tests,
-                                 n_class
+                                 n_class,
+                                 ## (optional: the covariates of each class and test, as Stan's n_covs_per_outcome;
+                                 ##  then each X[[c]][[t]] may be padded, its first n columns being used)
+                                 n_covariates_per_outcome_mat_given = NULL
 ) {
         
         if (is.null(X)) {
@@ -1138,6 +1257,43 @@ process_covariates_X <- function(Model_type,
                       }
                       
                       n_covariates_per_outcome_mat[c, t] <- ncol(X[[c]][[t]])
+                    }
+                
+              }
+              ##
+              ## ---- Padded X (as in the Stan versions, whose arrays of matrices must all have n_covariates_max
+              ##      columns): with the covariates of each class and test given, each X[[c]][[t]] is cut to its
+              ##      first n columns; without them, an X with a column of zeros stops here, since that column
+              ##      would add a coefficient that only its prior informs (e.g. padding read as a covariate).
+              ##
+              if (!is.null(n_covariates_per_outcome_mat_given)) {
+                
+                    n_covariates_per_outcome_mat_given <- matrix(as.integer(n_covariates_per_outcome_mat_given),
+                                                                 nrow = n_class, ncol = n_tests)
+                    for (c in 1:n_class) {
+                      for (t in 1:n_tests) {
+                        n_covariates_c_t <- n_covariates_per_outcome_mat_given[c, t]
+                        if ((n_covariates_c_t < 1) || (n_covariates_c_t > ncol(X[[c]][[t]]))) {
+                          stop(paste0("n_covariates_per_outcome_mat[", c, ", ", t, "] = ", n_covariates_c_t,
+                                      " must be between 1 and ncol(X[[", c, "]][[", t, "]]) = ",
+                                      ncol(X[[c]][[t]])))
+                        }
+                        X[[c]][[t]] <- X[[c]][[t]][, 1:n_covariates_c_t, drop = FALSE]
+                      }
+                    }
+                    n_covariates_per_outcome_mat <- n_covariates_per_outcome_mat_given
+                
+              } else {
+                
+                    for (c in 1:n_class) {
+                      for (t in 1:n_tests) {
+                        columns_of_zeros <- which(colSums(X[[c]][[t]] != 0) == 0)
+                        if (length(columns_of_zeros) > 0) {
+                          stop(paste0("X[[", c, "]][[", t, "]] has column(s) of zeros (",
+                                      paste(columns_of_zeros, collapse = ", "), "): if X is padded, give the ",
+                                      "covariates of each class and test as n_covariates_per_outcome_mat"))
+                        }
+                      }
                     }
                 
               }

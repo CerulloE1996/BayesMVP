@@ -40,6 +40,7 @@
 #include <unsupported/Eigen/SpecialFunctions>
 
 #include "PartialLog_nuisance_chunk_relayout.hpp"
+#include "MVP_and_MVOP_missing_results_GHK_fns.hpp"   //// missing test results (y = -1) by the GHK method
 
 
 
@@ -49,7 +50,8 @@
 
 
 
-//// MVOP_lp_grad_PartialLog_MD_AD_fns_T.hpp — replaces the process_chunk + _process_serial in MVOP_lp_grad_PartialLog_MD_AD_fns.hpp
+//// MVOP_lp_grad_PartialLog_MD_AD_fns_T.hpp - replaces the process_chunk + _process_serial in
+//// MVOP_lp_grad_PartialLog_MD_AD_fns.hpp
 ////
 //// Keep in the file: fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process (the dispatcher)
 //// and the InPlace wrappers. They call the non-template ..._Inplace_process_serial at the bottom.
@@ -77,6 +79,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
                                                                     Eigen::Matrix<double, -1, -1> &prev_grad_mat,
                                                                     const Model_fn_args_struct &Model_args_as_cpp_struct
 ) {
+
         typedef Eigen::Matrix<double, -1, -1> M; 
         typedef Eigen::Matrix<double, -1, 1> V;
         const double sqrt_2_pi_recip = 1.0 / std::sqrt(2.0 * M_PI);
@@ -112,7 +115,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
         M u_grad_array_CM_chunk = y_chunk, u_grad_array_CM_chunk_block = y_chunk;
         V u_unc_vec_chunk = V::Zero(chunk_size * n_tests), u_vec_chunk = u_unc_vec_chunk, du_wrt_duu_chunk = u_unc_vec_chunk, d_J_wrt_duu_chunk = u_unc_vec_chunk;
         M lp_array = M::Zero(chunk_size, n_class);
-        V log_sum_result = V::Constant(chunk_size, -700.0), container_max_logs = log_sum_result;
+        V log_sum_result = V::Constant(chunk_size, -INFINITY), container_max_logs = log_sum_result;
         V rowwise_sum = V::Zero(chunk_size), rowwise_prod = rowwise_sum, log_lik_chunk = rowwise_sum, prob_n = rowwise_sum, prob_n_recip = rowwise_sum, log_prob_n_recip = rowwise_sum;
         V log_prev_per_obs_given_c = V::Zero(chunk_size), prev_per_obs_given_c = log_prev_per_obs_given_c;
         std::vector<std::vector<char>> row_is_problem(n_class, std::vector<char>(chunk_size, 0));
@@ -123,6 +126,17 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
         fn_MVP_compute_nuisance_T<vec>(u_vec_chunk, u_unc_vec_chunk, k);
         log_jac_u += fn_MVP_compute_nuisance_log_jac_u_T<vec>(u_vec_chunk, u_unc_vec_chunk, d_J_wrt_duu_chunk, k);
         u_array = u_vec_chunk.reshaped(chunk_size, n_tests);
+        //// ---- missing test results (y = -1), by the GHK method (MVP_and_MVOP_missing_results_GHK_fns.hpp),
+        ////      only when the chunk has one: data without missing results run the code below unchanged.
+        const bool chunk_has_missing_results = fn_MVP_rows_of_y_have_a_missing_result(
+                y_ref, row_start, chunk_size);
+        Eigen::Matrix<double, -1, -1> is_missing_result, Z_untruncated;   //// empty unless the chunk has one
+        if (chunk_has_missing_results) {
+          fn_MVP_missing_result_indicator_and_recode_missing_results_to_y_equals_1(
+                y_chunk, is_missing_result);
+          fn_MVP_compute_untruncated_GHK_Z_of_missing_results_T<vec>(
+                Z_untruncated, u_array, is_missing_result, k);
+        }
         y_sign.array() = 2.0 * y_chunk.array() - 1.0;
         y_m_y_sign_x_u.array() = y_chunk.array() - (y_sign.array() * u_array.array());
 
@@ -134,18 +148,51 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
             const int t_ord = ord_idx_of_test(t);
             const double L_tt_inv = Lr[c](t, t);
             V mu(chunk_size);
-            if (n_covariates_max > 1) mu = X[c][t].block(row_start, 0, chunk_size, ncov(c, t)).cast<double>() * beta[c].col(t).head(ncov(c, t)) + prod_container_or_inc_array;
+            if (n_covariates_max > 1) mu = X[c][t].block(row_start,
+                0,
+                chunk_size,
+                ncov(c, t)).cast<double>() * beta[c].col(t).head(ncov(c, t)) + prod_container_or_inc_array;
             else                      mu.array() = beta[c](0, t) + prod_container_or_inc_array.array();
             std::vector<int> over_index, under_index, ord_problem_index;
             if (t_ord < 0) {
               Bound_Z[c].col(t).array() = -L_tt_inv * mu.array();
+              if (chunk_has_missing_results) {
+                //// the loop below, with a missing result never a tail entry (its prob is exactly 1):
+                for (int n = 0; n < chunk_size; ++n) {
+                  if (is_missing_result(n, t) > 0.5) continue;
+                  const double BZ = Bound_Z[c](n, t), yn = y_chunk(n, t);
+                  if ((BZ > overflow_threshold) && (yn == 1.0)) {
+                    over_index.push_back(n);  row_is_problem[c][n] = 1;
+                  } else if ((BZ < underflow_threshold) && (yn == 0.0)) {
+                    under_index.push_back(n); row_is_problem[c][n] = 1;
+                  }
+                }
+              } else {
               for (int n = 0; n < chunk_size; ++n) {
                 const double BZ = Bound_Z[c](n, t), yn = y_chunk(n, t);
                 if      ((BZ > overflow_threshold)  && (yn == 1.0)) { over_index.push_back(n);  row_is_problem[c][n] = 1; }
                 else if ((BZ < underflow_threshold) && (yn == 0.0)) { under_index.push_back(n); row_is_problem[c][n] = 1; }
               }
+              }
             } else {
               const int K_t = n_cat_per_ord_test(t_ord);
+              if (chunk_has_missing_results) {
+                //// the loop below, with both bounds of a missing result infinite (the untruncated draw), so that
+                //// it is never a tail entry:
+                for (int n = 0; n < chunk_size; ++n) {
+                  if (is_missing_result(n, t) > 0.5) {
+                    Bound_Z[c](n, t) = -Inf;  Upper_Bound_Z[c](n, t) = Inf;
+                    continue;
+                  }
+                  const int y_n = static_cast<int>(y_chunk(n, t));
+                  const double lb = (y_n == 1)   ? -Inf : (C[c](y_n - 2, t_ord) - mu(n)) * L_tt_inv;
+                  const double ub = (y_n == K_t) ?  Inf : (C[c](y_n - 1, t_ord) - mu(n)) * L_tt_inv;
+                  Bound_Z[c](n, t) = lb; Upper_Bound_Z[c](n, t) = ub;
+                  if ((lb > overflow_threshold) || (ub < underflow_threshold)) {
+                    ord_problem_index.push_back(n); row_is_problem[c][n] = 1;
+                  }
+                }
+              } else {
               for (int n = 0; n < chunk_size; ++n) {
                 const int y_n = static_cast<int>(y_chunk(n, t));
                 const double lb = (y_n == 1)   ? -Inf : (C[c](y_n - 2, t_ord) - mu(n)) * L_tt_inv;
@@ -153,22 +200,76 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
                 Bound_Z[c](n, t) = lb; Upper_Bound_Z[c](n, t) = ub;
                 if ((lb > overflow_threshold) || (ub < underflow_threshold)) { ord_problem_index.push_back(n); row_is_problem[c][n] = 1; }
               }
+              }
             }
             //// standard-scale pass, all rows
-            if (t_ord < 0) fn_MVP_compute_lp_GHK_cols_T<vec>(t, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], prob[c], y1_log_prob[c], Bound_Z[c], y_chunk, u_array, k);
-            else           fn_MVOP_compute_lp_GHK_cols_T<vec>(t, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], prob[c], y1_log_prob[c], Bound_Z[c], y_chunk, u_array, Upper_Bound_Z[c], false, k);
+            if (t_ord < 0) fn_MVP_compute_lp_GHK_cols_T<vec>(t,
+                Bound_U_Phi_Bound_Z[c],
+                Phi_Z[c],
+                Z_std_norm[c],
+                prob[c],
+                y1_log_prob[c],
+                Bound_Z[c],
+                y_chunk,
+                u_array,
+                k);
+            else           fn_MVOP_compute_lp_GHK_cols_T<vec>(t,
+                                                              Bound_U_Phi_Bound_Z[c],
+                                                              Phi_Z[c],
+                                                              Z_std_norm[c],
+                                                              prob[c],
+                                                              y1_log_prob[c],
+                                                              Bound_Z[c],
+                                                              y_chunk,
+                                                              u_array,
+                                                              Upper_Bound_Z[c],
+                                                              false,
+                                                              k);
+            if (chunk_has_missing_results) {
+              fn_MVP_set_GHK_col_of_missing_results_to_the_untruncated_draw(
+                    t, is_missing_result, u_array, Z_untruncated,
+                    Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], prob[c], y1_log_prob[c]);
+            }
             //// log-scale fix-ups of the problem entries
             if (t_ord < 0) {
               if (!under_index.empty())
-                fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T<vec>(t, under_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c], prob[c], y1_log_prob[c],
+                fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T<vec>(t,
+                                                                      under_index,
+                                                                      Bound_U_Phi_Bound_Z[c],
+                                                                      Phi_Z[c],
+                                                                      Z_std_norm[c],
+                                                                      log_Z_std_norm[c],
+                                                                      prob[c],
+                                                                      y1_log_prob[c],
+                                                                      
                                                                       log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
                                                                       k);   //// exact tails when Phi_type = "Phi"
               if (!over_index.empty())
-                fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T<vec>(t, (int)over_index.size(), over_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], log_Z_std_norm[c], prob[c], y1_log_prob[c],
+                fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T<vec>(t,
+                                                                     (int)over_index.size(),
+                                                                     over_index,
+                                                                     Bound_U_Phi_Bound_Z[c],
+                                                                     Phi_Z[c],
+                                                                     Z_std_norm[c],
+                                                                     log_Z_std_norm[c],
+                                                                     prob[c],
+                                                                     y1_log_prob[c],
+                                                                     
                                                                      log_phi_Bound_Z[c], log_phi_Z_recip[c], Bound_Z[c], u_array,
                                                                      k);   //// exact tails when Phi_type = "Phi"
             } else if (!ord_problem_index.empty()) {
-              fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(t, ord_problem_index, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], prob[c], y1_log_prob[c], Bound_Z[c], Upper_Bound_Z[c], u_array, S,
+              fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(t,
+                                                            ord_problem_index,
+                                                            Bound_U_Phi_Bound_Z[c],
+                                                            Phi_Z[c],
+                                                            Z_std_norm[c],
+                                                            prob[c],
+                                                            y1_log_prob[c],
+                                                            Bound_Z[c],
+                                                            Upper_Bound_Z[c],
+                                                            u_array,
+                                                            S,
+                                                            
                                                             k);   //// exact tails when Phi_type = "Phi"
             }
             if (t < n_tests - 1) prod_container_or_inc_array = Z_std_norm[c].leftCols(t + 1) * L[c].row(t + 1).head(t + 1).transpose();
@@ -194,19 +295,37 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
             fn_MVP_compute_phi_Z_recip_cols_T<vec>(t, phi_Z_recip, Phi_Z[c], Z_std_norm[c], k);
             if (ord_idx_of_test(t) < 0) {
               fn_MVP_compute_phi_Bound_Z_cols_T<vec>(t, phi_Bound_Z, Bound_U_Phi_Bound_Z[c], Bound_Z[c], k);
+              if (chunk_has_missing_results) {
+                fn_MVP_set_phi_Bound_Z_col_of_missing_results_to_zero(
+                      t, is_missing_result, phi_Bound_Z);
+              }
             } else {
               if (k.Phi_approx) {
                 //// d/dx Phi_approx(x) = (3a x^2 + b) s (1 - s), with s = Phi_approx(x), a = 0.07056, b = 1.5976:
                 phi_Bound_Z.col(t) = Bound_Z[c].col(t);             Phi_col_inplace<vec>(phi_Bound_Z, t, k);
-                phi_Bound_Z.col(t).array() = (3.0 * 0.07056 * Bound_Z[c].col(t).array().square() + 1.5976) * phi_Bound_Z.col(t).array() * (1.0 - phi_Bound_Z.col(t).array());
+                // phi_Bound_Z.col(t).array() = (3.0 * 0.07056 * Bound_Z[c].col(t).array().square() + 1.5976) * phi_Bound_Z.col(t).array() * (1.0 - phi_Bound_Z.col(t).array());
                 phi_Upper_Bound_Z.col(t) = Upper_Bound_Z[c].col(t); Phi_col_inplace<vec>(phi_Upper_Bound_Z, t, k);
-                phi_Upper_Bound_Z.col(t).array() = (3.0 * 0.07056 * Upper_Bound_Z[c].col(t).array().square() + 1.5976) * phi_Upper_Bound_Z.col(t).array() * (1.0 - phi_Upper_Bound_Z.col(t).array());
+                // phi_Upper_Bound_Z.col(t).array() = (3.0 * 0.07056 * Upper_Bound_Z[c].col(t).array().square() + 1.5976) * phi_Upper_Bound_Z.col(t).array() * (1.0 - phi_Upper_Bound_Z.col(t).array());
+                //// (with 1 - s formed directly, as s(-x) = Phi_approx(-x): 1 - s is exactly 0 once x > ~7.1,
+                ////  where s rounds to 1)
+                Eigen::Matrix<double, -1, -1> Phi_approx_of_minus_the_bounds(Bound_Z[c].rows(), 2);
+                Phi_approx_of_minus_the_bounds.col(0) = -Bound_Z[c].col(t);
+                Phi_approx_of_minus_the_bounds.col(1) = -Upper_Bound_Z[c].col(t);
+                Phi_col_inplace<vec>(Phi_approx_of_minus_the_bounds, 0, k);
+                Phi_col_inplace<vec>(Phi_approx_of_minus_the_bounds, 1, k);
+                phi_Bound_Z.col(t).array() = (3.0 * 0.07056 * Bound_Z[c].col(t).array().square() + 1.5976)
+                                             * phi_Bound_Z.col(t).array()
+                                             * Phi_approx_of_minus_the_bounds.col(0).array();
+                phi_Upper_Bound_Z.col(t).array() = (3.0 * 0.07056 * Upper_Bound_Z[c].col(t).array().square()
+                                                    + 1.5976)
+                                                   * phi_Upper_Bound_Z.col(t).array()
+                                                   * Phi_approx_of_minus_the_bounds.col(1).array();
               } else {
                 phi_Bound_Z.col(t).array() = -0.5 * Bound_Z[c].col(t).array().square();             apply_col_inplace<vec, Fn::exp>(phi_Bound_Z, t);       phi_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
                 phi_Upper_Bound_Z.col(t).array() = -0.5 * Upper_Bound_Z[c].col(t).array().square(); apply_col_inplace<vec, Fn::exp>(phi_Upper_Bound_Z, t); phi_Upper_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
               }
            // for (int i = 0; i < chunk_size; ++i) { if (std::isinf(Bound_Z[c](i, t))) phi_Bound_Z(i, t) = 0.0; if (std::isinf(Upper_Bound_Z[c](i, t))) phi_Upper_Bound_Z(i, t) = 0.0; }
-              //// the loop above (now a comment) as column-wise selects: phi(bound) = 0 for an infinite bound:
+              //// the loop above (commented out) as column-wise selects: phi(bound) = 0 for an infinite bound:
               phi_Bound_Z.col(t).array() = Bound_Z[c].col(t).array().isInf()
                                            .select(0.0, phi_Bound_Z.col(t).array());
               phi_Upper_Bound_Z.col(t).array() = Upper_Bound_Z[c].col(t).array().isInf()
@@ -217,7 +336,17 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
           if (grad_option != "none") {
             P_c.reserve(chunk_size);
             for (int n = 0; n < chunk_size; ++n) if (row_is_problem[c][n] == 1) P_c.push_back(n);
-            fn_MVOP_grad_prep(prob[c], y_sign, y_m_y_sign_x_u, u_array, Lr[c], prev_per_obs_given_c, prob_n_recip, phi_Z_recip, phi_Bound_Z, phi_Upper_Bound_Z,
+            fn_MVOP_grad_prep(prob[c],
+                              y_sign,
+                              y_m_y_sign_x_u,
+                              u_array,
+                              Lr[c],
+                              prev_per_obs_given_c,
+                              prob_n_recip,
+                              phi_Z_recip,
+                              phi_Bound_Z,
+                              phi_Upper_Bound_Z,
+                              
                               Bound_Z[c], Upper_Bound_Z[c], prob_recip, prob_rowwise_prod_temp, prob_recip_rowwise_prod_temp, prob_rowwise_prod_temp_all, common_grad_term_1,
                               dphi_over_L, dZ_dmu_neg, dphi_times_bz, dZ_times_bz, ord_idx_of_test, Model_args_as_cpp_struct);
             for (size_t pi = 0; pi < P_c.size(); ++pi) {
@@ -227,18 +356,103 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
               phi_Z_recip.row(n).setZero(); prob[c].row(n).setZero();
             }
           }
+          //// ---- (debug output of the non-finite gradient terms with Phi_approx, commented out: begin)
+          // if (k.Phi_approx) {
+                // static int n_debug_prints_1 = 0;
+                // for (int n = 0; (n < chunk_size) && (n_debug_prints_1 < 3); ++n) {
+                      // if (row_is_problem[c][n] == 1) continue;
+                      // bool all_finite = true;
+                      // for (int t = 0; t < n_tests; ++t) {
+                            // all_finite = all_finite && std::isfinite(common_grad_term_1(n, t))
+                                         // && std::isfinite(prob_recip(n, t))
+                                         // && std::isfinite(phi_Z_recip(n, t))
+                                         // && std::isfinite(dphi_over_L(n, t))
+                                         // && std::isfinite(dZ_dmu_neg(n, t))
+                                         // && std::isfinite(dphi_times_bz(n, t))
+                                         // && std::isfinite(dZ_times_bz(n, t))
+                                         // && std::isfinite(prob[c](n, t));
+                      // }
+                      // if (all_finite) continue;
+                      // n_debug_prints_1++;
+                      // std::cout << "DEBUG standard terms, class " << c << " row " << n
+                                // << " prob_n_recip " << prob_n_recip(n) << std::endl;
+                      // for (int t = 0; t < n_tests; ++t) {
+                            // std::cout << "   t " << t << " y " << y_chunk(n, t)
+                                      // << " lb " << Bound_Z[c](n, t)
+                                      // << " ub " << Upper_Bound_Z[c](n, t) << " prob " << prob[c](n, t)
+                                      // << " y1_log_prob " << y1_log_prob[c](n, t)
+                                      // << " Z " << Z_std_norm[c](n, t)
+                                      // << " phi_Z_recip " << phi_Z_recip(n, t)
+                                      // << " phi_lb " << phi_Bound_Z(n, t)
+                                      // << " phi_ub " << phi_Upper_Bound_Z(n, t)
+                                      // << " common " << common_grad_term_1(n, t)
+                                      // << " prob_recip " << prob_recip(n, t)
+                                      // << " dphi_over_L " << dphi_over_L(n, t)
+                                      // << " dZ_dmu_neg " << dZ_dmu_neg(n, t)
+                                      // << " dphi_times_bz " << dphi_times_bz(n, t)
+                                      // << " dZ_times_bz " << dZ_times_bz(n, t)
+                                      // << " u " << u_array(n, t) << std::endl;
+                      // }
+                // }
+          // }
+          //// ---- (debug output: end)
           if (do_us) {
             u_grad_array_CM_chunk_block = u_grad_array_CM_chunk.block(0, 0, chunk_size, n_tests);
-            fn_MVP_compute_nuisance_grad_v2(u_grad_array_CM_chunk_block, phi_Z_recip, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp, dphi_over_L, dZ_dmu_neg,
+            fn_MVP_compute_nuisance_grad_v2(u_grad_array_CM_chunk_block,
+                                            phi_Z_recip,
+                                            common_grad_term_1,
+                                            L[c],
+                                            prob[c],
+                                            prob_recip,
+                                            prob_rowwise_prod_temp,
+                                            dphi_over_L,
+                                            dZ_dmu_neg,
+                                            
                                             z_grad_term, grad_prob, prod_container_or_inc_array, derivs_chain_container_vec, Model_args_as_cpp_struct);
             u_grad_array_CM_chunk.block(0, 0, chunk_size, n_tests).array() += u_grad_array_CM_chunk_block.array();
           }
+          //// ---- (debug output of the non-finite gradient terms with Phi_approx, commented out: begin)
+          // if (k.Phi_approx && do_us) {
+                // static int n_debug_prints_2 = 0;
+                // for (int n = 0; (n < chunk_size) && (n_debug_prints_2 < 3); ++n) {
+                      // if (row_is_problem[c][n] == 1) continue;
+                      // bool all_finite = true;
+                      // for (int t = 0; t < n_tests; ++t) {
+                            // all_finite = all_finite && std::isfinite(u_grad_array_CM_chunk(n, t));
+                      // }
+                      // if (all_finite) continue;
+                      // n_debug_prints_2++;
+                      // std::cout << "DEBUG u gradient not finite after the standard terms, class " << c
+                                // << " row " << n << ":";
+                      // for (int t = 0; t < n_tests; ++t) std::cout << " " << u_grad_array_CM_chunk(n, t);
+                      // std::cout << std::endl;
+                // }
+          // }
+          //// ---- (debug output: end)
           if (do_coeff) {
-            fn_MVP_compute_coefficients_grad_v3(c, beta_grad_array[c], X[c], n_cov_vec_c, row_start, n_covariates_max, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp,
+            fn_MVP_compute_coefficients_grad_v3(c,
+                                                beta_grad_array[c],
+                                                X[c],
+                                                n_cov_vec_c,
+                                                row_start,
+                                                n_covariates_max,
+                                                common_grad_term_1,
+                                                L[c],
+                                                prob[c],
+                                                prob_recip,
+                                                prob_rowwise_prod_temp,
+                                                
                                                 dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container_or_inc_array, derivs_chain_container_vec, true, Model_args_as_cpp_struct);
           }
           if (do_corr) {
-            fn_MOVP_compute_L_Omega_grad_v3(U_Omega_grad_array[c], common_grad_term_1, L[c], prob[c], prob_recip, Z_std_norm[c], prob_rowwise_prod_temp,
+            fn_MOVP_compute_L_Omega_grad_v3(U_Omega_grad_array[c],
+                                            common_grad_term_1,
+                                            L[c],
+                                            prob[c],
+                                            prob_recip,
+                                            Z_std_norm[c],
+                                            prob_rowwise_prod_temp,
+                                            
                                             dphi_over_L, dZ_dmu_neg, dphi_times_bz, dZ_times_bz, z_grad_term, grad_prob, prod_container_or_inc_array, derivs_chain_container_vec, true, Model_args_as_cpp_struct);
           }
           if (do_cut) {
@@ -247,7 +461,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
            // fn_MVOP_compute_cutpoint_grad(c, cutpoint_grad_array[c], t, t_ord, n_thr_per_ord_test(t_ord) + 1, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp,
                                          // phi_Bound_Z, phi_Upper_Bound_Z, phi_Z_recip, u_array, y_chunk, dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container_or_inc_array,
                                          // derivs_chain_container_vec, dphi_direct_Cj, dZ_direct_Cj, true, Model_args_as_cpp_struct);
-              //// one propagation per test instead of one per cutpoint (the call above, now a comment):
+              //// one propagation per test instead of one per cutpoint (the call above, commented out):
               fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter(
                     c, cutpoint_grad_array[c], t, t_ord, n_thr_per_ord_test(t_ord) + 1, common_grad_term_1, L[c],
                     prob[c], prob_recip, prob_rowwise_prod_temp, phi_Bound_Z, phi_Upper_Bound_Z, phi_Z_recip,
@@ -261,24 +475,74 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T(  Eigen::Ref<E
             for (size_t pi = 0; pi < P_c.size(); ++pi) {
               const int n = P_c[pi];
               const double log_prev_nc = (n_class > 1) ? log_prev_per_obs_given_c(n) : 0.0;
-              fn_MVOP_row_grads_log_scale(n, row_start + n, c, do_us, do_coeff, do_corr, do_cut, n_tests, ord_idx_of_test, n_class, n_covariates_max, n_cov_vec_c, n_cat_per_ord_test,
+              fn_MVOP_row_grads_log_scale(n,
+                                          row_start + n,
+                                          c,
+                                          do_us,
+                                          do_coeff,
+                                          do_corr,
+                                          do_cut,
+                                          n_tests,
+                                          ord_idx_of_test,
+                                          n_class,
+                                          n_covariates_max,
+                                          n_cov_vec_c,
+                                          n_cat_per_ord_test,
+                                          
                                           X[c], y_chunk, u_array, Bound_Z[c], Upper_Bound_Z[c], Z_std_norm[c], y1_log_prob[c], L[c], log_prev_nc, log_prob_n_recip(n),
-                                          u_grad_array_CM_chunk, beta_grad_array[c], U_Omega_grad_array[c], cutpoint_grad_array[c], S);
+                                          u_grad_array_CM_chunk, beta_grad_array[c], U_Omega_grad_array[c], cutpoint_grad_array[c], S,
+                                          k.Phi_approx, k.inv_Phi_approx,
+                                          chunk_has_missing_results ? &is_missing_result : nullptr);
+              //// ---- (debug output of the non-finite gradient terms with Phi_approx, commented out: begin)
+              // if (k.Phi_approx) {
+                    // static int n_debug_prints_3 = 0;
+                    // bool all_finite = true;
+                    // for (int t = 0; t < n_tests; ++t) all_finite = all_finite
+                                                               // && std::isfinite(u_grad_array_CM_chunk(n, t));
+                    // if ((all_finite == false) && (n_debug_prints_3 < 3)) {
+                          // n_debug_prints_3++;
+                          // std::cout << "DEBUG problem row u gradient not finite, class " << c << " row " << n
+                                    // << " log_prob_n_recip " << log_prob_n_recip(n) << " log_prev " << log_prev_nc
+                                    // << std::endl;
+                          // for (int t = 0; t < n_tests; ++t) {
+                                // std::cout << "   t " << t << " y " << y_chunk(n, t)
+                                          // << " lb " << Bound_Z[c](n, t)
+                                          // << " ub " << Upper_Bound_Z[c](n, t)
+                                          // << " y1_log_prob " << y1_log_prob[c](n, t)
+                                          // << " Z " << Z_std_norm[c](n, t) << " u " << u_array(n, t)
+                                          // << " u gradient " << u_grad_array_CM_chunk(n, t) << std::endl;
+                          // }
+                    // }
+              // }
+              //// ---- (debug output: end)
             }
           }
           if ((n_class > 1) && do_prev) {
-            fn_MVP_prev_multi_pop_accumulate_grad(prob[c], prob_n_recip, pop_ind, row_start, chunk_size, n_pops, c, prev_grad_mat, rowwise_prod);
+            fn_MVP_prev_multi_pop_accumulate_grad(prob[c],
+                                                  prob_n_recip,
+                                                  pop_ind,
+                                                  row_start,
+                                                  chunk_size,
+                                                  n_pops,
+                                                  c,
+                                                  prev_grad_mat,
+                                                  rowwise_prod);
             for (size_t pi = 0; pi < P_c.size(); ++pi) { const int n = P_c[pi]; prev_grad_mat(pop_ind(row_start + n), c) += std::exp(y1_log_prob[c].row(n).sum() + log_prob_n_recip(n)); }
           }
           if (do_us && (c == n_class - 1)) {
             const int start_index = 1 + row_start * n_tests, length = chunk_size * n_tests;
             out_mat.segment(start_index, length) = u_grad_array_CM_chunk.reshaped();
             fn_MVP_nuisance_first_deriv_T<vec>(du_wrt_duu_chunk, u_vec_chunk, u_unc_vec_chunk, k);
-            fn_MVP_nuisance_deriv_of_log_det_J_T<vec>(d_J_wrt_duu_chunk, u_vec_chunk, u_unc_vec_chunk, du_wrt_duu_chunk, k);
+            fn_MVP_nuisance_deriv_of_log_det_J_T<vec>(d_J_wrt_duu_chunk,
+                                                      u_vec_chunk,
+                                                      u_unc_vec_chunk,
+                                                      du_wrt_duu_chunk,
+                                                      k);
             out_mat.segment(start_index, length).array() *= du_wrt_duu_chunk.array();
             out_mat.segment(start_index, length).array() += d_J_wrt_duu_chunk.array();
           }
         }
+
 }
 
 
@@ -294,18 +558,45 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_seri
                                                                                        const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                                        const int n_chunks_multiplier = 1
 ) {
-        const MVOP_prep P = fn_MVOP_prep(out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, Model_args_as_cpp_struct, n_chunks_multiplier);
-        std::vector<Eigen::Matrix<double, -1, -1>> beta_grad_array = vec_of_mats<double>(P.n_covariates_max, P.n_tests, P.n_class);
-        std::vector<Eigen::Matrix<double, -1, -1>> U_Omega_grad_array = vec_of_mats<double>(P.n_tests, P.n_tests, P.n_class);
-        std::vector<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array = vec_of_mats<double>(P.n_cutpoints_max, P.n_ordinal_tests, P.n_class);
+
+        const MVOP_prep P = fn_MVOP_prep(out_mat,
+                                         theta_main_vec_ref,
+                                         theta_us_vec_ref,
+                                         y_ref,
+                                         Model_args_as_cpp_struct,
+                                         n_chunks_multiplier);
+        std::vector<Eigen::Matrix<double, -1, -1>> beta_grad_array = vec_of_mats<double>(P.n_covariates_max,
+                                                                                         P.n_tests,
+                                                                                         P.n_class);
+        std::vector<Eigen::Matrix<double, -1, -1>> U_Omega_grad_array = vec_of_mats<double>(P.n_tests,
+                                                                                            P.n_tests,
+                                                                                            P.n_class);
+        std::vector<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array = vec_of_mats<double>(P.n_cutpoints_max,
+                                                                                             P.n_ordinal_tests,
+                                                                                             P.n_class);
         Eigen::Matrix<double, -1, -1> prev_grad_mat = Eigen::Matrix<double, -1, -1>::Zero(P.n_pops, P.n_class);
         double log_jac_u = 0.0;
         for (int nc = 0; nc < P.n_total_chunks; nc++) {
           const int cs = (nc == P.n_full_chunks) ? P.last_chunk_size : P.normal_chunk_size;
-          fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T<vec>(out_mat, theta_us_vec_ref, y_ref, grad_option, nc, cs, P, log_jac_u,
+          fn_lp_grad_MVOP_LC_Pinkney_PartialLog_process_chunk_T<vec>(out_mat,
+                                                                     theta_us_vec_ref,
+                                                                     y_ref,
+                                                                     grad_option,
+                                                                     nc,
+                                                                     cs,
+                                                                     P,
+                                                                     log_jac_u,
+                                                                     
                                                                      beta_grad_array, U_Omega_grad_array, cutpoint_grad_array, prev_grad_mat, Model_args_as_cpp_struct);
         }
-        fn_MVOP_assemble(out_mat, P, log_jac_u, beta_grad_array, U_Omega_grad_array, cutpoint_grad_array, prev_grad_mat);
+        fn_MVOP_assemble(out_mat,
+                         P,
+                         log_jac_u,
+                         beta_grad_array,
+                         U_Omega_grad_array,
+                         cutpoint_grad_array,
+                         prev_grad_mat);
+
 }
 
 
@@ -321,10 +612,12 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_seri
                                                                                      std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
                                                                                      const int n_chunks_multiplier = 1
 ) {
+
         (void)LC_MVP_ws_structs;
         const Vec vec = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
         DISPATCH_VEC(vec, fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_serial_T,
                      out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct, n_chunks_multiplier);
+
 }
 
 
@@ -374,6 +667,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process(    
             n_chunks_multiplier_used,
             [&]( Eigen::Ref<Eigen::Matrix<double, -1, 1>> out_mat_of_evaluation,
                  const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_of_evaluation) {
+
                   fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process_serial(
                         out_mat_of_evaluation,
                         theta_main_vec_ref,
@@ -383,6 +677,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_PartialLog_MD_and_AD_Inplace_process(    
                         Model_args_as_cpp_struct,
                         LC_MVP_ws_structs,
                         n_chunks_multiplier_used);
+
             });
   
 }

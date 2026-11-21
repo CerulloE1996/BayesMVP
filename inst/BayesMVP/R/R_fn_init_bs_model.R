@@ -6,14 +6,19 @@
 
 #' init_bs_model_internal
 #' @export
-init_bs_model_internal <- function(   stream = NULL,
+init_bs_model_internal <- function(   stream,
+                                      compile,
+                                      force_recompile,
                                       Stan_data_list, 
-                                      Stan_model_name
+                                      Stan_model_name,
+                                      auto_chunking = TRUE
 ) {
   
         # Get package directory paths
         pkg_dir <- system.file(package = "BayesMVP")
-        outs <- list(pkg_dir = pkg_dir, data_dir = file.path(pkg_dir, "stan_data"), stan_dir = file.path(pkg_dir, "stan_models"))
+        outs <- list(pkg_dir = pkg_dir,
+                     data_dir = file.path(pkg_dir, "stan_data"),
+                     stan_dir = file.path(pkg_dir, "stan_models"))
         pkg_dir <- outs$pkg_dir
         data_dir <- outs$data_dir
         stan_dir <- outs$stan_dir
@@ -28,8 +33,13 @@ init_bs_model_internal <- function(   stream = NULL,
         # } 
         ##
         outs_bs_model <- init_bs_model_external(stream = stream,
+                                                compile = compile,
+                                                force_recompile = force_recompile,
                                                 Stan_data_list = Stan_data_list, 
-                                                Stan_model_file_path = Stan_model_file_path)
+                                                Stan_model_file_path = Stan_model_file_path,
+                                                ## (Enzo 21 Nov: "THE DEFAULT SHOULD BE TRUE"; the model's own setting
+                                                ##  is passed on by its caller)
+                                                auto_chunking = auto_chunking)
         ##
         bs_model <- outs_bs_model$bs_model
         json_file_path <- outs_bs_model$json_file_path

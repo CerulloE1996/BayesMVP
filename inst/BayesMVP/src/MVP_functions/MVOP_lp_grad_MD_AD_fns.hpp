@@ -11,6 +11,7 @@
 
 #include <unsupported/Eigen/SpecialFunctions>
 
+#include "MVP_and_MVOP_missing_results_GHK_fns.hpp"   //// missing test results (y = -1) by the GHK method
 
 
 
@@ -19,9 +20,12 @@
 
 
 
-//// MVOP_lp_grad_MD_AD_fns_T.hpp — replaces MVOP_lp_grad_MD_AD_fns.hpp AND the _WCP impl in MVOP_lp_grad_MD_AD_fns_WCP.hpp
+
+//// MVOP_lp_grad_MD_AD_fns_T.hpp - replaces MVOP_lp_grad_MD_AD_fns.hpp AND the _WCP impl in
+//// MVOP_lp_grad_MD_AD_fns_WCP.hpp
 ////
-//// Keep in the files: fn_MVOP_resize_ws_for_chunk (reused here), fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process
+//// Keep in the files: fn_MVOP_resize_ws_for_chunk (reused here),
+//// fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process
 //// and the InPlace wrappers. They call the two non-template functions at the bottom of this file
 //// (original names/signatures): ..._Inplace_process_serial and ..._Inplace_process_WCP.
 //// Delete the old fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk, ..._process_serial and ..._process_WCP bodies.
@@ -134,6 +138,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
                                                                LC_MVP_workspace_struct &ws,
                                                                const Model_fn_args_struct &Model_args_as_cpp_struct
 ) {
+
         const double sqrt_2_pi_recip = 1.0 / std::sqrt(2.0 * M_PI);
         const double Inf = std::numeric_limits<double>::infinity();
         const int N = P.N, n_params = P.n_params, n_tests = P.n_tests, n_class = P.n_class, n_pops = P.n_pops, n_covariates_max = P.n_covariates_max;
@@ -145,7 +150,10 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
         const std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> &X = *P.X;
         const std::vector<Eigen::Matrix<double, -1, -1>> &beta = P.beta_double_array, &C = P.C, &L = P.L_Omega_double, &Lr = P.L_Omega_recip_double;
 
-        if ((ws.y_chunk.rows() != chunk_size) || (ws.y_chunk.cols() != n_tests)) fn_MVOP_resize_ws_for_chunk(ws, chunk_size, n_tests, n_class);
+        if ((ws.y_chunk.rows() != chunk_size) || (ws.y_chunk.cols() != n_tests)) fn_MVOP_resize_ws_for_chunk(ws,
+            chunk_size,
+            n_tests,
+            n_class);
 
         auto &Z_std_norm = ws.Z_std_norm; auto &Bound_Z = ws.Bound_Z; auto &Bound_U_Phi_Bound_Z = ws.Bound_U_Phi_Bound_Z; auto &prob = ws.prob; auto &Phi_Z = ws.Phi_Z;
         auto &y1_log_prob = ws.y1_log_prob; auto &phi_Z_recip = ws.phi_Z_recip; auto &phi_Bound_Z = ws.phi_Bound_Z;
@@ -169,6 +177,17 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
         fn_MVP_compute_nuisance_T<vec>(u_vec_chunk, u_unc_vec_chunk, k);
         log_jac_u += fn_MVP_compute_nuisance_log_jac_u_T<vec>(u_vec_chunk, u_unc_vec_chunk, d_J_wrt_duu_chunk, k);
         u_array = u_vec_chunk.reshaped(chunk_size, n_tests);
+        //// ---- missing test results (y = -1), by the GHK method (MVP_and_MVOP_missing_results_GHK_fns.hpp),
+        ////      only when the chunk has one: data without missing results run the code below unchanged.
+        const bool chunk_has_missing_results = fn_MVP_rows_of_y_have_a_missing_result(
+                y_ref, row_start, chunk_size);
+        Eigen::Matrix<double, -1, -1> is_missing_result, Z_untruncated;   //// empty unless the chunk has one
+        if (chunk_has_missing_results) {
+          fn_MVP_missing_result_indicator_and_recode_missing_results_to_y_equals_1(
+                y_chunk, is_missing_result);
+          fn_MVP_compute_untruncated_GHK_Z_of_missing_results_T<vec>(
+                Z_untruncated, u_array, is_missing_result, k);
+        }
         y_sign.array() = 2.0 * y_chunk.array() - 1.0;
         y_m_y_sign_x_u.array() = y_chunk.array() - (y_sign.array() * u_array.array());
 
@@ -181,7 +200,10 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
             const double L_tt_inv = Lr[c](t, t);
             //// mu_t (with or without covariates) into a single expression:
             Eigen::Matrix<double, -1, 1> mu(chunk_size);
-            if (n_covariates_max > 1) mu = X[c][t].block(row_start, 0, chunk_size, ncov(c, t)).cast<double>() * beta[c].col(t).head(ncov(c, t)) + prod_container_or_inc_array;
+            if (n_covariates_max > 1) mu = X[c][t].block(row_start,
+                0,
+                chunk_size,
+                ncov(c, t)).cast<double>() * beta[c].col(t).head(ncov(c, t)) + prod_container_or_inc_array;
             else                      mu.array() = beta[c](0, t) + prod_container_or_inc_array.array();
             if (t_ord < 0) {
               Bound_Z[c].col(t).array() = -L_tt_inv * mu.array();
@@ -192,8 +214,32 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
                 Bound_Z[c](n, t)       = (y_n == 1)   ? -Inf : (C[c](y_n - 2, t_ord) - mu(n)) * L_tt_inv;
                 Upper_Bound_Z[c](n, t) = (y_n == K_t) ?  Inf : (C[c](y_n - 1, t_ord) - mu(n)) * L_tt_inv;
               }
+              if (chunk_has_missing_results) {
+                //// a missing result (recoded to category 1 above): both bounds infinite, the untruncated draw
+                fn_MVOP_set_bounds_of_missing_results_to_minus_and_plus_infinity(
+                      t, is_missing_result, Bound_Z[c], Upper_Bound_Z[c]);
+              }
             }
-            fn_MVOP_compute_lp_GHK_cols_T<vec>(t, Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], prob[c], y1_log_prob, Bound_Z[c], y_chunk, u_array, Upper_Bound_Z[c], (t_ord < 0), k);
+            fn_MVOP_compute_lp_GHK_cols_T<vec>(t,
+                                               Bound_U_Phi_Bound_Z[c],
+                                               Phi_Z[c],
+                                               Z_std_norm[c],
+                                               prob[c],
+                                               y1_log_prob,
+                                               Bound_Z[c],
+                                               y_chunk,
+                                               u_array,
+                                               Upper_Bound_Z[c],
+                                               (t_ord < 0),
+                                               k);
+            //// (binary and ordinal tests alike: for an ordinal test the step with infinite bounds is already
+            ////  the untruncated draw, and setting it here makes prob = 1 and Z = F^{-1}(u) exact whatever the
+            ////  kernels return at +-Inf)
+            if (chunk_has_missing_results) {
+              fn_MVP_set_GHK_col_of_missing_results_to_the_untruncated_draw(
+                    t, is_missing_result, u_array, Z_untruncated,
+                    Bound_U_Phi_Bound_Z[c], Phi_Z[c], Z_std_norm[c], prob[c], y1_log_prob);
+            }
             if (t < n_tests - 1) prod_container_or_inc_array = Z_std_norm[c].leftCols(t + 1) * L[c].row(t + 1).head(t + 1).transpose();
           }
           rowwise_sum = y1_log_prob.rowwise().sum();
@@ -213,19 +259,37 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
             fn_MVP_compute_phi_Z_recip_cols_T<vec>(t, phi_Z_recip, Phi_Z[c], Z_std_norm[c], k);
             if (ord_idx_of_test(t) < 0) {
               fn_MVP_compute_phi_Bound_Z_cols_T<vec>(t, phi_Bound_Z, Bound_U_Phi_Bound_Z[c], Bound_Z[c], k);
+              if (chunk_has_missing_results) {
+                fn_MVP_set_phi_Bound_Z_col_of_missing_results_to_zero(
+                      t, is_missing_result, phi_Bound_Z);
+              }
             } else {
               if (k.Phi_approx) {
                 //// d/dx Phi_approx(x) = (3a x^2 + b) s (1 - s), with s = Phi_approx(x), a = 0.07056, b = 1.5976:
                 phi_Bound_Z.col(t) = Bound_Z[c].col(t);             Phi_col_inplace<vec>(phi_Bound_Z, t, k);
-                phi_Bound_Z.col(t).array() = (3.0 * 0.07056 * Bound_Z[c].col(t).array().square() + 1.5976) * phi_Bound_Z.col(t).array() * (1.0 - phi_Bound_Z.col(t).array());
+                // phi_Bound_Z.col(t).array() = (3.0 * 0.07056 * Bound_Z[c].col(t).array().square() + 1.5976) * phi_Bound_Z.col(t).array() * (1.0 - phi_Bound_Z.col(t).array());
                 phi_Upper_Bound_Z.col(t) = Upper_Bound_Z[c].col(t); Phi_col_inplace<vec>(phi_Upper_Bound_Z, t, k);
-                phi_Upper_Bound_Z.col(t).array() = (3.0 * 0.07056 * Upper_Bound_Z[c].col(t).array().square() + 1.5976) * phi_Upper_Bound_Z.col(t).array() * (1.0 - phi_Upper_Bound_Z.col(t).array());
+                // phi_Upper_Bound_Z.col(t).array() = (3.0 * 0.07056 * Upper_Bound_Z[c].col(t).array().square() + 1.5976) * phi_Upper_Bound_Z.col(t).array() * (1.0 - phi_Upper_Bound_Z.col(t).array());
+                //// (with 1 - s formed directly, as s(-x) = Phi_approx(-x): 1 - s is exactly 0 once x > ~7.1,
+                ////  where s rounds to 1)
+                Eigen::Matrix<double, -1, -1> Phi_approx_of_minus_the_bounds(Bound_Z[c].rows(), 2);
+                Phi_approx_of_minus_the_bounds.col(0) = -Bound_Z[c].col(t);
+                Phi_approx_of_minus_the_bounds.col(1) = -Upper_Bound_Z[c].col(t);
+                Phi_col_inplace<vec>(Phi_approx_of_minus_the_bounds, 0, k);
+                Phi_col_inplace<vec>(Phi_approx_of_minus_the_bounds, 1, k);
+                phi_Bound_Z.col(t).array() = (3.0 * 0.07056 * Bound_Z[c].col(t).array().square() + 1.5976)
+                                             * phi_Bound_Z.col(t).array()
+                                             * Phi_approx_of_minus_the_bounds.col(0).array();
+                phi_Upper_Bound_Z.col(t).array() = (3.0 * 0.07056 * Upper_Bound_Z[c].col(t).array().square()
+                                                    + 1.5976)
+                                                   * phi_Upper_Bound_Z.col(t).array()
+                                                   * Phi_approx_of_minus_the_bounds.col(1).array();
               } else {
                 phi_Bound_Z.col(t).array() = -0.5 * Bound_Z[c].col(t).array().square();       apply_col_inplace<vec, Fn::exp>(phi_Bound_Z, t);       phi_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
                 phi_Upper_Bound_Z.col(t).array() = -0.5 * Upper_Bound_Z[c].col(t).array().square(); apply_col_inplace<vec, Fn::exp>(phi_Upper_Bound_Z, t); phi_Upper_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
               }
            // for (int i = 0; i < chunk_size; ++i) { if (std::isinf(Bound_Z[c](i, t))) phi_Bound_Z(i, t) = 0.0; if (std::isinf(Upper_Bound_Z[c](i, t))) phi_Upper_Bound_Z(i, t) = 0.0; }
-              //// the loop above (now a comment) as column-wise selects: phi(bound) = 0 for an infinite bound:
+              //// the loop above (commented out) as column-wise selects: phi(bound) = 0 for an infinite bound:
               phi_Bound_Z.col(t).array() = Bound_Z[c].col(t).array().isInf()
                                            .select(0.0, phi_Bound_Z.col(t).array());
               phi_Upper_Bound_Z.col(t).array() = Upper_Bound_Z[c].col(t).array().isInf()
@@ -233,31 +297,72 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
             }
           }
           if (grad_option != "none") {
-            fn_MVOP_grad_prep(prob[c], y_sign, y_m_y_sign_x_u, u_array, Lr[c], prev_per_obs_given_c, prob_n_recip, phi_Z_recip, phi_Bound_Z, phi_Upper_Bound_Z,
+            fn_MVOP_grad_prep(prob[c],
+                              y_sign,
+                              y_m_y_sign_x_u,
+                              u_array,
+                              Lr[c],
+                              prev_per_obs_given_c,
+                              prob_n_recip,
+                              phi_Z_recip,
+                              phi_Bound_Z,
+                              phi_Upper_Bound_Z,
+                              
                               Bound_Z[c], Upper_Bound_Z[c], prob_recip, prob_rowwise_prod_temp, prob_recip_rowwise_prod_temp, prob_rowwise_prod_temp_all, common_grad_term_1,
                               dphi_over_L, dZ_dmu_neg, dphi_times_bz, dZ_times_bz, ord_idx_of_test, Model_args_as_cpp_struct);
           }
           if ((grad_option == "us_only") || (grad_option == "all")) {
             u_grad_array_CM_chunk_block = u_grad_array_CM_chunk.block(0, 0, chunk_size, n_tests);
-            fn_MVP_compute_nuisance_grad_v2(u_grad_array_CM_chunk_block, phi_Z_recip, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp, dphi_over_L, dZ_dmu_neg,
+            fn_MVP_compute_nuisance_grad_v2(u_grad_array_CM_chunk_block,
+                                            phi_Z_recip,
+                                            common_grad_term_1,
+                                            L[c],
+                                            prob[c],
+                                            prob_recip,
+                                            prob_rowwise_prod_temp,
+                                            dphi_over_L,
+                                            dZ_dmu_neg,
+                                            
                                             z_grad_term, grad_prob, prod_container_or_inc_array, derivs_chain_container_vec, Model_args_as_cpp_struct);
             u_grad_array_CM_chunk.block(0, 0, chunk_size, n_tests).array() += u_grad_array_CM_chunk_block.array();
             if (c == n_class - 1) {
               const int start_index = 1 + row_start * n_tests, length = chunk_size * n_tests;
               out_mat.segment(start_index, length) = u_grad_array_CM_chunk.reshaped();
               fn_MVP_nuisance_first_deriv_T<vec>(du_wrt_duu_chunk, u_vec_chunk, u_unc_vec_chunk, k);
-              fn_MVP_nuisance_deriv_of_log_det_J_T<vec>(d_J_wrt_duu_chunk, u_vec_chunk, u_unc_vec_chunk, du_wrt_duu_chunk, k);
+              fn_MVP_nuisance_deriv_of_log_det_J_T<vec>(d_J_wrt_duu_chunk,
+                                                        u_vec_chunk,
+                                                        u_unc_vec_chunk,
+                                                        du_wrt_duu_chunk,
+                                                        k);
               out_mat.segment(start_index, length).array() *= du_wrt_duu_chunk.array();
               out_mat.segment(start_index, length).array() += d_J_wrt_duu_chunk.array();
             }
           }
           if ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "coeff_only")) {
             Eigen::Matrix<int, -1, 1> n_cov_vec_c = ncov.row(c).transpose();
-            fn_MVP_compute_coefficients_grad_v3(c, beta_grad_array[c], X[c], n_cov_vec_c, row_start, n_covariates_max, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp,
+            fn_MVP_compute_coefficients_grad_v3(c,
+                                                beta_grad_array[c],
+                                                X[c],
+                                                n_cov_vec_c,
+                                                row_start,
+                                                n_covariates_max,
+                                                common_grad_term_1,
+                                                L[c],
+                                                prob[c],
+                                                prob_recip,
+                                                prob_rowwise_prod_temp,
+                                                
                                                 dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container_or_inc_array, derivs_chain_container_vec, true, Model_args_as_cpp_struct);
           }
           if ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "corr_only")) {
-            fn_MOVP_compute_L_Omega_grad_v3(U_Omega_grad_array[c], common_grad_term_1, L[c], prob[c], prob_recip, Z_std_norm[c], prob_rowwise_prod_temp,
+            fn_MOVP_compute_L_Omega_grad_v3(U_Omega_grad_array[c],
+                                            common_grad_term_1,
+                                            L[c],
+                                            prob[c],
+                                            prob_recip,
+                                            Z_std_norm[c],
+                                            prob_rowwise_prod_temp,
+                                            
                                             dphi_over_L, dZ_dmu_neg, dphi_times_bz, dZ_times_bz, z_grad_term, grad_prob, prod_container_or_inc_array, derivs_chain_container_vec, true, Model_args_as_cpp_struct);
           }
           if ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "cutpoints_only")) {
@@ -266,7 +371,7 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
            // fn_MVOP_compute_cutpoint_grad(c, cutpoint_grad_array[c], t, t_ord, n_thr_per_ord_test(t_ord) + 1, common_grad_term_1, L[c], prob[c], prob_recip, prob_rowwise_prod_temp,
                                          // phi_Bound_Z, phi_Upper_Bound_Z, phi_Z_recip, u_array, y_chunk, dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container_or_inc_array,
                                          // derivs_chain_container_vec, dphi_direct_Cj, dZ_direct_Cj, true, Model_args_as_cpp_struct);
-              //// one propagation per test instead of one per cutpoint (the call above, now a comment):
+              //// one propagation per test instead of one per cutpoint (the call above, commented out):
               fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter(
                     c, cutpoint_grad_array[c], t, t_ord, n_thr_per_ord_test(t_ord) + 1, common_grad_term_1, L[c],
                     prob[c], prob_recip, prob_rowwise_prod_temp, phi_Bound_Z, phi_Upper_Bound_Z, phi_Z_recip,
@@ -276,9 +381,18 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T(  Eigen::Ref<Eigen:
             }
           }
           if ((n_class > 1) && ((grad_option == "main_only") || (grad_option == "all") || (grad_option == "prev_only"))) {
-            fn_MVP_prev_multi_pop_accumulate_grad(prob[c], prob_n_recip, pop_ind, row_start, chunk_size, n_pops, c, prev_grad_mat, rowwise_prod);
+            fn_MVP_prev_multi_pop_accumulate_grad(prob[c],
+                                                  prob_n_recip,
+                                                  pop_ind,
+                                                  row_start,
+                                                  chunk_size,
+                                                  n_pops,
+                                                  c,
+                                                  prev_grad_mat,
+                                                  rowwise_prod);
           }
         }
+
 }
 
 
@@ -297,11 +411,22 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T(  Eigen
                                                                            std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
                                                                            const int n_threads_WCP
 ) {
-        const MVOP_prep P = fn_MVOP_prep(out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, Model_args_as_cpp_struct);
+
+        const MVOP_prep P = fn_MVOP_prep(out_mat,
+                                         theta_main_vec_ref,
+                                         theta_us_vec_ref,
+                                         y_ref,
+                                         Model_args_as_cpp_struct);
         const int n_tests = P.n_tests, n_class = P.n_class, n_pops = P.n_pops, n_covariates_max = P.n_covariates_max;
-        std::vector<Eigen::Matrix<double, -1, -1>> beta_grad_array = vec_of_mats<double>(n_covariates_max, n_tests, n_class);
-        std::vector<Eigen::Matrix<double, -1, -1>> U_Omega_grad_array = vec_of_mats<double>(n_tests, n_tests, n_class);
-        std::vector<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array = vec_of_mats<double>(P.n_cutpoints_max, P.n_ordinal_tests, n_class);
+        std::vector<Eigen::Matrix<double, -1, -1>> beta_grad_array = vec_of_mats<double>(n_covariates_max,
+                                                                                         n_tests,
+                                                                                         n_class);
+        std::vector<Eigen::Matrix<double, -1, -1>> U_Omega_grad_array = vec_of_mats<double>(n_tests,
+                                                                                            n_tests,
+                                                                                            n_class);
+        std::vector<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array = vec_of_mats<double>(P.n_cutpoints_max,
+                                                                                             P.n_ordinal_tests,
+                                                                                             n_class);
         Eigen::Matrix<double, -1, -1> prev_grad_mat = Eigen::Matrix<double, -1, -1>::Zero(n_pops, n_class);
         double log_jac_u = 0.0;
 
@@ -309,13 +434,22 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T(  Eigen
           LC_MVP_workspace_struct &ws = LC_MVP_ws_structs[0]; ws.reset_sizes();
           for (int nc = 0; nc < P.n_total_chunks; nc++) {
             const int cs = (nc == P.n_full_chunks) ? P.last_chunk_size : P.normal_chunk_size;
-            fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat, theta_us_vec_ref, y_ref, grad_option, nc, cs, P, log_jac_u,
+            fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat,
+                                                                  theta_us_vec_ref,
+                                                                  y_ref,
+                                                                  grad_option,
+                                                                  nc,
+                                                                  cs,
+                                                                  P,
+                                                                  log_jac_u,
+                                                                  
                                                                   beta_grad_array, U_Omega_grad_array, cutpoint_grad_array, prev_grad_mat, ws, Model_args_as_cpp_struct);
           }
         } else {
-          //// Each chunk accumulates into its OWN zeroed slot; the slots are added up in CHUNK ORDER after the parallel
-          //// region, so lp/grad is bit-reproducible run to run and independent of n_threads_WCP (previously the
-          //// per-thread partials were added in an 'omp critical' block in whatever order the threads finished).
+          //// Each chunk accumulates into its OWN zeroed slot; the slots are added up in CHUNK ORDER after the
+          //// parallel region, so lp/grad is bit-reproducible run to run and independent of n_threads_WCP (adding
+          //// the per-thread partials in an 'omp critical' block, in whatever order the threads finish, would not
+          //// be).
           std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> beta_grad_per_chunk(P.n_full_chunks);
           std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> U_Omega_grad_per_chunk(P.n_full_chunks);
           std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> cutpoint_grad_per_chunk(P.n_full_chunks);
@@ -361,7 +495,14 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T(  Eigen
               U_Omega_grad_per_chunk[nc]  = vec_of_mats<double>(n_tests, n_tests, n_class);
               cutpoint_grad_per_chunk[nc] = vec_of_mats<double>(P.n_cutpoints_max, P.n_ordinal_tests, n_class);
               prev_grad_per_chunk[nc]     = Eigen::Matrix<double, -1, -1>::Zero(n_pops, n_class);
-              fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat, theta_us_vec_ref, y_ref, grad_option, nc, P.normal_chunk_size, P,
+              fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat,
+                                                                    theta_us_vec_ref,
+                                                                    y_ref,
+                                                                    grad_option,
+                                                                    nc,
+                                                                    P.normal_chunk_size,
+                                                                    P,
+                                                                    
                                                                     log_jac_u_per_chunk[nc], beta_grad_per_chunk[nc], U_Omega_grad_per_chunk[nc],
                                                                     cutpoint_grad_per_chunk[nc], prev_grad_per_chunk[nc], ws, Model_args_as_cpp_struct);
               } catch (...) {
@@ -379,11 +520,26 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T(  Eigen
           }
           if ((P.n_full_chunks < P.n_total_chunks) && (P.last_chunk_size > 0)) {
             LC_MVP_workspace_struct &ws0 = LC_MVP_ws_structs[0]; ws0.reset_sizes();
-            fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat, theta_us_vec_ref, y_ref, grad_option, P.n_full_chunks, P.last_chunk_size, P, log_jac_u,
+            fn_lp_grad_MVOP_LC_Pinkney_NoLog_process_chunk_T<vec>(out_mat,
+                                                                  theta_us_vec_ref,
+                                                                  y_ref,
+                                                                  grad_option,
+                                                                  P.n_full_chunks,
+                                                                  P.last_chunk_size,
+                                                                  P,
+                                                                  log_jac_u,
+                                                                  
                                                                   beta_grad_array, U_Omega_grad_array, cutpoint_grad_array, prev_grad_mat, ws0, Model_args_as_cpp_struct);
           }
         }
-        fn_MVOP_assemble(out_mat, P, log_jac_u, beta_grad_array, U_Omega_grad_array, cutpoint_grad_array, prev_grad_mat);
+        fn_MVOP_assemble(out_mat,
+                         P,
+                         log_jac_u,
+                         beta_grad_array,
+                         U_Omega_grad_array,
+                         cutpoint_grad_array,
+                         prev_grad_mat);
+
 }
 
 
@@ -398,9 +554,11 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial(  
                                                                                 const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                                                 std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs
 ) {
+
         const Vec vec = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
         DISPATCH_VEC(vec, fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T,
                      out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct, LC_MVP_ws_structs, 1);
+
 }
 
 
@@ -414,9 +572,11 @@ inline void fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_WCP(  Eig
                                                                              std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
                                                                              const int n_threads_WCP
 ) {
+
         const Vec vec = vec_from_string(Model_args_as_cpp_struct.Model_args_strings(0));
         DISPATCH_VEC(vec, fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_T,
                      out_mat, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct, LC_MVP_ws_structs, n_threads_WCP);
+
 }
 
 

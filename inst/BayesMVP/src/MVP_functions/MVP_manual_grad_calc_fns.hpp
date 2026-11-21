@@ -13,7 +13,6 @@
  
 
  
-using namespace Eigen;
 
  
 
@@ -32,8 +31,8 @@ using namespace Eigen;
 
 ////
 //// ---- forward declaration of the templated version defined further down this file,
-////      so that the string-dispatch version (still used by the latent_trait NoLog / PartialLog paths) can delegate to it for
-////      exact Phi and pick up the right-side-seam reflection derived there.
+////      so that the string-dispatch version (used by the latent_trait NoLog / PartialLog paths) can delegate to
+////      it for exact Phi and pick up the right-side-seam reflection derived there.
 ////
 template <Vec vec>
 inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
@@ -68,8 +67,9 @@ ALWAYS_INLINE  void fn_MVP_compute_lp_GHK_cols(   const int t,
        
        ////
        //// ---- exact Phi (Phi_type = "Phi") -> templated version with the right-side-seam reflection
-       ////      (prob = Phi((1 - 2y) Bound_Z), Z = (1 - 2y) Phi^{-1}((y - (2y - 1) u) prob); derivation in fn_MVP_compute_lp_GHK_cols_T).
-       ////      Same Phi / inv_Phi / log kernels as the string dispatch (stan::math for "Stan", fast_*_AVX2 / _AVX512 otherwise).
+       ////      (prob = Phi((1 - 2y) Bound_Z), Z = (1 - 2y) Phi^{-1}((y - (2y - 1) u) prob); derivation in
+       ////      fn_MVP_compute_lp_GHK_cols_T). Same Phi / inv_Phi / log kernels as the string dispatch
+       ////      (stan::math for "Stan", fast_*_AVX2 / _AVX512 otherwise).
        ////
        if (Phi_type == "Phi") {
              KernelChoice kernel_choice_for_GHK_cols;
@@ -83,19 +83,19 @@ ALWAYS_INLINE  void fn_MVP_compute_lp_GHK_cols(   const int t,
        }
 
        ////// Compute on NON-log-scale for all observations using ".col(t)".
-       Bound_U_Phi_Bound_Z.col(t) =   fn_EIGEN_double( Bound_Z.col(t), Phi_type, vect_type_Phi );
+       fn_EIGEN_double_into( Bound_U_Phi_Bound_Z.col(t), Bound_Z.col(t), Phi_type, vect_type_Phi);
 
        Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array() +   (y_chunk.col(t).array() -  Bound_U_Phi_Bound_Z.col(t).array()) *
                             ((y_chunk.col(t).array()  + (y_chunk.col(t).array()  - 1.0)) * u_array.col(t).array());
 
-       Z_std_norm.col(t) =   fn_EIGEN_double( Phi_Z.col(t),   inv_Phi_type, vect_type_inv_Phi);
+       fn_EIGEN_double_into( Z_std_norm.col(t), Phi_Z.col(t),   inv_Phi_type, vect_type_inv_Phi);
 
 
        prob.col(t).array() =    y_chunk.col(t).array()  * (1.0 - Bound_U_Phi_Bound_Z.col(t).array() ) + ( y_chunk.col(t).array()  -  1.0)  *
                                 Bound_U_Phi_Bound_Z.col(t).array() * ( y_chunk.col(t).array()  +  (  y_chunk.col(t).array()  - 1.0)  )  ;
        // prob.col(t).array() = prob.col(t).array().max(1e-30);
 
-       y1_log_prob.col(t)  =    fn_EIGEN_double( prob.col(t),  "log", vect_type_log);
+       fn_EIGEN_double_into( y1_log_prob.col(t), prob.col(t),  "log", vect_type_log);
 
 }
 // template <Vec vec>
@@ -149,48 +149,62 @@ inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
                                           const KernelChoice &k
 ) {
   
-        if (k.Phi_approx) {
-          
-                //// ---- Phi_approx setting: original code, unchanged ----
-                Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
-                Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
-              
-                Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array()
-                                     + (y_chunk.col(t).array() - Bound_U_Phi_Bound_Z.col(t).array())
-                                     * ((2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array());
-              
-                Z_std_norm.col(t) = Phi_Z.col(t);
-                inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
-              
-                prob.col(t).array() = y_chunk.col(t).array() * (1.0 - Bound_U_Phi_Bound_Z.col(t).array())
-                                    + (y_chunk.col(t).array() - 1.0) * Bound_U_Phi_Bound_Z.col(t).array()
-                                    * (2.0 * y_chunk.col(t).array() - 1.0);
-              
-                y1_log_prob.col(t) = prob.col(t);
-                apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
-                
-                return;
-          
-        }
+        // if (k.Phi_approx) {
+        //   
+        //         //// ---- Phi_approx setting: the original code ----
+        //         Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
+        //         Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
+        //       
+        //         Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array()
+        //                              + (y_chunk.col(t).array() - Bound_U_Phi_Bound_Z.col(t).array())
+        //                              * ((2.0 * y_chunk.col(t).array() - 1.0) * u_array.col(t).array());
+        //       
+        //         Z_std_norm.col(t) = Phi_Z.col(t);
+        //         inv_Phi_col_inplace<vec>(Z_std_norm, t, k);
+        //       
+        //         prob.col(t).array() = y_chunk.col(t).array() * (1.0 - Bound_U_Phi_Bound_Z.col(t).array())
+        //                             + (y_chunk.col(t).array() - 1.0) * Bound_U_Phi_Bound_Z.col(t).array()
+        //                             * (2.0 * y_chunk.col(t).array() - 1.0);
+        //       
+        //         y1_log_prob.col(t) = prob.col(t);
+        //         apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+        //         
+        //         return;
+        //   
+        // }
+        ////
+        //// ---- Phi_approx (Phi_type = "Phi_approx") takes the same reflection as the exact Phi below, with its
+        ////      own kernels (Phi_col_inplace / inv_Phi_col_inplace follow k): Phi_approx(-x) = 1 - Phi_approx(x)
+        ////      and inv_Phi_approx(1 - q) = -inv_Phi_approx(q) hold as well. The original code above formed
+        ////      1 - Phi_approx(Bound_Z), which is exactly 0 once Bound_Z > ~7.1 (inside overflow_threshold = 7.5),
+        ////      so log(prob) = -Inf and Z = +Inf there; with the reflection, prob = Phi_approx(sign_y * Bound_Z)
+        ////      >= ~7e-19 and q = (1 - u) prob are formed directly and stay finite in the whole ordinary range.
+        ////
         
         ////
-        //// ---- Exact Phi (Phi_type = "Phi"): right-side seam fixed by reflection.
+        //// ---- Exact Phi (Phi_type = "Phi"): right-side seam handled by reflection.
         ////
-        //// The old code formed prob = 1 - Phi(Bound_Z) for y = 1 and Phi_Z = Phi(B) + u (1 - Phi(B)), Z = Phi^{-1}(Phi_Z).
-        //// Near Bound_Z = +7.5 (just inside overflow_threshold), 1 - Phi(B) ~ 3e-14 is the difference of two numbers
-        //// near 1, so it kept only ~2-3 significant digits (up to ~1e-3 nats in log prob), and Phi_Z rounded to 1
-        //// (Z = +Inf) once u > ~0.996. Using the symmetry Phi(-x) = 1 - Phi(x) (exact for Phi and for the AS241
-        //// inverse, inv_Phi(1 - q) = -inv_Phi(q)), with sign_y = 1 - 2y (+1 for y = 0, -1 for y = 1):
+        //// Forming prob = 1 - Phi(Bound_Z) for y = 1 and Phi_Z = Phi(B) + u (1 - Phi(B)), Z = Phi^{-1}(Phi_Z)
+        //// directly would lose precision: near Bound_Z = +7.5 (just inside overflow_threshold),
+        //// 1 - Phi(B) ~ 3e-14 is the difference of two numbers near 1, so it would keep only ~2-3 significant
+        //// digits (up to ~1e-3 nats in log prob), and Phi_Z would round to 1 (Z = +Inf) once u > ~0.996. Using
+        //// the symmetry Phi(-x) = 1 - Phi(x) (exact for Phi and for the AS241 inverse,
+        //// inv_Phi(1 - q) = -inv_Phi(q)), with sign_y = 1 - 2y (+1 for y = 0, -1 for y = 1):
         ////
-        ////   prob          = Phi(sign_y * Bound_Z)                 [ = Phi(B) for y = 0,  Phi(-B) = 1 - Phi(B) for y = 1 ]
-        ////   q             = (y - (2y - 1) u) * prob               [ = u Phi(B) = Phi_Z for y = 0,  (1 - u)(1 - Phi(B)) = 1 - Phi_Z for y = 1 ]
+        ////   prob          = Phi(sign_y * Bound_Z)
+        ////                   [ = Phi(B) for y = 0,  Phi(-B) = 1 - Phi(B) for y = 1 ]
+        ////   q             = (y - (2y - 1) u) * prob
+        ////                   [ = u Phi(B) = Phi_Z for y = 0,  (1 - u)(1 - Phi(B)) = 1 - Phi_Z for y = 1 ]
         ////   Z             = sign_y * Phi^{-1}(q)                  [ = Phi^{-1}(Phi_Z) in both cases ]
         ////   Phi_Z         = y + sign_y * q
-        ////   Phi(Bound_Z)  = y + sign_y * prob                     (stored for completeness; only the Phi_approx derivative reads it)
+        ////   Phi(Bound_Z)  = y + sign_y * prob
+        ////                   (stored for completeness; only the Phi_approx derivative reads it)
         ////
-        //// For y = 0 every quantity is mathematically identical to before and uses the same products (up to compiler FMA contraction). The derivatives the
-        //// gradient code uses are unchanged, because they are the analytic derivatives of the same functions:
-        ////   d prob / d Bound_Z = sign_y * phi(Bound_Z),   d Z / d q = sign_y / phi(Z)  (so dZ/dPhi_Z = 1/phi(Z) as before).
+        //// For y = 0 every quantity is mathematically the same as the direct form and uses the same products (up
+        //// to compiler FMA contraction). The derivatives the gradient code uses are the same, because they are
+        //// the analytic derivatives of the same functions:
+        ////   d prob / d Bound_Z = sign_y * phi(Bound_Z),   d Z / d q = sign_y / phi(Z)
+        ////   (so dZ/dPhi_Z = 1/phi(Z)).
         ////
         prob.col(t).array() = (1.0 - 2.0 * y_chunk.col(t).array()) * Bound_Z.col(t).array();
         Phi_col_inplace<vec>(prob, t, k);
@@ -202,7 +216,9 @@ inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
                                   * prob.col(t).array();                                                             //// q
         Phi_Z.col(t).array() = y_chunk.col(t).array()
                              + (1.0 - 2.0 * y_chunk.col(t).array()) * Z_std_norm.col(t).array();                    //// y + sign_y * q
-        inv_Phi_col_inplace<vec>(Z_std_norm, t, k);                                                                    //// Phi^{-1}(q)
+        inv_Phi_col_inplace<vec>(Z_std_norm,
+                                 t,
+                                 k); //// Phi^{-1}(q)
         Z_std_norm.col(t).array() *= (1.0 - 2.0 * y_chunk.col(t).array());                                             //// sign_y * Phi^{-1}(q)
         
         y1_log_prob.col(t) = prob.col(t);
@@ -247,7 +263,7 @@ ALWAYS_INLINE  void fn_MVP_compute_phi_Bound_Z_cols(      const int t,
               // temp = sqrt_2_pi_recip*temp;
               // phi_Bound_Z.col(t).array() +=   temp.array();
               ////
-              phi_Bound_Z.col(t).array() += (sqrt_2_pi_recip*fn_EIGEN_double((-0.5)*stan::math::square(Bound_Z.col(t)), "exp", vect_type_exp)).array();
+              phi_Bound_Z.col(t).array() += (sqrt_2_pi_recip*fn_EIGEN_double_in_a_per_thread_buffer((-0.5)*stan::math::square(Bound_Z.col(t)), "exp", vect_type_exp)).array();
          }
          
          // ///////// grad stuff
@@ -304,7 +320,7 @@ ALWAYS_INLINE  void fn_MVP_compute_phi_Z_recip_cols(     const int t,
                // temp = sqrt_2_pi_recip*fn_EIGEN_double((-0.5)*stan::math::square(Z_std_norm.col(t)), "exp", vect_type_exp);
                // temp = stan::math::inv(sqrt_2_pi_recip*fn_EIGEN_double((-0.5)*stan::math::square(Z_std_norm.col(t)), "exp", vect_type_exp));
                ////
-               phi_Z_recip.col(t).array() += (stan::math::inv(sqrt_2_pi_recip*fn_EIGEN_double((-0.5)*stan::math::square(Z_std_norm.col(t)), "exp", vect_type_exp))).array();
+               phi_Z_recip.col(t).array() += (stan::math::inv(sqrt_2_pi_recip*fn_EIGEN_double_in_a_per_thread_buffer((-0.5)*stan::math::square(Z_std_norm.col(t)), "exp", vect_type_exp))).array();
          
        }
        
@@ -676,7 +692,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
               {
                 int t = n_tests - 1;
                 beta_grad_array_for_each_n[0].col(t) =    (  common_grad_term_1.col(t).array()  *   (  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array()   ) );
-                if (compute_final_scalar_grad)  coefficients_array(0, t)   +=       beta_grad_array_for_each_n[0].col(t).sum();
+                if (compute_final_scalar_grad)  coefficients_array(0,
+                    t)   +=       beta_grad_array_for_each_n[0].col(t).sum();
               }
 
               {   ///// then second-to-last term (test T - 1)
@@ -686,7 +703,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
                 z_grad_term.col(0)   =     -      y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t).array()         ;
                 grad_prob.col(1)  =       (  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t  + 1).array()    )   * (   L_Omega_double(t + 1, t) * z_grad_term.col(0).array() ) ;
                 beta_grad_array_for_each_n[0].col(t) =   (  common_grad_term_1.col(t).array()   * ( grad_prob.col(1).array() *  prob.col(t).array() +         grad_prob.col(0).array() *   prob.col(t  + 1).array() ) );
-                if (compute_final_scalar_grad)  coefficients_array(0, t)   +=       beta_grad_array_for_each_n[0].col(t).sum();
+                if (compute_final_scalar_grad)  coefficients_array(0,
+                    t)   +=       beta_grad_array_for_each_n[0].col(t).sum();
               }
 
               for (int i = 1; i < n_tests - 1; i++) {     // then rest of terms
@@ -710,7 +728,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
                         derivs_chain_container_vec.array() +=  ( grad_prob.col(ii).array()  * (        prop_rowwise_prod_temp.col(t).array() *   prob_recip.col(t + ii).array()  ).array() ).array() ;
                       }
                       beta_grad_array_for_each_n[0].col(t) =    common_grad_term_1.col(t).array()   *  derivs_chain_container_vec.array() ;
-                      if (compute_final_scalar_grad)  coefficients_array(0, t)   +=       beta_grad_array_for_each_n[0].col(t).sum();
+                      if (compute_final_scalar_grad)  coefficients_array(0,
+                          t)   +=       beta_grad_array_for_each_n[0].col(t).sum();
                     }
 
               }
@@ -731,7 +750,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
                                 Eigen::Matrix<double, -1, 1> y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t =    y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array() *
                                                                                                                                         X[t].block(chunk_size * chunk_counter, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() ;
                             beta_grad_array_for_each_n[k].col(t) = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t.array() * prob_recip.col(t).array();
-                            if (compute_final_scalar_grad)  coefficients_array(k, t) +=   beta_grad_array_for_each_n[k].col(t).sum();
+                            if (compute_final_scalar_grad)  coefficients_array(k,
+                                t) +=   beta_grad_array_for_each_n[k].col(t).sum();
                           }
 
                     }
@@ -752,10 +772,12 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
 
                           if (n_class != 1) {  ///// if latent class
                               beta_grad_array_for_each_n[k].col(t) =   (  common_grad_term_1.col(t).array()   * ( grad_prob.col(1).array() *  prob.col(t).array() + grad_prob.col(0).array() *   prob.col(t  + 1).array() ) );
-                              if (compute_final_scalar_grad)  coefficients_array(k, t) +=   beta_grad_array_for_each_n[k].col(t).sum();
+                              if (compute_final_scalar_grad)  coefficients_array(k,
+                                  t) +=   beta_grad_array_for_each_n[k].col(t).sum();
                           } else {  //// if standard MVP
                               beta_grad_array_for_each_n[k].col(t) =    (  grad_prob.col(1).array() *  prob_recip.col(t + 1).array()   +   grad_prob.col(0).array() *   prob_recip.col(t + 0).array()      );
-                              if (compute_final_scalar_grad)  coefficients_array(k, t) +=   beta_grad_array_for_each_n[k].col(t).sum();
+                              if (compute_final_scalar_grad)  coefficients_array(k,
+                                  t) +=   beta_grad_array_for_each_n[k].col(t).sum();
                           }
 
                     }
@@ -790,7 +812,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
                                     derivs_chain_container_vec.array() +=   grad_prob.col(ii).array()  *   prob_recip.col(t + ii).array()  ;
                                   }
                                   beta_grad_array_for_each_n[k].col(t) =         derivs_chain_container_vec;
-                                  if (compute_final_scalar_grad)  coefficients_array(k, t) +=   beta_grad_array_for_each_n[k].col(t).sum();
+                                  if (compute_final_scalar_grad)  coefficients_array(k,
+                                      t) +=   beta_grad_array_for_each_n[k].col(t).sum();
 
                            } else {  //// if latent class
 
@@ -799,7 +822,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
                                    derivs_chain_container_vec.array() +=  ( grad_prob.col(ii).array()  * (        prop_rowwise_prod_temp.col(t).array() *   prob_recip.col(t + ii).array()  ).array() ).array() ;
                                  }
                                  beta_grad_array_for_each_n[k].col(t) =         (   common_grad_term_1.col(t).array()   *  derivs_chain_container_vec.array() );
-                                 if (compute_final_scalar_grad)  coefficients_array(k, t) +=   beta_grad_array_for_each_n[k].col(t).sum();
+                                 if (compute_final_scalar_grad)  coefficients_array(k,
+                                     t) +=   beta_grad_array_for_each_n[k].col(t).sum();
 
                            }
 
@@ -914,7 +938,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v3(      const int c, // lat
                  for (int ii = 0; ii < i + 2; ii++) {
                    derivs_chain_container_vec.array() += ( grad_prob.col(ii).array() * ( prop_rowwise_prod_temp.col(t).array() * prob_recip.col(t + ii).array() ).array() ).array() ;
                  }
-                 if (compute_final_scalar_grad) coefficients_array(0, t) += ( common_grad_term_1.col(t).array() * derivs_chain_container_vec.array() ).sum();
+                 if (compute_final_scalar_grad) coefficients_array(0,
+                     t) += ( common_grad_term_1.col(t).array() * derivs_chain_container_vec.array() ).sum();
                }
                
              }
@@ -1006,7 +1031,8 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v3(      const int c, // lat
                for (int ii = 0; ii < i + 2; ii++) {
                  derivs_chain_container_vec.array() +=  ( grad_prob.col(ii).array()  * (        prop_rowwise_prod_temp.col(t).array() *   prob_recip.col(t + ii).array()  ).array() ).array() ;
                }
-               if (compute_final_scalar_grad)  coefficients_array(k, t) +=   (   common_grad_term_1.col(t).array()   *  derivs_chain_container_vec.array() ).sum();
+               if (compute_final_scalar_grad)  coefficients_array(k,
+                   t) +=   (   common_grad_term_1.col(t).array()   *  derivs_chain_container_vec.array() ).sum();
                
          }
          
@@ -1085,10 +1111,12 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
 
         if (n_class == 1)  {
           Omega_grad_array_for_each_n[t1].col(t1) =    prob_recip.col(t1).array()   *   y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array()  *   Bound_Z.col(t1).array();
-          if (compute_final_scalar_grad) U_Omega_grad_array(t1, t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
+          if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+              t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
         }  else  {
           Omega_grad_array_for_each_n[t1].col(t1) =  (   common_grad_term_1.col(t1).array()   *   y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array()  *   Bound_Z.col(t1).array()       );
-          if (compute_final_scalar_grad) U_Omega_grad_array(t1, t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
+          if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+              t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
         }
 
       }
@@ -1102,10 +1130,12 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
 
       if (n_class == 1) {
           Omega_grad_array_for_each_n[t1].col(t1) =    (  prob_recip.col(t1).array()  *   grad_prob.col(0).array()  +    prob_recip.col(t1 + 1).array()  *      grad_prob.col(1).array()   );
-          if (compute_final_scalar_grad) U_Omega_grad_array(t1, t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
+          if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+              t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
       }  else   {
           Omega_grad_array_for_each_n[t1].col(t1) =    ((common_grad_term_1.col(t1).array() )  *  (  prob.col(t1 + 1).array() * grad_prob.col(0).array()  +  prob.col(t1).array()  * grad_prob.col(1).array()   )  );
-          if (compute_final_scalar_grad) U_Omega_grad_array(t1, t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
+          if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+              t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
       }
 
     }
@@ -1135,7 +1165,8 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
                 derivs_chain_container_vec.array()  +=    ( grad_prob.col(iii).array()  * ( prop_rowwise_prod_temp.col(t1).array()    *   prob_recip.col(t1 + iii).array()  ).array() ).array()   ;  // correct  (standard form)
               }
               Omega_grad_array_for_each_n[t1].col(t1) =     (   common_grad_term_1.col(t1).array()   * derivs_chain_container_vec.array() );
-              if (compute_final_scalar_grad) U_Omega_grad_array(t1, t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
+              if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                  t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
 
        } else { //// if standard MVP
 
@@ -1144,7 +1175,8 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
                derivs_chain_container_vec.array()  +=    grad_prob.col(iii).array()  *  prob_recip.col(t1 + iii).array()    ;
              }
              Omega_grad_array_for_each_n[t1].col(t1) =       derivs_chain_container_vec;
-             if (compute_final_scalar_grad) U_Omega_grad_array(t1, t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
+             if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                 t1) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
 
        }
 
@@ -1163,10 +1195,12 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
 
           if (n_class == 1) {
             Omega_grad_array_for_each_n[t1].col(t2) =  (prob_recip.col(t1).array()    *    y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array()  *  Z_std_norm.col(t2).array()   );
-            if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
+            if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
           }  else {
             Omega_grad_array_for_each_n[t1].col(t2) =   (common_grad_term_1.col(t1).array()      *    y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array()   *    Z_std_norm.col(t2).array()   );
-            if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
+            if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
           }
 
           if (t1 > 1) { // starts at  L_{T, T-2}
@@ -1175,10 +1209,12 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
 
               if (n_class == 1) {
                 Omega_grad_array_for_each_n[t1].col(t2) =  (prob_recip.col(t1).array()   *    y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array()   *    Z_std_norm.col(t2).array()   );
-                if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
+                if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                    t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
               } else  {
                 Omega_grad_array_for_each_n[t1].col(t2) =  (common_grad_term_1.col(t1).array()  * y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array()  *    Z_std_norm.col(t2).array()   );
-                if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
+                if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                    t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
               }
 
           }
@@ -1192,10 +1228,12 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
                 if (t2 < n_tests - 1) {
                   if (n_class == 1)  {
                     Omega_grad_array_for_each_n[t1].col(t2) =   (prob_recip.col(t1).array() * y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array() * Z_std_norm.col(t2).array());
-                    if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
+                    if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                        t2) +=   Omega_grad_array_for_each_n[t1].col(t1).sum();
                   } else {
                     Omega_grad_array_for_each_n[t1].col(t2) =  (common_grad_term_1.col(t1).array() * y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1).array() * Z_std_norm.col(t2).array());
-                    if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
+                    if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                        t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
                   }
                 }
 
@@ -1240,7 +1278,8 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
                   derivs_chain_container_vec.array() +=   grad_prob.col(ii).array()  *     prob_recip.col(t1 + ii).array()   ; // correct i think
                 }
                 Omega_grad_array_for_each_n[t1].col(t2) =         derivs_chain_container_vec;
-                if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
+                if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                    t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
 
           } else {  //// if latent class
 
@@ -1249,7 +1288,8 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
                   derivs_chain_container_vec.array() += ( grad_prob.col(ii).array()  * (   prop_rowwise_prod_temp.col(t1).array()    *  prob_recip.col(t1 + ii).array()  ).array() ).array() ; // correct i think
                 }
                 Omega_grad_array_for_each_n[t1].col(t2) =      (   common_grad_term_1.col(t1).array()   * derivs_chain_container_vec.array() );
-                if (compute_final_scalar_grad) U_Omega_grad_array(t1, t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
+                if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+                    t2) +=   Omega_grad_array_for_each_n[t1].col(t2).sum();
 
           }
 
@@ -1371,7 +1411,8 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v3(   Eigen::Ref<Eigen::Matrix<do
            for (int iii = 0; iii <  i; iii++) {
              derivs_chain_container_vec.array()  +=    ( grad_prob.col(iii).array()  * ( prop_rowwise_prod_temp.col(t1).array()    *   prob_recip.col(t1 + iii).array()  ).array() ).array()   ;  // correct  (standard form)
            }
-           if (compute_final_scalar_grad) U_Omega_grad_array(t1, t1) +=  (   common_grad_term_1.col(t1).array()   * derivs_chain_container_vec.array() ).sum();
+           if (compute_final_scalar_grad) U_Omega_grad_array(t1,
+               t1) +=  (   common_grad_term_1.col(t1).array()   * derivs_chain_container_vec.array() ).sum();
            
          } else { //// if standard MVP
            

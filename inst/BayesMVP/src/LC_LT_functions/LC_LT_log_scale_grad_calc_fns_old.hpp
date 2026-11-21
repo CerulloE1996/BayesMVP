@@ -83,7 +83,7 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
        double sign_deriv_L_T_T_inv = -1.0 * stan::math::sign(1.0 / (L_Omega_double(t1,t1) * L_Omega_double(t1,t1))) * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t1);
        
        // non-log-scale: deriv_Bound_Z_x_L.col(0).array() = 0.0;
-       log_abs_deriv_Bound_Z_x_L.col(0).setConstant(-700.0); // initialise
+       log_abs_deriv_Bound_Z_x_L.col(0).setConstant(-INFINITY); // initialise
        sign_deriv_Bound_Z_x_L.col(0).setOnes() ; // initialise
        for (int t = 0; t < t1; t++) {
          // non-log-scale: deriv_Bound_Z_x_L.col(0).array() +=   Z_std_norm.col(t).array() *  Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t);
@@ -110,7 +110,8 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
        // sign_a.array() = sign_deriv_L_T_T_inv * (B_sign_Bound_Z.col(t1).array() * stan::math::sign(L_Omega_double(t1, t1)) );
        // log_abs_b.array() =  - log_abs_L_Omega_double(t1, t1) +  log_abs_deriv_Bound_Z_x_L.col(0).array();
        // sign_b.array() =  stan::math::sign(1.0 / L_Omega_double(t1, t1))  *   sign_deriv_Bound_Z_x_L.col(0).array();
-       log_terms.col(0) =  log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1).array() + log_abs_L_Omega_double(t1, t1);
+       log_terms.col(0) =  log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1).array() + log_abs_L_Omega_double(t1,
+                     t1);
        log_terms.col(1)  = - log_abs_L_Omega_double(t1, t1) +  log_abs_deriv_Bound_Z_x_L.col(0).array();
        sign_terms.col(0) =  sign_deriv_L_T_T_inv * (B_sign_Bound_Z.col(t1).array() * stan::math::sign(L_Omega_double(t1, t1)) );
        sign_terms.col(1) =  stan::math::sign(1.0 / L_Omega_double(t1, t1))  *   sign_deriv_Bound_Z_x_L.col(0).array();
@@ -158,7 +159,7 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
        double sign_deriv_L_T_T_inv = -1.0 * stan::math::sign(1.0 / (L_Omega_double(t1,t1) * L_Omega_double(t1,t1))) * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t1);
        
        // non-log-scale: deriv_Bound_Z_x_L.col(0).array() = 0.0;
-       log_abs_deriv_Bound_Z_x_L.col(0).setConstant(-700.0); // initialise
+       log_abs_deriv_Bound_Z_x_L.col(0).setConstant(-INFINITY); // initialise
        sign_deriv_Bound_Z_x_L.col(0).setOnes() ; // initialise
        for (int t = 0; t < t1; t++) {
          // non-log-scale: deriv_Bound_Z_x_L.col(0).array() +=   Z_std_norm.col(t).array() *  Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t);
@@ -185,7 +186,8 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
        // sign_a.array() = sign_deriv_L_T_T_inv * (B_sign_Bound_Z.col(t1).array() * stan::math::sign(L_Omega_double(t1, t1)) );
        // log_abs_b.array() =  - log_abs_L_Omega_double(t1, t1) +  log_abs_deriv_Bound_Z_x_L.col(0).array();
        // sign_b.array() =  stan::math::sign(1.0 / L_Omega_double(t1, t1))  *   sign_deriv_Bound_Z_x_L.col(0).array();
-       log_terms.col(0) = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1).array() + log_abs_L_Omega_double(t1, t1); 
+       log_terms.col(0) = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1).array() + log_abs_L_Omega_double(t1,
+                     t1);
        log_terms.col(1) =  - log_abs_L_Omega_double(t1, t1) +  log_abs_deriv_Bound_Z_x_L.col(0).array();
        sign_terms.col(0) = sign_deriv_L_T_T_inv * (B_sign_Bound_Z.col(t1).array() * stan::math::sign(L_Omega_double(t1, t1)) );
        sign_terms.col(1) =  stan::math::sign(1.0 / L_Omega_double(t1, t1))  *   sign_deriv_Bound_Z_x_L.col(0).array();
@@ -302,7 +304,7 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
        
        for (int i = 3; i < n_tests + 1; i++) {
          
-         B_log_abs_grad_prob.setConstant(-700.0);
+         B_log_abs_grad_prob.setConstant(-INFINITY);
          B_sign_grad_prob.setOnes();
          
          int  t1 = n_tests - i;
@@ -313,7 +315,7 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
          double sign_deriv_L_T_T_inv = -1.0 * stan::math::sign(1.0 / (L_Omega_double(t1,t1) * L_Omega_double(t1,t1))) * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t1);
          
          // non-log-scale: deriv_Bound_Z_x_L.col(0).array() = 0.0;
-         log_abs_deriv_Bound_Z_x_L.col(0).setConstant(-700.0); // initialise
+         log_abs_deriv_Bound_Z_x_L.col(0).setConstant(-INFINITY); // initialise
          sign_deriv_Bound_Z_x_L.col(0).setOnes() ; // initialise
          for (int t = 0; t < t1; t++) {
            // non-log-scale: deriv_Bound_Z_x_L.col(0).array() +=   Z_std_norm.col(t).array() *  Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t);
@@ -340,7 +342,8 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
          // sign_a.array() = sign_deriv_L_T_T_inv * (B_sign_Bound_Z.col(t1).array() * stan::math::sign(L_Omega_double(t1, t1)) );
          // log_abs_b.array() =  - log_abs_L_Omega_double(t1, t1) +  log_abs_deriv_Bound_Z_x_L.col(0).array();
          // sign_b.array() =  stan::math::sign(1.0 / L_Omega_double(t1, t1))  *   sign_deriv_Bound_Z_x_L.col(0).array();
-         log_terms.col(0) =  log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1).array() + log_abs_L_Omega_double(t1, t1); 
+         log_terms.col(0) =  log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1).array() + log_abs_L_Omega_double(t1,
+                       t1);
          log_terms.col(1) =  - log_abs_L_Omega_double(t1, t1) +  log_abs_deriv_Bound_Z_x_L.col(0).array();
          sign_terms.col(0) =   sign_deriv_L_T_T_inv * (B_sign_Bound_Z.col(t1).array() * stan::math::sign(L_Omega_double(t1, t1)) );
          sign_terms.col(1) =   stan::math::sign(1.0 / L_Omega_double(t1, t1))  *   sign_deriv_Bound_Z_x_L.col(0).array();
@@ -460,7 +463,8 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
                // non-log-scale: deriv_Bound_Z_x_L.col(0).array() = 0.0;
                for (int jj = 0; jj < ii + 1; jj++) { 
                  // non-log-scale:  deriv_Bound_Z_x_L.col(ii + 1).array()  +=    L_Omega_double(t1 + ii + 1,t1 + jj)     *   A_z_grad_term.col(jj).array()     +   Z_std_norm.col(t1 + jj).array()     *  Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1 + ii + 1, t1 + jj) ;// +
-                 log_abs_deriv_Bound_Z_x_L_comp.col(jj).array() =  log_abs_L_Omega_double(t1 + ii + 1, t1 + jj) +   B_log_abs_z_grad_term.col(jj).array()   +  
+                 log_abs_deriv_Bound_Z_x_L_comp.col(jj).array() =  log_abs_L_Omega_double(t1 + ii + 1,
+                                                    t1 + jj) +   B_log_abs_z_grad_term.col(jj).array()   +
                                                                    B_log_Z_std_norm.col(t1 + jj).array() +  log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1 + ii + 1, t1 + jj) ; 
                  sign_deriv_Bound_Z_x_L_comp.col(jj).array() =   stan::math::sign(L_Omega_double(t1 + ii + 1, t1 + jj)) *   B_sign_z_grad_term.col(jj).array()   *  
                                                                  B_sign_Z_std_norm.col(t1 + jj).array() *  sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1 + ii + 1, t1 + jj) ; 
@@ -482,7 +486,8 @@ inline void fn_latent_trait_compute_bs_grad_log_scale(      Eigen::Ref<Eigen::Ma
                // log_abs_b.array() =  - log_abs_L_Omega_double(t1 + ii + 1, t1 + ii + 1) +  log_abs_deriv_Bound_Z_x_L.col(ii + 1).array();
                // sign_b.array() =  stan::math::sign(1.0 / L_Omega_double(t1 + ii + 1, t1 + ii + 1))  *   -1.0 * sign_deriv_Bound_Z_x_L.col(ii + 1).array();
                log_terms.col(0)  =   log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1 + ii + 1).array() + log_abs_L_Omega_double(t1 + ii + 1, t1 + ii + 1); 
-               log_terms.col(1)  = - log_abs_L_Omega_double(t1 + ii + 1, t1 + ii + 1) +  log_abs_deriv_Bound_Z_x_L.col(ii + 1).array();
+               log_terms.col(1)  = - log_abs_L_Omega_double(t1 + ii + 1,
+                             t1 + ii + 1) +  log_abs_deriv_Bound_Z_x_L.col(ii + 1).array();
                sign_terms.col(0) =  sign_deriv_L_T_T_inv * (B_sign_Bound_Z.col(t1 + ii + 1).array() * stan::math::sign(L_Omega_double(t1 + ii + 1, t1 + ii + 1)) );
                sign_terms.col(1) =  stan::math::sign(1.0 / L_Omega_double(t1 + ii + 1, t1 + ii + 1))  *   -1.0 * sign_deriv_Bound_Z_x_L.col(ii + 1).array();
                

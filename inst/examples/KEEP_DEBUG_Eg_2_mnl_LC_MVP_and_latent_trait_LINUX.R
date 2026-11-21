@@ -291,7 +291,7 @@ N <- 500
     learning_rate <- 0.05
     diffusion_HMC <- TRUE
     partitioned_HMC = TRUE
-    n_nuisance_to_track <- 10 # set to some small number (< 10) if don't care about making inference on nuisance params (which is most of the time!)
+    nuisance_to_track <- "none" # "none" keeps no nuisance values; the names of nuisance blocks keep those blocks
   }
   
   
@@ -350,7 +350,7 @@ N <- 500
                                       multi_attempts = TRUE,
                                       metric_shape_main = "dense",
                                       metric_type_main = "Hessian",
-                                      n_nuisance_to_track = n_nuisance_to_track)   
+                                      nuisance_to_track = nuisance_to_track)   
   
   model_samples
   

@@ -8,7 +8,6 @@
  
 
  
-using namespace Eigen;
 
  
 
@@ -171,7 +170,9 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
   int n_choose_2 = n_tests * (n_tests - 1.0) * 0.5 ;
   std::vector< std::vector<Eigen::Matrix<double, -1, -1 > > > Jacobian_d_L_Sigma_wrt_b_3d_arrays_double =  vec_of_vec_of_mats<double>(n_tests, n_tests, n_tests, n_class);
   std::vector<Eigen::Matrix<double, -1, -1 > > L_Omega_double =  vec_of_mats<double>(n_tests, n_tests, n_class);
-  std::vector<Eigen::Matrix<double, -1, -1 > > L_Omega_recip_double =  vec_of_mats<double>(n_tests, n_tests, n_class);
+  std::vector<Eigen::Matrix<double, -1, -1 > > L_Omega_recip_double =  vec_of_mats<double>(n_tests,
+                                                                                           n_tests,
+                                                                                           n_class);
   Eigen::Matrix<double, -1, 1 >   bs_d_double = Eigen::Matrix<double, -1, 1 >::Zero(n_tests);
   Eigen::Matrix<double, -1, 1 >   bs_nd_double  = Eigen::Matrix<double, -1, 1 >::Zero(n_tests);
 
@@ -223,7 +224,9 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
             for (int c = 0; c < n_class; ++c) {
               for (int t = 0; t < n_tests; ++t) {
                 // val   =  lb +  (ub - lb) *  0.5 * (1.0 +  stan::math::tanh(y));
-                  Eigen::Matrix<stan::math::var, -1, 1> outs = lb_ub_lp(bs_raw_mat(c, t), LT_b_priors_1(c, t), LT_b_priors_2(c, t));
+                  Eigen::Matrix<stan::math::var, -1, 1> outs = lb_ub_lp(bs_raw_mat(c, t),
+                                                                        LT_b_priors_1(c, t),
+                                                                        LT_b_priors_2(c, t));
                   bs_mat(c, t) = outs(1);
                   target_AD += outs(0);
               }
@@ -252,7 +255,7 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
                      double normalized = 2.0 * ((LT_known_bs_values(c, t) - lower) / (upper - lower)) - 1.0; 
                      bs_raw_mat(c, t) = stan::math::atanh(normalized);
                   } else { 
-                     bs_raw_mat(c, t) = -700.0; // to prevent any possible numerical issues
+                     bs_raw_mat(c, t) = -INFINITY; // to prevent any possible numerical issues
                   }
               } else { 
                   // For uniform, need to compute the inverse transformation
@@ -294,8 +297,12 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
           LT_theta(0, t)   =    LT_a(0, t) /  stan::math::sqrt(1.0 + ( bs_nd(t) * bs_nd(t)));
         }
 
-        std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  L_Omega_var = vec_of_mats<stan::math::var>(n_tests, n_tests, n_class);
-        std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  Omega_var   = vec_of_mats<stan::math::var>(n_tests, n_tests, n_class);
+        std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  L_Omega_var = vec_of_mats<stan::math::var>(n_tests,
+                                                                                                        n_tests,
+                                                                                                        n_class);
+        std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  Omega_var   = vec_of_mats<stan::math::var>(n_tests,
+                                                                                                        n_tests,
+                                                                                                        n_class);
 
         Eigen::Matrix<stan::math::var, -1, -1 > identity_dim_T =     Eigen::Matrix<stan::math::var, -1, -1 > ::Zero(n_tests, n_tests) ; //  stan::math::diag_matrix(  stan::math::rep_vector(1, n_tests)  ) ;
 
@@ -354,7 +361,8 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
             sum_sq_2  = 0;
 
             for (int j = 1; j < t + 1; ++j) {
-              if (j < (t)) Jacobian_d_L_Sigma_wrt_b_3d_arrays_var[c][t-1](t-1, j-1) = ( L_Omega_var[c](t-1, j-1) /  bs_mat(c, t-1) ) ;//* ;// bs_nd(t-1) ;
+              if (j < (t)) Jacobian_d_L_Sigma_wrt_b_3d_arrays_var[c][t-1](t-1,
+                  j-1) = ( L_Omega_var[c](t-1, j-1) /  bs_mat(c, t-1) ) ; //* ;// bs_nd(t-1) ;
               sum_sq_1 +=   bs_mat(c, j-1) *   bs_mat(c, j-1) ;
               if (j < (t))   sum_sq_2 +=    bs_mat(c, j-1) *   bs_mat(c, j-1) ;
             }
@@ -399,11 +407,19 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
         if (exclude_priors == false)
         for (int t = 0; t < n_tests; ++t) {
             if (LT_prior_corr_bs == "Weibull") {
-              target_AD += stan::math::weibull_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = scale/sigma
-              target_AD += stan::math::weibull_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = shape/alpha, b = scale/sigma
+              target_AD += stan::math::weibull_lpdf(  bs_nd(t) ,
+                                                    LT_b_priors_1(0, t),
+                                                    LT_b_priors_2(0, t)  ); // a = shape/alpha, b = scale/sigma
+              target_AD += stan::math::weibull_lpdf(  bs_d(t)  ,
+                                                    LT_b_priors_1(1, t),
+                                                    LT_b_priors_2(1, t)  ); // a = shape/alpha, b = scale/sigma
             } else if (LT_prior_corr_bs == "gamma") {
-              target_AD += stan::math::gamma_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = inv_scale/beta
-              target_AD += stan::math::gamma_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = shape/alpha, b = inv_scale/beta
+              target_AD += stan::math::gamma_lpdf(  bs_nd(t) ,
+                                                  LT_b_priors_1(0, t),
+                                                  LT_b_priors_2(0, t)  ); // a = shape/alpha, b = inv_scale/beta
+              target_AD += stan::math::gamma_lpdf(  bs_d(t)  ,
+                                                  LT_b_priors_1(1, t),
+                                                  LT_b_priors_2(1, t)  ); // a = shape/alpha, b = inv_scale/beta
             }
             // } else if (LT_prior_corr_bs == "uniform") {
             //   target_AD += stan::math::uniform_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = min, b = max
@@ -427,7 +443,9 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
         if (exclude_priors == false)
         for (int c = 0; c < n_class; ++c) {
           for (int t = 0; t < n_tests; ++t) {
-            target_AD += stan::math::normal_lpdf(LT_theta(c, t), prior_coeffs_mean[c](0, t), prior_coeffs_sd[c](0, t)); //// Prior on theta
+            target_AD += stan::math::normal_lpdf(LT_theta(c, t),
+                                                 prior_coeffs_mean[c](0, t),
+                                                 prior_coeffs_sd[c](0, t)); //// Prior on theta
             target_AD +=  - 0.5 * stan::math::log(1.0 + stan::math::square(stan::math::abs(bs_mat(c, t) ))); // Jacobian for LT_theta -> LT_a
           }
         }
@@ -617,11 +635,13 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
   Eigen::Matrix<double, -1, -1> u_grad_array_CM_chunk = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests); /// accumilated in loop
   ///////////////////////////////////////////////
   Eigen::Matrix<double, -1, -1> common_grad_term_1 = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
-  Eigen::Matrix<double, -1, -1> L_Omega_diag_recip_array = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
+  Eigen::Matrix<double, -1, -1> L_Omega_diag_recip_array = Eigen::Matrix<double, -1, -1>::Zero(chunk_size,
+                                                                                               n_tests);
   Eigen::Matrix<double, -1, -1> y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
   Eigen::Matrix<double, -1, -1> y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
   Eigen::Matrix<double, -1, -1> prob_rowwise_prod_temp = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
-  Eigen::Matrix<double, -1, -1> prob_recip_rowwise_prod_temp = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
+  Eigen::Matrix<double, -1, -1> prob_recip_rowwise_prod_temp = Eigen::Matrix<double, -1, -1>::Zero(chunk_size,
+                                                                                                   n_tests);
   ///////////////////////////////////////////////
   Eigen::Matrix<double, -1, 1> prod_container = Eigen::Matrix<double, -1, 1>::Zero(chunk_size);
   Eigen::Matrix<double, -1, 1> derivs_chain_container_vec = Eigen::Matrix<double, -1, 1>::Zero(chunk_size);
@@ -781,7 +801,8 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
         for (int t = 0; t < n_tests; t++) {
 
                 ////-----------------------------------------------
-                Bound_Z[c].col(t).array() =     L_Omega_recip_double[c](t, t) * (  - ( LT_a_double(c, t) +      inc_array.array()   )  ) ;
+                Bound_Z[c].col(t).array() =     L_Omega_recip_double[c](t,
+                        t) * (  - ( LT_a_double(c, t) +      inc_array.array()   )  ) ;
                 ////-----------------------------------------------
                 
                 ////-----------------------------------------------
@@ -828,7 +849,7 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
       
       ////-----------------------------------------------
       log_lik_chunk = out_mat.tail(N).segment(chunk_size_orig * chunk_counter, chunk_size);
-      prob_n  =  fn_EIGEN_double(log_lik_chunk, "exp",  vect_type_exp);
+      fn_EIGEN_double_into( prob_n, log_lik_chunk, "exp",  vect_type_exp);
       prob_n_recip  =  stan::math::inv(prob_n); // this CANNOT be a temporary otherwise it created a "dangling reference", since prob_n is a temporary!!
       ////-----------------------------------------------
 
@@ -929,7 +950,10 @@ inline  void         fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(   Eigen::
                                                     derivs_chain_container_vec,
                                                     Model_args_as_cpp_struct);
                   
-                  u_grad_array_CM_chunk.block(0, 0, chunk_size, n_tests).array() += u_grad_array_CM_chunk_block.array();
+                  u_grad_array_CM_chunk.block(0,
+                                              0,
+                                              chunk_size,
+                                              n_tests).array() += u_grad_array_CM_chunk_block.array();
                   
                   const int start_index = 1 + (chunk_size_orig * n_tests * chunk_counter);
                   const int length = chunk_size * n_tests;

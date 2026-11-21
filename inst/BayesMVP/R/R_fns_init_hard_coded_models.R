@@ -391,8 +391,17 @@ init_hard_coded_model_args <- function( Model_type,
         ##
         model_args_list$n_obs <- N * n_tests
         ##
+        ## ---- missing test results are coded y = -1 (handled in the C++ by the GHK method: the untruncated
+        ##      draw, no likelihood term); every other value must be a category. The type of each test and its
+        ##      categories are read from its observed (non-missing) results only:
+        ##
+        if (any(is.na(y)) || any((y < 0) & (y != -1))) {
+          stop("y: a missing test result must be coded -1 (no NA, and no other negative value)")
+        }
+        # is_binary_slot <- sapply(1:n_tests, 
+        #                  function(t) all(y[, t] %in% c(0, 1)))
         is_binary_slot <- sapply(1:n_tests, 
-                         function(t) all(y[, t] %in% c(0, 1)))
+                         function(t) all(y[y[, t] != -1, t] %in% c(0, 1)))
         ##
         n_binary_tests  <- sum(is_binary_slot)
         n_ordinal_tests <- sum(!is_binary_slot)
@@ -419,12 +428,22 @@ init_hard_coded_model_args <- function( Model_type,
               ord_slots <- which(!is_binary_slot)
               for (k in seq_along(ord_slots)) {
                     t <- ord_slots[k]
-                    if (max(y[, t]) > n_cat_per_ord_test[k]) {
-                      stop(paste0("slot ", t, ": observed max category (", max(y[, t]),
+                    ## (the observed results only: y = -1 is a missing result)
+                    observed_y_of_slot_t <- y[y[, t] != -1, t]
+                    # if (max(y[, t]) > n_cat_per_ord_test[k]) {
+                    #   stop(paste0("slot ", t, ": observed max category (", max(y[, t]),
+                    #               ") exceeds declared n_cat_per_ord_test[", k, "] = ", n_cat_per_ord_test[k]))
+                    # }
+                    # if (min(y[, t]) < 1) {
+                    #   stop(paste0("slot ", t, " is ordinal so y must be 1-indexed; found min = ", min(y[, t])))
+                    # }
+                    if (max(observed_y_of_slot_t) > n_cat_per_ord_test[k]) {
+                      stop(paste0("slot ", t, ": observed max category (", max(observed_y_of_slot_t),
                                   ") exceeds declared n_cat_per_ord_test[", k, "] = ", n_cat_per_ord_test[k]))
                     }
-                    if (min(y[, t]) < 1) {
-                      stop(paste0("slot ", t, " is ordinal so y must be 1-indexed; found min = ", min(y[, t])))
+                    if (min(observed_y_of_slot_t) < 1) {
+                      stop(paste0("slot ", t, " is ordinal so y must be 1-indexed; found min = ",
+                                  min(observed_y_of_slot_t)))
                     }
                     if (n_cat_per_ord_test[k] < 3L) {
                       stop(paste0("slot ", t, ": n_cat_per_ord_test[", k, "] = ", n_cat_per_ord_test[k],
@@ -529,7 +548,9 @@ init_hard_coded_model_args <- function( Model_type,
                                       X = model_args_list$X,
                                       N = model_args_list$N,
                                       n_tests = model_args_list$n_tests,
-                                      n_class = model_args_list$n_class)
+                                      n_class = model_args_list$n_class,
+                                      n_covariates_per_outcome_mat_given =
+                                            model_args_list$n_covariates_per_outcome_mat)
         X <- outs$X
         model_args_list$X <- outs$X
         ##
@@ -594,7 +615,7 @@ init_hard_coded_model_args <- function( Model_type,
                           overflow_threshold  = +7.5,
                           underflow_threshold = -7.5,
                           ##
-                          C_raw_lower = -7.5,   ## ---- ordinal-only
+                          C_raw_lower = -15,    ## ---- ordinal-only
                           C_raw_upper = +2.5,   ## ---- ordinal-only
                           ##
                           num_chunks = find_num_chunks_MVP(N, n_tests),
@@ -785,6 +806,170 @@ init_hard_coded_model_args <- function( Model_type,
 
 
 
+#' fn_Se_Sp_prior_Model_args
+#' @keywords internal
+fn_Se_Sp_prior_Model_args <- function(model_args_list,
+                                      n_class,
+                                      n_tests,
+                                      n_cat_per_test,
+                                      n_covariates_max) {
+
+        ##
+        ## ---- Priors directly on Sp (c = 1) and Se (c = 2) at chosen cutoffs, for the C++ (0-based cutoffs, -1 =
+        ##      unused). Types 1 and 3 on the scale P = Sp (c = 1) and P = 1 - Se (c = 2); type 2 Beta(a, b) on Sp
+        ##      and on Se; type 4 on link(Sp) and link(Se). Ordinal tests (second index = ordinal test slot):
+        ##      n_chosen [class, ordinal test], chosen_cutoffs [class, ordinal test, j] (1-based within the test),
+        ##      prior_Se_Sp_dirichlet_A [class, ordinal test, j],
+        ##      prior_Se_Sp_beta [class, ordinal test, j, a / b],
+        ##      prior_Se_Sp_link_mean_SD [class, ordinal test, j, mean / SD]
+        ##      (unset: every cutoff, mean 0 and SD 1). Binary tests (the prior replaces the intercept prior):
+        ##      Se_Sp_binary_n_chosen [class], Se_Sp_binary_chosen_tests [class, j] (test columns, 1-based),
+        ##      Se_Sp_binary_dirichlet_A, Se_Sp_binary_beta, Se_Sp_binary_link_mean_SD [class, j, 1 / 2]
+        ##      (unset: no binary test chosen).
+        ##
+        use_Se_Sp_prior <- model_args_list$use_Se_Sp_prior %||% 0L
+        dummy_int <- rep(list(matrix(-1L, nrow = 1, ncol = 1)), n_class)
+        dummy_double <- rep(list(matrix(0.0, nrow = 1, ncol = 1)), n_class)
+        if (use_Se_Sp_prior == 0) {
+              return(list(chosen_cutoffs = dummy_int,
+                          binary_chosen = dummy_int,
+                          A = dummy_double,
+                          beta_a = dummy_double,
+                          beta_b = dummy_double,
+                          link_mean = dummy_double,
+                          link_SD = dummy_double,
+                          baseline_case = dummy_double,
+                          binary_hyper = dummy_double))
+        }
+        ##
+        ## ---- ordinal tests:
+        ##
+        ord_slots <- which(n_cat_per_test > 2)
+        n_ordinal_tests <- length(ord_slots)
+        n_thr_per_ord_test <- n_cat_per_test[ord_slots] - 1L
+        n_chosen <- model_args_list$n_chosen %||%
+                    matrix(n_thr_per_ord_test, nrow = n_class, ncol = n_ordinal_tests, byrow = TRUE)
+        n_chosen_max <- max(1L, n_chosen)
+        chosen_cutoffs_of_user <- model_args_list$chosen_cutoffs
+        if (is.null(chosen_cutoffs_of_user)) {
+              chosen_cutoffs_of_user <- array(1L, dim = c(n_class, max(1L, n_ordinal_tests), n_chosen_max))
+              for (c in 1:n_class) {
+                    for (t_ord in seq_len(n_ordinal_tests)) {
+                          n_thr_t <- n_thr_per_ord_test[t_ord]
+                          chosen_cutoffs_of_user[c, t_ord, 1:n_thr_t] <- 1:n_thr_t
+                    }
+              }
+        }
+        link_mean_SD_of_user <- model_args_list$prior_Se_Sp_link_mean_SD
+        if (is.null(link_mean_SD_of_user)) {
+              link_mean_SD_of_user <- array(0.0, dim = c(n_class, max(1L, n_ordinal_tests), n_chosen_max, 2))
+              link_mean_SD_of_user[, , , 2] <- 1.0
+        }
+        chosen_cutoffs <- A <- beta_a <- beta_b <- link_mean <- link_SD <- vector("list", n_class)
+        for (c in 1:n_class) {
+
+              chosen_cutoffs[[c]] <- matrix(-1L, nrow = n_chosen_max, ncol = max(1L, n_ordinal_tests))
+              A[[c]] <- matrix(0.0, nrow = n_chosen_max + 1, ncol = max(1L, n_ordinal_tests))
+              beta_a[[c]] <- beta_b[[c]] <- matrix(0.0, nrow = n_chosen_max, ncol = max(1L, n_ordinal_tests))
+              link_mean[[c]] <- link_SD[[c]] <- matrix(0.0, nrow = n_chosen_max, ncol = max(1L, n_ordinal_tests))
+              for (t_ord in seq_len(n_ordinal_tests)) {
+
+                    m <- n_chosen[c, t_ord]
+                    if (m == 0) next
+                    chosen <- chosen_cutoffs_of_user[c, t_ord, 1:m]
+                    chosen_cutoffs[[c]][1:m, t_ord] <- as.integer(chosen - 1L)
+                    if (!is.null(model_args_list$prior_Se_Sp_dirichlet_A)) {
+                          A[[c]][1:(m + 1), t_ord] <- model_args_list$prior_Se_Sp_dirichlet_A[c, t_ord, 1:(m + 1)]
+                    }
+                    if (!is.null(model_args_list$prior_Se_Sp_beta)) {
+                          beta_a[[c]][1:m, t_ord] <- model_args_list$prior_Se_Sp_beta[c, t_ord, 1:m, 1]
+                          beta_b[[c]][1:m, t_ord] <- model_args_list$prior_Se_Sp_beta[c, t_ord, 1:m, 2]
+                    }
+                    link_mean[[c]][1:m, t_ord] <- link_mean_SD_of_user[c, t_ord, 1:m, 1]
+                    link_SD[[c]][1:m, t_ord] <- link_mean_SD_of_user[c, t_ord, 1:m, 2]
+
+              }
+
+        }
+        ##
+        ## ---- baseline covariate values of each class (columns = tests):
+        ##
+        baseline_case <- vector("list", n_class)
+        for (c in 1:n_class) {
+
+              baseline_list <- if (c == 1) model_args_list$baseline_case_nd else model_args_list$baseline_case_d
+              baseline_case[[c]] <- matrix(0.0, nrow = n_covariates_max, ncol = n_tests)
+              baseline_case[[c]][1, ] <- 1.0
+              for (t in seq_along(baseline_list)) {
+
+                    baseline_case[[c]][, t] <- 0.0
+                    baseline_case[[c]][seq_along(baseline_list[[t]]), t] <- baseline_list[[t]]
+
+              }
+
+        }
+        ##
+        ## ---- binary tests: chosen (1) or not per test column, and the rows of hyper (Dirichlet A 1-2, Beta
+        ##      a / b 3-4, link mean / SD 5-6) per test column:
+        ##
+        fn_row_of_chosen_test <- function(x,
+                                          c,
+                                          j) {
+
+              if (is.list(x)) return(x[[c]][j, ])
+              return(x[c, j, ])
+
+        }
+        binary_chosen <- binary_hyper <- vector("list", n_class)
+        for (c in 1:n_class) {
+
+              binary_chosen[[c]] <- matrix(0L, nrow = 1, ncol = n_tests)
+              binary_hyper[[c]] <- matrix(1.0, nrow = 6, ncol = n_tests)
+              binary_hyper[[c]][5, ] <- 0.0
+              n_chosen_binary <- if (is.null(model_args_list$Se_Sp_binary_n_chosen)) 0L else
+                                 model_args_list$Se_Sp_binary_n_chosen[c]
+              for (j in seq_len(n_chosen_binary)) {
+
+                    t <- model_args_list$Se_Sp_binary_chosen_tests[c, j]
+                    if (n_cat_per_test[t] > 2) stop("Se_Sp_binary_chosen_tests holds an ordinal test: ", t)
+                    if (baseline_case[[c]][1, t] == 0.0) stop("the baseline case of test ", t, " starts with 0")
+                    binary_chosen[[c]][1, t] <- 1L
+                    binary_A <- model_args_list$Se_Sp_binary_dirichlet_A
+                    binary_beta <- model_args_list$Se_Sp_binary_beta
+                    binary_link_mean_SD <- model_args_list$Se_Sp_binary_link_mean_SD
+                    if (!is.null(binary_A)) {
+                          binary_hyper[[c]][1:2, t] <- fn_row_of_chosen_test(binary_A,
+                                                                             c,
+                                                                             j)
+                    }
+                    if (!is.null(binary_beta)) {
+                          binary_hyper[[c]][3:4, t] <- fn_row_of_chosen_test(binary_beta,
+                                                                             c,
+                                                                             j)
+                    }
+                    if (!is.null(binary_link_mean_SD)) {
+                          binary_hyper[[c]][5:6, t] <- fn_row_of_chosen_test(binary_link_mean_SD,
+                                                                             c,
+                                                                             j)
+                    }
+
+              }
+
+        }
+        return(list(chosen_cutoffs = chosen_cutoffs,
+                    binary_chosen = binary_chosen,
+                    A = A,
+                    beta_a = beta_a,
+                    beta_b = beta_b,
+                    link_mean = link_mean,
+                    link_SD = link_SD,
+                    baseline_case = baseline_case,
+                    binary_hyper = binary_hyper))
+
+}
+
+
+
 #' build_Model_args_as_Rcpp_Lists
 #' @export
 build_Model_args_as_Rcpp_List <- function(Model_type,
@@ -826,7 +1011,10 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         n_cat_per_test_in_column_order_of_y <-  model_args_list$n_cat_per_test
         ##
         if (is.null(n_cat_per_test_in_column_order_of_y)) {
-              is_binary_column_of_y <-  apply(y, 2, function(column_of_y) all(column_of_y %in% c(0, 1)))
+              # is_binary_column_of_y <-  apply(y, 2, function(column_of_y) all(column_of_y %in% c(0, 1)))
+              ## (the observed results only: y = -1 is a missing result)
+              is_binary_column_of_y <-  apply(y, 2, function(column_of_y) all(column_of_y[column_of_y != -1] %in%
+                                                                                c(0, 1)))
               n_cat_per_test_in_column_order_of_y <-  rep(2, ncol(y))
               n_cat_per_test_in_column_order_of_y[!is_binary_column_of_y] <-  model_args_list$n_cat_per_ord_test
         }
@@ -863,9 +1051,17 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
           model_args_list$num_chunks %||% 1L,                  # [3]
           model_args_list$n_binary_tests,                      # [4] ## ---- ordinal-only
           model_args_list$n_ordinal_tests,                      # [5] ## ---- ordinal-only
-          model_args_list$n_pops ## ---- multiple-pops
+          model_args_list$n_pops, ## ---- multiple-pops
+          model_args_list$use_Se_Sp_prior %||% 0L,             # [7] priors directly on Se / Sp
+          model_args_list$Se_Sp_prior_type %||% 4L             # [8] 1 = Dirichlet, 2 / 3 = Betas, 4 = link Normal
         )
         Model_args_ints <- matrix(Model_args_ints, ncol = 1, nrow = length(Model_args_ints))
+        Se_Sp_args <- fn_Se_Sp_prior_Model_args(model_args_list = model_args_list,
+                                                n_class = n_class,
+                                                n_tests = n_tests,
+                                                n_cat_per_test = model_args_list$n_cat_per_test %||%
+                                                                 rep(2L, n_tests),
+                                                n_covariates_max = max(1L, model_args_list$n_covariates_max))
         # Model_args_doubles - ORDER MATTERS!
         Model_args_doubles <- c(
           # model_args_list$prior_prev_a,                        # [0]
@@ -961,12 +1157,21 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
           model_args_list$lb_corr,                            # [4]
           model_args_list$ub_corr,                            # [5]
           model_args_list$known_values_list,                   # [6]
-          model_args_list$prior_dirichlet_alpha               # [7] ## ---- ordinal-only
+          model_args_list$prior_dirichlet_alpha,              # [7] ## ---- ordinal-only
+          Se_Sp_args$A,                                       # [8]  Se / Sp prior: Dirichlet A
+          Se_Sp_args$beta_a,                                  # [9]  Se / Sp prior: Beta a
+          Se_Sp_args$beta_b,                                  # [10] Se / Sp prior: Beta b
+          Se_Sp_args$baseline_case,                           # [11] baseline covariate values
+          Se_Sp_args$binary_hyper,                            # [12] Se / Sp prior of binary tests: A, a / b, link
+          Se_Sp_args$link_mean,                               # [13] Se / Sp prior: link mean (Sp; Se)
+          Se_Sp_args$link_SD                                  # [14] Se / Sp prior: link SD
         )
         
         # Model_args_vecs_of_mats_int - ORDERED LIST
         Model_args_vecs_of_mats_int <- list(
-          model_args_list$known_values_indicator_list         # [0]
+          model_args_list$known_values_indicator_list,        # [0]
+          Se_Sp_args$chosen_cutoffs,                          # [1] Se / Sp prior: chosen cutoffs (0-based)
+          Se_Sp_args$binary_chosen                            # [2] Se / Sp prior of binary tests: used (1) or not
         )
         
         # Model_args_2_layer_vecs_of_col_vecs_double - empty
@@ -1011,7 +1216,9 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
                                        "number of chunks",
                                        "n_binary_tests", 
                                        "n_ordinal_tests", 
-                                       "n_pops" ## ----
+                                       "n_pops", ## ----
+                                       "use_Se_Sp_prior",
+                                       "Se_Sp_prior_type"
                                        )
         ##
         colnames(Model_args_doubles) <- c("Model arguments - doubles")

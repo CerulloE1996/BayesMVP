@@ -22,6 +22,9 @@
 
 #pragma once
 
+#include <NicoSIMD/math/nico_double_exp_log_reference.hpp>
+#include <NicoSIMD/math/nico_double_probability_reference.hpp>
+
 #include <Eigen/Dense>
 #include <limits>
 #include <cmath>
@@ -39,33 +42,64 @@ static constexpr double HALF_LOG_TWO_PI   =  0.91893853320467274178;  // 0.5*log
 //// paths everywhere else use the APPROX pair (log_Phi_approx + inv_Phi_approx_from_
 //// logit_prob), so this file must too, or it disagrees with the standard-scale pass
 //// that produced its inputs.
-//// the note above now applies to the Phi_approx setting only. For
+//// the note above applies to the Phi_approx setting only. For
 //// Phi_type = "Phi" / inv_Phi_type = "inv_Phi" the log-scale tail paths use the exact pair
-//// fast_log_Phi / fast_inv_Phi_from_log_p (double_fns.hpp); see
+//// nico_log_Phi / nico_inv_Phi_from_log_p (double_fns.hpp); see
 //// fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal and MVP_log_scale_grad_calc_fns_T.hpp.
 //// -----------------------------------------------------------------------------
-ALWAYS_INLINE double sl_exp(const double x, const bool S)   { return S ? stan::math::exp(x)   : fast_exp_1(x); }
-ALWAYS_INLINE double sl_log(const double x, const bool S)   { return S ? stan::math::log(x)   : fast_log_1(x); }
-ALWAYS_INLINE double sl_log1m(const double x, const bool S) { return S ? stan::math::log1m(x) : fast_log1m_1(x); }
+ALWAYS_INLINE double sl_exp(const double x,
+                            const bool S) {
+
+      return S ? stan::math::exp(x)
+               : nico::math::reference::nico_exp_1(x);
+
+}
+
+ALWAYS_INLINE double sl_log(const double x,
+                            const bool S) {
+
+      return S ? stan::math::log(x)
+               : nico::math::nico_log_1_double_precision(x);   //// (NicoSIMD 14 Nov: replaces the removed nico_log_1)
+
+}
+
+ALWAYS_INLINE double sl_log1m(const double x,
+                              const bool S) {
+
+      return S ? stan::math::log1m(x)
+               : nico::math::reference::nico_log1m_1(x);
+
+}
 ////
 //// log Phi(x) ~=~ log_inv_logit(0.07056*x^3 + 1.5976*x)   [matches "log_Phi_approx"]:
 ALWAYS_INLINE double sl_log_Phi(const double x, const bool S) {
+
       const double t = 0.07056*x*x*x + 1.5976*x;
-      return S ? stan::math::log_inv_logit(t) : fast_log_inv_logit(t);
+      return S ? stan::math::log_inv_logit(t) : nico::math::reference::nico_log_inv_logit(t);
+
 }
 ////
-ALWAYS_INLINE double sl_inv_Phi_from_logit(const double logit_p, const bool S) {
-      return S ? inv_Phi_approx_from_logit_prob_std(logit_p) : fast_inv_Phi_approx_from_logit_prob(logit_p);
+ALWAYS_INLINE double sl_inv_Phi_from_logit(const double logit_p,
+                                           const bool S) {
+
+      return S
+                   ? nico::math::reference::inv_Phi_approx_from_logit_prob_std(logit_p)
+                   : nico::math::reference::nico_inv_Phi_approx_from_logit_prob(logit_p);
+
 }
 ////
 //// log(1 - exp(x)), x < 0. expm1 has no custom/SIMD counterpart in this codebase, so
 //// libm is used for the near-zero branch (exact, scalar, problem-rows only):
 ALWAYS_INLINE double sl_log1m_exp(const double x, const bool S) {
+
       if (x > -0.6931471805599453) return std::log(-std::expm1(x));
       return sl_log1m(sl_exp(x, S), S);
+
 }
 ALWAYS_INLINE double sl_log_diff_exp(const double a, const double b, const bool S) {   //// log(e^a - e^b), a > b
+
       return a + sl_log1m_exp(b - a, S);
+
 }
 
 
@@ -81,7 +115,9 @@ struct SignedLog {
 };
 
 ALWAYS_INLINE SignedLog sl_zero() {
+
   return { SL_NEG_INF, 1.0 };
+
 }
 
 // ALWAYS_INLINE bool sl_is_zero(const SignedLog &a) {
@@ -90,7 +126,9 @@ ALWAYS_INLINE SignedLog sl_zero() {
 //// exact zero only for lg == -Inf; a NaN lg (a failed computation) is NOT zero, so sl_add / sl_val carry it
 //// through to a NaN value and the failed evaluation is flagged:
 ALWAYS_INLINE bool sl_is_zero(const SignedLog &a) {
+
   return (a.lg == SL_NEG_INF);
+
 }
 
 //// make a SignedLog from (log|x|, sign) - returns exact zero if lg is -Inf/NaN:
@@ -101,8 +139,10 @@ ALWAYS_INLINE bool sl_is_zero(const SignedLog &a) {
 //// exact zero only if lg is -Inf; a NaN lg is kept (a NaN SignedLog), so the failure is flagged downstream
 //// instead of being masked as an exact zero:
 ALWAYS_INLINE SignedLog sl_make(const double lg, const double sg) {
+
   if (lg == SL_NEG_INF) return sl_zero();
   return { lg, (sg < 0.0) ? -1.0 : 1.0 };
+
 }
 
 // ALWAYS_INLINE SignedLog sl_from_val(const double x) {
@@ -156,26 +196,33 @@ ALWAYS_INLINE SignedLog sl_make(const double lg, const double sg) {
 //// of x (an infinite value, not zero), so a failure is flagged downstream instead of being masked as zero.
 //// (An infinite x times an exact-zero SignedLog is still exact zero in sl_mul: the x phi(x) -> 0 limit.)
 ALWAYS_INLINE SignedLog sl_from_val(const double x_given, const bool S) {
+
   const double x = x_given;
   if (x == 0.0) return sl_zero();
   if (std::isnan(x)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
   if (std::isinf(x)) return { std::numeric_limits<double>::infinity(), (x < 0.0) ? -1.0 : 1.0 };
   return { sl_log(std::abs(x), S), (x < 0.0) ? -1.0 : 1.0 };
+
 }
 
 ALWAYS_INLINE SignedLog sl_neg(const SignedLog &a) {
+
   if (sl_is_zero(a)) return sl_zero();
   return { a.lg, -a.sg };
+
 }
 
 ALWAYS_INLINE SignedLog sl_mul(const SignedLog &a, const SignedLog &b) {
+
   //// NaN times anything (also exact zero) stays NaN, as for doubles: no zero factor masks a failure:
   if (std::isnan(a.lg) || std::isnan(b.lg)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
   if (sl_is_zero(a) || sl_is_zero(b)) return sl_zero();
   return { a.lg + b.lg, a.sg * b.sg };
+
 }
 
 ALWAYS_INLINE SignedLog sl_add(const SignedLog &a, const SignedLog &b, const bool S) {
+
   //// a NaN term gives a NaN sum (not left to the fast exp / log approximations when S is false):
   if (std::isnan(a.lg) || std::isnan(b.lg)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
   //// an infinite term (lg = +Inf) gives that infinity, and +Inf plus -Inf gives NaN (not left to the fast exp):
@@ -191,19 +238,35 @@ ALWAYS_INLINE SignedLog sl_add(const SignedLog &a, const SignedLog &b, const boo
   const double s = a.sg * sl_exp(a.lg - m, S) + b.sg * sl_exp(b.lg - m, S);
   if (s == 0.0) return sl_zero();
   return { m + sl_log(std::abs(s), S), (s < 0.0) ? -1.0 : 1.0 };
+
 }
 
 ALWAYS_INLINE double sl_val(const SignedLog &a, const bool S) {
+
   if (std::isnan(a.lg)) return std::numeric_limits<double>::quiet_NaN();   //// a failure stays a NaN value
   if (a.lg == std::numeric_limits<double>::infinity()) return a.sg * std::numeric_limits<double>::infinity();
   if (sl_is_zero(a)) return 0.0;
   return a.sg * sl_exp(a.lg, S);
+
 }
 
 //// log of standard-normal pdf; -Inf at +-Inf argument (phi = 0). Analytic - no dispatch needed:
 ALWAYS_INLINE double log_phi_std_norm(const double x) {
+
   if (std::isinf(x)) return SL_NEG_INF;
   return -0.5 * x * x - HALF_LOG_TWO_PI;
+
+}
+
+//// log of the Phi_approx density, d/dx Phi_approx(x) = (3 a x^2 + b) s(p) s(-p) with p = x (a x^2 + b),
+//// a = 0.07056, b = 1.5976, s = inv_logit, on the log scale (log_inv_logit(+-p), so that s(-p), which is
+//// 1 - s(p), is never formed as a difference); -Inf at +-Inf argument (density 0), as log_phi_std_norm:
+ALWAYS_INLINE double log_Phi_approx_density(const double x) {
+
+  if (std::isinf(x)) return SL_NEG_INF;
+  const double p = x * (0.07056 * x * x + 1.5976);
+  return std::log(3.0 * 0.07056 * x * x + 1.5976) + stan::math::log_inv_logit(p) + stan::math::log_inv_logit(-p);
+
 }
 
 //// numerically-safe log-sum-exp of two logs (either may be -Inf):
@@ -212,11 +275,12 @@ ALWAYS_INLINE double log_phi_std_norm(const double x) {
 //   if (!(b > SL_NEG_INF)) return a;
 //   const double m = (a > b) ? a : b;
 //   const double d = ((a > b) ? b : a) - m;
-//   return m + (S ? stan::math::log1p_exp(d) : fast_log1p_exp_1(d));
+//   return m + (S ? stan::math::log1p_exp(d) : nico_log1p_exp_1(d));
 // }
-//// -Inf (the log of an exact zero) returns the other argument, as before. A NaN argument gives NaN (a failure is
-//// no longer masked by returning the other argument), and +Inf gives +Inf (not left to the fast log1p_exp):
+//// -Inf (the log of an exact zero) returns the other argument. A NaN argument gives NaN (a failure is not masked
+//// by returning the other argument), and +Inf gives +Inf (not left to the fast log1p_exp):
 ALWAYS_INLINE double lse_2(const double a, const double b, const bool S) {
+
   if (std::isnan(a) || std::isnan(b)) return std::numeric_limits<double>::quiet_NaN();
   if (a == SL_NEG_INF) return b;
   if (b == SL_NEG_INF) return a;
@@ -224,7 +288,8 @@ ALWAYS_INLINE double lse_2(const double a, const double b, const bool S) {
   if ((a == positive_infinity) || (b == positive_infinity)) return positive_infinity;
   const double m = (a > b) ? a : b;
   const double d = ((a > b) ? b : a) - m;
-  return m + (S ? stan::math::log1p_exp(d) : fast_log1p_exp_1(d));
+  return m + (S ? stan::math::log1p_exp(d) : nico::math::reference::nico_log1p_exp_1(d));
+
 }
 
 
@@ -264,18 +329,22 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
       ////
       //// ---- Native exact tails:
       ////
-      //// Previously these rows ALWAYS used the Phi_approx tail pair (sl_log_Phi = cubic-logistic log Phi,
-      //// sl_inv_Phi_from_logit = cubic inverse), whatever Phi_type was, while fn_MVOP_row_grads_log_scale
-      //// below differentiates them with the EXACT Gaussian densities (log_phi_std_norm, lphZr = Z^2/2 + 0.5 log 2pi).
-      //// For Phi_type = "Phi" / inv_Phi_type = "inv_Phi" that was both a splice in the target (exact interior,
-      //// Phi_approx tails) and a value/gradient mismatch on these rows. Now:
-      ////   use_exact_log_Phi (Phi_type = "Phi"):        log Phi(x) = fast_log_Phi(x)     (erfc body, Mills-ratio tail; exact)
-      ////   use_exact_inv_Phi (inv_Phi_type = "inv_Phi"): Z = fast_inv_Phi_from_log_p(log Phi_Z, log(1 - Phi_Z))  (AS241; exact)
-      //// The row gradients need no change: they are already the exact derivatives
+      //// fn_MVOP_row_grads_log_scale below differentiates these rows with the EXACT Gaussian densities
+      //// (log_phi_std_norm, lphZr = Z^2/2 + 0.5 log 2pi), so for Phi_type = "Phi" / inv_Phi_type = "inv_Phi" the
+      //// tails are exact too (the Phi_approx tail pair, sl_log_Phi = cubic-logistic log Phi and
+      //// sl_inv_Phi_from_logit = cubic inverse, would be both a splice in the target, exact interior with
+      //// Phi_approx tails, and a value/gradient mismatch on these rows):
+      ////   use_exact_log_Phi (Phi_type = "Phi"):
+      ////       log Phi(x) = nico_log_Phi(x)     (erfc body, Mills-ratio tail; exact)
+      ////   use_exact_inv_Phi (inv_Phi_type = "inv_Phi"):
+      ////       Z = nico_inv_Phi_from_log_p(log Phi_Z, log(1 - Phi_Z))  (AS241; exact)
+      //// The row gradients are the exact derivatives
       ////   d/dx Phi(x) = phi(x),  dZ/dPhi_Z = 1/phi(Z),
       //// i.e. dprob/dmu = (phi(lb) - phi(ub)) / L_tt and -dZ/dmu = [(1-u) phi(lb) + u phi(ub)] / (phi(Z) L_tt).
-      //// The Phi_approx setting keeps the old tail functions (and hence its pre-existing mismatch with the exact
-      //// row gradients - reported separately, not changed here).
+      //// The Phi_approx setting keeps the Phi_approx tail functions (and hence their mismatch with the exact
+      //// row gradients).
+      //// (fn_MVOP_row_grads_log_scale now takes the Phi_approx densities of the bounds and of Z when
+      ////  Phi_type = "Phi_approx" / inv_Phi_type = "inv_Phi_approx", so these rows and their gradients match.)
       ////
       const bool use_exact_log_Phi = !kernel_choice.Phi_approx;
       const bool use_exact_inv_Phi = !kernel_choice.inv_Phi_approx;
@@ -364,8 +433,16 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
             if (lb <= 0.0) {
               
                   //// ---------------- LOWER-TAIL (or straddling) case ----------------
-                  log_Phi_lb              = std::isinf(lb) ? SL_NEG_INF : (use_exact_log_Phi ? fast_log_Phi(lb) : sl_log_Phi(lb, S));
-                  const double log_Phi_ub = std::isinf(ub) ? 0.0        : (use_exact_log_Phi ? fast_log_Phi(ub) : sl_log_Phi(ub, S));
+                  log_Phi_lb = std::isinf(lb)
+                                   ? SL_NEG_INF
+                                   : (use_exact_log_Phi
+                                          ? nico::math::reference::nico_log_Phi(lb)
+                                          : sl_log_Phi(lb, S));
+                  const double log_Phi_ub = std::isinf(ub)
+                                                ? 0.0
+                                                : (use_exact_log_Phi
+                                                       ? nico::math::reference::nico_log_Phi(ub)
+                                                       : sl_log_Phi(ub, S));
                   
                   if (!(log_Phi_lb > SL_NEG_INF)) {
                     log_prob = log_Phi_ub;
@@ -381,7 +458,8 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
                   ////
                   const double log_1m_Phi_Z = sl_log1m_exp(log_Phi_Z, S);
                   if (use_exact_inv_Phi) {
-                    Z = fast_inv_Phi_from_log_p(log_Phi_Z, log_1m_Phi_Z);        //// exact; lower tail driven by log Phi_Z
+                    Z = nico::math::reference::nico_inv_Phi_from_log_p(log_Phi_Z,
+                                                log_1m_Phi_Z); //// exact; lower tail driven by log Phi_Z
                   } else {
                     const double logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
                     Z = sl_inv_Phi_from_logit(logit_Phi_Z, S);
@@ -393,8 +471,14 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
               
                   //// ---------------- UPPER-TAIL case (lb > 0, so ub > 0 too) ----------------
                   //// survival fns:  Phi_bar(x) = Phi(-x)
-                  const double log_Sb_lb = use_exact_log_Phi ? fast_log_Phi(-lb) : sl_log_Phi(-lb, S);
-                  const double log_Sb_ub = std::isinf(ub) ? SL_NEG_INF : (use_exact_log_Phi ? fast_log_Phi(-ub) : sl_log_Phi(-ub, S));
+                  const double log_Sb_lb = use_exact_log_Phi
+                                                ? nico::math::reference::nico_log_Phi(-lb)
+                                                : sl_log_Phi(-lb, S);
+                  const double log_Sb_ub = std::isinf(ub)
+                                                ? SL_NEG_INF
+                                                : (use_exact_log_Phi
+                                                       ? nico::math::reference::nico_log_Phi(-ub)
+                                                       : sl_log_Phi(-ub, S));
                   
                   if (!(log_Sb_ub > SL_NEG_INF)) {
                     log_prob = log_Sb_lb;
@@ -410,13 +494,15 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
                   ////
                   const double log_Phi_Z_upper = sl_log1m_exp(log_q, S);
                   if (use_exact_inv_Phi) {
-                    Z = fast_inv_Phi_from_log_p(log_Phi_Z_upper, log_q);         //// exact; upper tail driven by log(1 - Phi_Z) = log q
+                    Z = nico::math::reference::nico_inv_Phi_from_log_p(log_Phi_Z_upper,
+                                                log_q); //// exact; upper tail driven by log(1 - Phi_Z) = log q
                   } else {
                     const double logit_Phi_Z = log_Phi_Z_upper - log_q;
                     Z = sl_inv_Phi_from_logit(logit_Phi_Z, S);
                   }
                   ////
-                  log_Phi_lb  = sl_log1m_exp(log_Sb_lb, S);   //// log(1 - Phi_bar(lb)); fine since Phi_bar(lb) tiny (lb > 0)
+                  log_Phi_lb  = sl_log1m_exp(log_Sb_lb,
+                                             S); //// log(1 - Phi_bar(lb)); fine since Phi_bar(lb) tiny (lb > 0)
                   Phi_Z(i, t) = 1.0 - sl_exp(log_q, S);
               
             }
@@ -426,16 +512,19 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
             //// only a non-finite value (-Inf / NaN) takes the -700 sentinel. A finite log_prob below -700 is
             //// exact here and stays exact: the gradient engine of this row (fn_MVOP_row_grads_log_scale) uses
             //// it together with the exact Z, in dZ/du = prob / phi(Z) = exp(log_prob + Z^2 / 2 + log sqrt(2pi)),
-            //// and with log_prob clamped to -700 the two no longer cancel (nuisance gradient ~1e+267 for an
-            //// ordinal test whose bounds are near -53, e.g. a test intercept of +40), and the row's lp was
+            //// and with log_prob clamped to -700 the two would not cancel (nuisance gradient ~1e+267 for an
+            //// ordinal test whose bounds are near -53, e.g. a test intercept of +40), and the row's lp would be
             //// biased upwards:
          // if (!std::isfinite(log_prob)) log_prob = -700.0;
             //// only -Inf (an exact zero probability) takes the -700 placeholder; NaN or +Inf (a failed
             //// computation) stays non-finite, so the evaluation is flagged and the multi-attempt fallback runs:
-            if (log_prob == SL_NEG_INF) log_prob = -700.0;
+            //// if (log_prob == SL_NEG_INF) log_prob = -700.0;
+            //// (removed: log(0) stays -Inf; no -700 floor)
             
             y1_log_prob(i, t) = log_prob;
-            prob(i, t)        = sl_exp(log_prob, S);   //// may underflow to 0.0 - grads for these rows use the log-scale path
+            prob(i,
+                 t)        = sl_exp(log_prob,
+                 S); //// may underflow to 0.0 - grads for these rows use the log-scale path
             Z_std_norm(i, t)  = Z;
             Bound_U_Phi_Bound_Z(i, t) = (log_Phi_lb > SL_NEG_INF) ? sl_exp(log_Phi_lb, S) : 0.0;
             
@@ -551,7 +640,16 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
                                                   Eigen::Ref<Eigen::Matrix<double, -1, -1>> beta_grad_array_c,
                                                   Eigen::Ref<Eigen::Matrix<double, -1, -1>> U_Omega_grad_array_c,
                                                   Eigen::Ref<Eigen::Matrix<double, -1, -1>> cutpoint_grad_array_c,
-                                                  const bool S
+                                                  const bool S,
+                                                  //// the densities of the bounds and of Z: those of
+                                                  //// Phi_approx and inv_Phi_approx (true) or the exact
+                                                  //// Gaussian ones (false):
+                                                  const bool use_the_Phi_approx_density_of_the_bounds = false,
+                                                  const bool use_the_Phi_approx_density_of_Z = false,
+                                                  //// missing results (y = -1) of the chunk (1.0 = missing),
+                                                  //// or nullptr when the chunk has none:
+                                                  const Eigen::Matrix<double, -1,
+                                                                      -1> *is_missing_result_chunk = nullptr
 ) {
   
       //// ---------------- per-test signed-log seeds + weights ----------------
@@ -593,7 +691,20 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
             // const double log_L_recip = -std::log(L_tt);   //// L(t,t) > 0
             const double log_L_recip = -sl_log(L_tt, S);
             const double Z = Z_std_norm_c(n, t);
-            lphZr[t] = 0.5 * Z * Z + HALF_LOG_TWO_PI;
+            // lphZr[t] = 0.5 * Z * Z + HALF_LOG_TWO_PI;
+            lphZr[t] = use_the_Phi_approx_density_of_Z ? -log_Phi_approx_density(Z) :
+                                                         0.5 * Z * Z + HALF_LOG_TWO_PI;
+            if ((is_missing_result_chunk != nullptr) && ((*is_missing_result_chunk)(n, t) > 0.5)) {
+                  //// a missing result: the untruncated GHK draw (both bounds infinite), so every derivative with
+                  //// respect to its bounds is exactly 0; dZ/du = 1 / phi(Z) stays (lphZr, with log(prob) = 0)
+                  lph_lb[t] = SL_NEG_INF;
+                  lph_ub[t] = SL_NEG_INF;
+                  sl_dphi[t]   = sl_zero();
+                  sl_dZneg[t]  = sl_zero();
+                  sl_dphibz[t] = sl_zero();
+                  sl_dZbz[t]   = sl_zero();
+                  continue;
+            }
             
             // if (t < n_binary_tests) {
             if (ord_idx_of_test(t) < 0) {
@@ -602,16 +713,21 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
                   const double BZ    = Bound_Z_c(n, t);
                   const double y     = y_chunk(n, t);
                   const double ysign = 2.0 * y - 1.0;
-                  const double lphB  = log_phi_std_norm(BZ);
+                  // const double lphB  = log_phi_std_norm(BZ);
+                  const double lphB  = use_the_Phi_approx_density_of_the_bounds ? log_Phi_approx_density(BZ) :
+                                                                                  log_phi_std_norm(BZ);
                   lph_lb[t] = lphB;
                   lph_ub[t] = SL_NEG_INF;
                   
-                  sl_dphi[t]  = sl_make(lphB + log_L_recip, ysign);                    //// == dprob_t/dmu (see derivation in file header of lp_grad)
-                  const double ymy = y - ysign * u_array(n, t);                        //// y - y_sign*u  >= 0 always
+                  sl_dphi[t]  = sl_make(lphB + log_L_recip,
+                          ysign); //// == dprob_t/dmu (see derivation in file header of lp_grad)
+                  const double ymy = y - ysign * u_array(n,
+                                                         t); //// y - y_sign*u  >= 0 always
                   // sl_dZneg[t] = (ymy > 0.0) ? sl_make(std::log(ymy) + lphZr[t] + lphB + log_L_recip, 1.0) : sl_zero();
                   // sl_dphibz[t] = sl_mul(sl_dphi[t],  sl_from_val(BZ));
                   // sl_dZbz[t]   = sl_mul(sl_dZneg[t], sl_from_val(BZ));
-                  sl_dZneg[t] = (ymy > 0.0) ? sl_make(sl_log(ymy, S) + lphZr[t] + lphB + log_L_recip, 1.0) : sl_zero();
+                  sl_dZneg[t] = (ymy > 0.0) ? sl_make(sl_log(ymy, S) + lphZr[t] + lphB + log_L_recip,
+                           1.0) : sl_zero();
                   sl_dphibz[t] = sl_mul(sl_dphi[t],  sl_from_val(BZ, S));
                   sl_dZbz[t]   = sl_mul(sl_dZneg[t], sl_from_val(BZ, S));
               
@@ -649,8 +765,13 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
                   const double u  = u_array(n, t);
                   const double log_u   = sl_log(u, S);
                   const double log_1mu = sl_log1m(u, S);
-                  lph_lb[t] = log_phi_std_norm(lb);   //// -Inf if lb = -Inf
-                  lph_ub[t] = log_phi_std_norm(ub);   //// -Inf if ub = +Inf
+                  // lph_lb[t] = log_phi_std_norm(lb);   //// -Inf if lb = -Inf
+                  // lph_ub[t] = log_phi_std_norm(ub);   //// -Inf if ub = +Inf
+                  //// (-Inf if lb = -Inf or ub = +Inf)
+                  lph_lb[t] = use_the_Phi_approx_density_of_the_bounds ? log_Phi_approx_density(lb) :
+                                                                         log_phi_std_norm(lb);
+                  lph_ub[t] = use_the_Phi_approx_density_of_the_bounds ? log_Phi_approx_density(ub) :
+                                                                         log_phi_std_norm(ub);
                 
                   sl_dphi[t] = sl_add( sl_make(lph_lb[t] + log_L_recip,  1.0),
                                        sl_make(lph_ub[t] + log_L_recip, -1.0), S );
@@ -831,6 +952,8 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
             
                 const int t_ord = ord_idx_of_test(t);
                 if (t_ord < 0) continue;   //// binary slot -> no cutpoints
+                //// a missing result touches no cutpoint (its cutpoint terms are exactly 0):
+                if ((is_missing_result_chunk != nullptr) && ((*is_missing_result_chunk)(n, t) > 0.5)) continue;
                 ////
                 const int K_t   = n_cat_per_ord_test(t_ord);
                 const int y_i   = static_cast<int>(y_chunk(n, t));

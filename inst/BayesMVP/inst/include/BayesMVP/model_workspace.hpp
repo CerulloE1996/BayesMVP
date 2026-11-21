@@ -40,9 +40,11 @@ struct LC_MVP_workspace_struct {
   }
   
   void reset_sizes() {
+
     if (is_allocated && y1_log_prob.rows() != allocated_chunk_size) {
       restore_sizes();
     } 
+
   }
   
   //// Always size 2 — 1-class model just uses [0]
@@ -153,7 +155,8 @@ struct LC_MVP_workspace_struct {
     u_grad_array_CM_chunk =  Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
     ////////////////////////////////////////////////
     common_grad_term_1 =     Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
-    y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
+    y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip = Eigen::Matrix<double, -1, -1>::Zero(chunk_size,
+                                                                                              n_tests);
     y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
     prob_rowwise_prod_temp =         Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
     prob_recip_rowwise_prod_temp =   Eigen::Matrix<double, -1, -1>::Zero(chunk_size, n_tests);
@@ -231,7 +234,8 @@ struct LC_MVP_workspace_struct {
     ////////////////////////////////////////////////
     common_grad_term_1.resize(allocated_chunk_size, stored_n_tests);
     y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.resize(allocated_chunk_size, stored_n_tests);
-    y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.resize(allocated_chunk_size, stored_n_tests);
+    y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.resize(allocated_chunk_size,
+                                                                                      stored_n_tests);
     prob_rowwise_prod_temp.resize(allocated_chunk_size, stored_n_tests);
     prob_recip_rowwise_prod_temp.resize(allocated_chunk_size, stored_n_tests);
     ////////////////////////////////////////////////

@@ -95,27 +95,33 @@ struct PartialLog_nuisance_chunk_relayout_workspace {
 };
 
 inline PartialLog_nuisance_chunk_relayout_workspace &fn_PartialLog_relayout_workspace_of_this_thread() {
+
         thread_local PartialLog_nuisance_chunk_relayout_workspace workspace;
         return workspace;
+
 }
 
 
 ////
 //// ---- the number of chunks of a PartialLog evaluation, as fn_MVOP_prep and the LC_MVP PartialLog function
-////      compute it (capped at N / vec_size chunks, never fewer than n_chunks):
+////      compute it, without an upper cap on the requested number of chunks:
 ////
 inline int fn_PartialLog_n_chunks_of_evaluation( const int N,
                                                  const int n_chunks,
                                                  const int vec_size,
                                                  const int n_chunks_multiplier) {
-        return std::min(n_chunks * std::max(1, n_chunks_multiplier), std::max(n_chunks, N / vec_size));
+
+        return n_chunks * std::max(1, n_chunks_multiplier);
+
 }
 
 inline int fn_vec_size_of_vect_type(const std::string &vect_type) {
+
         if      (vect_type == "AVX512") return 8;
         else if (vect_type == "AVX2")   return 4;
         else if (vect_type == "AVX")    return 2;
         return 1;
+
 }
 
 

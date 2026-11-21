@@ -9,8 +9,6 @@
 #include <cstdint>
 #include <cmath>
 using namespace Rcpp;
-using Eigen::MatrixXd;
-using Eigen::VectorXd;
 
 
 // Groups matrix columns into superchain blocks, computes row-wise mean 
@@ -33,7 +31,10 @@ Eigen::Matrix<double, -1, -1> cpp_fn_grp_mat_cols_by_mean_per_superchain_grp( co
             
                 int start_col = i * n_chains_per_superchain;
                 // Row-wise mean across columns in this superchain block
-                Eigen::Matrix<double, -1, 1> mean_vec = out.block(0, start_col, n_params, n_chains_per_superchain).rowwise().mean();
+                Eigen::Matrix<double, -1, 1> mean_vec = out.block(0,
+                                                                  start_col,
+                                                                  n_params,
+                                                                  n_chains_per_superchain).rowwise().mean();
                 // Replicate mean across all columns in this block
                 for (int j = 0; j < n_chains_per_superchain; ++j) {
                   out.col(start_col + j) = mean_vec;
@@ -45,7 +46,10 @@ Eigen::Matrix<double, -1, -1> cpp_fn_grp_mat_cols_by_mean_per_superchain_grp( co
           int remaining_start = n_full_superchains * n_chains_per_superchain;
           int n_remaining = n_chains - remaining_start;
           if (n_remaining > 0) {
-            Eigen::Matrix<double, -1, 1> mean_vec = out.block(0, remaining_start, n_params, n_remaining).rowwise().mean();
+            Eigen::Matrix<double, -1, 1> mean_vec = out.block(0,
+                                                              remaining_start,
+                                                              n_params,
+                                                              n_remaining).rowwise().mean();
             for (int j = 0; j < n_remaining; ++j) {
               out.col(remaining_start + j) = mean_vec;
             }

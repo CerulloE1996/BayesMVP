@@ -93,6 +93,13 @@ override CXX_STD = -std=gnu++17 # Use C++17
 ##
 override CPU_BASE_FLAGS = -O3  -march=native  -mtune=native
 ##
+## On a 64-bit ARM CPU (e.g. Apple Silicon, Snapdragon, AWS Graviton; NEON, no AVX), -mcpu=native instead
+## (-march=native is not accepted on ARM by every compiler):
+override MACHINE_OF_THIS_CPU=$(shell "$(R_HOME)/bin/Rscript" -e "cat(Sys.info()[['machine']])")
+ifneq ($(filter aarch64 arm64,$(MACHINE_OF_THIS_CPU)),)
+  override CPU_BASE_FLAGS = -O3  -mcpu=native
+endif
+##
 ##
 ## BASE_FLAGS +=  -mllvm   ### --openmp-opt-shared-limit=96  ### -inlinehint-threshold=20000000 # for clang++
 ##
@@ -468,3 +475,9 @@ override PKG_LIBS += $(RCPP_PARALLEL_LIB_DIR)/RcppParallel.so -Wl,-rpath,$(RCPP_
 
 # Package-local provider headers and the canonical installed NicoStan runtime.
 override PKG_CPPFLAGS += -I. -I../inst/include
+##
+## ---- NicoSIMD: the one home of every AVX2 / AVX-512 kernel (BayesMVP's C++ includes
+##      <NicoSIMD/math/nico_and_approx_AVX2_fns.hpp> and <NicoSIMD/math/nico_and_approx_AVX512_fns.hpp>);
+##      the include folder of the installed NicoSIMD (also given by LinkingTo: NicoSIMD):
+override NICOSIMD_INCLUDE_PATH:=$(shell "$(R_HOME)/bin/Rscript" --vanilla -e 'cat(system.file("include", package = "NicoSIMD"))')
+override PKG_CPPFLAGS += -I"$(NICOSIMD_INCLUDE_PATH)"

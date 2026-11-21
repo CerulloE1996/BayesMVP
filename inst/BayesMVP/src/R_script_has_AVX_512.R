@@ -29,7 +29,8 @@ require(Rcpp)
 Rcpp::sourceCpp(code = " 
               #include <Rcpp.h>
               #include <bitset>
-              #ifdef _WIN32
+              #if !(defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86))
+              #elif defined(_WIN32)
               #include <x86intrin.h>
               #else
               #include <cpuid.h>
@@ -39,7 +40,12 @@ Rcpp::sourceCpp(code = "
               Rcpp::List checkCPUFeatures() {
                 
                 
-                #ifdef _WIN32
+                #if !(defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86))
+                bool has_avx = false;      // not an x86 CPU (e.g. ARM): no AVX, AVX2, AVX-512 or FMA
+                bool has_avx2 = false;
+                bool has_avx512 = false;
+                bool has_fma = false;
+                #elif defined(_WIN32)
                 int info[4];
                 int subinfo[4];
                 

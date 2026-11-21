@@ -26,68 +26,75 @@
 #pragma once
 // ---------------------------------------------------------------------------------------------
 //  Drop-in replacements for fn_MVP_compute_lp_GHK_cols_log_scale_underflow / _overflow.
-//  Requires normal_tail_kernels.hpp (fast_log_Phi_*, fast_inv_Phi_from_log_p_*).
+//  Requires normal_tail_kernels.hpp (nico_log_Phi_*, nico_inv_Phi_from_log_p_*).
 //
 //  What changed vs. the old versions (same signatures, same output arrays, same semantics):
-//    log_Phi_approx (logistic)              ->  exact, relative-accurate log Phi   (fast_log_Phi)
-//    inv_Phi_approx_from_logit_prob (cubic) ->  exact inv_Phi fed log p, log(1-p) (fast_inv_Phi_from_log_p)
+//    log_Phi_approx (logistic)              ->  exact, relative-accurate log Phi   (nico_log_Phi)
+//    inv_Phi_approx_from_logit_prob (cubic) ->  exact inv_Phi fed log p, log(1-p) (nico_inv_Phi_from_log_p)
 //    logistic-derivative "log phi"          ->  exact Gaussian  log phi(z) = -z^2/2 - 0.5 log 2pi
 //  The gradient code already consumes log_phi_Bound_Z / log_phi_Z_recip / y1_log_prob, so it
 //  needs no change: these arrays are the exact derivatives of the lp computed here, as before.
 //  vect_type strings: Model_args_strings(8) for log_Phi, (9) for inv_Phi. (10) is now unused.
 // ---------------------------------------------------------------------------------------------
 
-//// ---- two small dispatch helpers (chunked SIMD over a contiguous Eigen vector, scalar remainder)
-inline Eigen::Matrix<double, -1, 1> fn_EIGEN_log_Phi(const Eigen::Matrix<double, -1, 1> &x,
-                                                      const std::string &vect_type) {
-      const int N = x.size();
-      Eigen::Matrix<double, -1, 1> out(N);
-      int i = 0;
-#if defined(__AVX512VL__) && defined(__AVX512F__) && defined(__AVX512DQ__)
-      if (vect_type == "AVX512") {
-          for (; i + 8 <= N; i += 8) {
-              _mm512_storeu_pd(out.data() + i, fast_log_Phi_AVX512(_mm512_loadu_pd(x.data() + i)));
-          }
-      }
-#endif
-#if defined(__AVX2__)
-      if (vect_type == "AVX2") {
-          for (; i + 4 <= N; i += 4) {
-              _mm256_storeu_pd(out.data() + i, fast_log_Phi_AVX2(_mm256_loadu_pd(x.data() + i)));
-          }
-      }
-#endif
-      for (; i < N; ++i) out(i) = fast_log_Phi(x(i));
-      return out;
-}
-
-inline Eigen::Matrix<double, -1, 1> fn_EIGEN_inv_Phi_from_log_p(const Eigen::Matrix<double, -1, 1> &log_p,
-                                                                 const Eigen::Matrix<double, -1, 1> &log_1m_p,
-                                                                 const std::string &vect_type) {
-      const int N = log_p.size();
-      Eigen::Matrix<double, -1, 1> out(N);
-      int i = 0;
-#if defined(__AVX512VL__) && defined(__AVX512F__) && defined(__AVX512DQ__)
-      if (vect_type == "AVX512") {
-          for (; i + 8 <= N; i += 8) {
-              _mm512_storeu_pd(out.data() + i,
-                               fast_inv_Phi_from_log_p_wo_checks_AVX512(_mm512_loadu_pd(log_p.data() + i),
-                                                                        _mm512_loadu_pd(log_1m_p.data() + i)));
-          }
-      }
-#endif
-#if defined(__AVX2__)
-      if (vect_type == "AVX2") {
-          for (; i + 4 <= N; i += 4) {
-              _mm256_storeu_pd(out.data() + i,
-                               fast_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p.data() + i),
-                                                                      _mm256_loadu_pd(log_1m_p.data() + i)));
-          }
-      }
-#endif
-      for (; i < N; ++i) out(i) = fast_inv_Phi_from_log_p(log_p(i), log_1m_p(i));
-      return out;
-}
+//// log_Phi_and_inv_Phi_from_log_p_over_an_Eigen_vector.hpp
+////
+//// ---- Moved into NicoSIMD, where every SIMD function lives: this header only includes NicoSIMD's, word for
+////      word the code that was here
+////      (the copy is on the 20 TB drive, Work_backup_cumulative).
+#include <NicoSIMD/kernel_dispatch_and_vector_loops_of_the_BayesMVP_manual_gradient_models/log_Phi_and_inv_Phi_from_log_p_over_an_Eigen_vector.hpp>
+//// (the old lines, kept as comments:)
+// //// ---- two small dispatch helpers (chunked SIMD over a contiguous Eigen vector, scalar remainder)
+// inline Eigen::Matrix<double, -1, 1> fn_EIGEN_log_Phi(const Eigen::Matrix<double, -1, 1> &x,
+//                                                       const std::string &vect_type) {
+//       const int N = x.size();
+//       Eigen::Matrix<double, -1, 1> out(N);
+//       int i = 0;
+// #if defined(__AVX512VL__) && defined(__AVX512F__) && defined(__AVX512DQ__)
+//       if (vect_type == "AVX512") {
+//           for (; i + 8 <= N; i += 8) {
+//               _mm512_storeu_pd(out.data() + i, nico_log_Phi_AVX512(_mm512_loadu_pd(x.data() + i)));
+//           }
+//       }
+// #endif
+// #if defined(__AVX2__)
+//       if (vect_type == "AVX2") {
+//           for (; i + 4 <= N; i += 4) {
+//               _mm256_storeu_pd(out.data() + i, nico_log_Phi_AVX2(_mm256_loadu_pd(x.data() + i)));
+//           }
+//       }
+// #endif
+//       for (; i < N; ++i) out(i) = nico_log_Phi(x(i));
+//       return out;
+// }
+// 
+// inline Eigen::Matrix<double, -1, 1> fn_EIGEN_inv_Phi_from_log_p(const Eigen::Matrix<double, -1, 1> &log_p,
+//                                                                  const Eigen::Matrix<double, -1, 1> &log_1m_p,
+//                                                                  const std::string &vect_type) {
+//       const int N = log_p.size();
+//       Eigen::Matrix<double, -1, 1> out(N);
+//       int i = 0;
+// #if defined(__AVX512VL__) && defined(__AVX512F__) && defined(__AVX512DQ__)
+//       if (vect_type == "AVX512") {
+//           for (; i + 8 <= N; i += 8) {
+//               _mm512_storeu_pd(out.data() + i,
+//                                nico_inv_Phi_from_log_p_wo_checks_AVX512(_mm512_loadu_pd(log_p.data() + i),
+//                                                                         _mm512_loadu_pd(log_1m_p.data() + i)));
+//           }
+//       }
+// #endif
+// #if defined(__AVX2__)
+//       if (vect_type == "AVX2") {
+//           for (; i + 4 <= N; i += 4) {
+//               _mm256_storeu_pd(out.data() + i,
+//                                nico_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p.data() + i),
+//                                                                       _mm256_loadu_pd(log_1m_p.data() + i)));
+//           }
+//       }
+// #endif
+//       for (; i < N; ++i) out(i) = nico_inv_Phi_from_log_p(log_p(i), log_1m_p(i));
+//       return out;
+// }
 
 
 
@@ -228,9 +235,10 @@ static std::atomic<long long> g_n_tail_obs{0};
 
 ////
 //// ---- forward declarations of the templated tail fix-ups
-////      (defined in MVP_log_scale_grad_calc_fns_T.hpp, which main.cpp includes right after this file), so the string-dispatch
-////      versions below can delegate to them for every setting other than the fully approximate one. Only the latent-trait
-////      PartialLog path (LC_LT_lp_grad_log_scale_MD_AD_fns.hpp) still calls these string-dispatch versions.
+////      (defined in MVP_log_scale_grad_calc_fns_T.hpp, which main.cpp includes right after this file), so the
+////      string-dispatch versions below can delegate to them for every setting other than the fully approximate
+////      one. Only the latent-trait PartialLog path (LC_LT_lp_grad_log_scale_MD_AD_fns.hpp) calls these
+////      string-dispatch versions.
 ////
 template <Vec vec>
 inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
@@ -264,7 +272,8 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                                                               const KernelChoice &kernel_choice);
 
 ////
-//// ---- KernelChoice for the tails from the Model_args strings (Phi_type = strings(1), inv_Phi_type = strings(2)); the nuisance field is unused here:
+//// ---- KernelChoice for the tails from the Model_args strings (Phi_type = strings(1),
+////      inv_Phi_type = strings(2)); the nuisance field is unused here:
 ////
 inline KernelChoice fn_kernel_choice_for_tails_from_args(const Model_fn_args_struct &Model_args_as_cpp_struct) {
   
@@ -323,35 +332,48 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_underflow(        const 
             const std::string vect_type_inv_Phi_approx_from_logit_prob = Model_args_as_cpp_struct.Model_args_strings(10);
 
             Eigen::Matrix<double, -1, 1> temp = Bound_Z(index, t);
-            Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z =   fn_EIGEN_double(temp, "log_Phi_approx",  vect_type_log_Phi);
-            Bound_U_Phi_Bound_Z(index, t)    =    fn_EIGEN_double( log_Bound_U_Phi_Bound_Z, "exp", vect_type_exp);
+            Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z =   fn_EIGEN_double_in_a_per_thread_buffer(temp, "log_Phi_approx",  vect_type_log_Phi);
+            Bound_U_Phi_Bound_Z(index,
+                                t)    =    fn_EIGEN_double_in_a_per_thread_buffer( log_Bound_U_Phi_Bound_Z,
+                                "exp",
+                                vect_type_exp);
 
             temp = u_array(index, t);
-            Eigen::Matrix<double, -1, 1> u_log =  fn_EIGEN_double( temp, "log",  vect_type_log);
+            Eigen::Matrix<double, -1, 1> u_log =  fn_EIGEN_double_in_a_per_thread_buffer( temp,
+                                                                                         "log",
+                                                                                         vect_type_log);
             Eigen::Matrix<double, -1, 1> log_Phi_Z = u_log + log_Bound_U_Phi_Bound_Z ; /// log(u * Phi_Bound_Z);
-            Phi_Z(index, t) =   fn_EIGEN_double(log_Phi_Z, "exp",  vect_type_exp);  //// computed but not actually used
+            Phi_Z(index,
+                  t) =   fn_EIGEN_double_in_a_per_thread_buffer(log_Phi_Z,
+                  "exp",
+                  vect_type_exp); //// computed but not actually used
 
             //// log_1m_Phi_Z =   stan::math::log1m_exp( u_log + log_Bound_U_Phi_Bound_Z );
             temp.array() = Bound_U_Phi_Bound_Z(index, t).array() * u_array(index, t).array();
-            Eigen::Matrix<double, -1, 1> log_1m_Phi_Z = fn_EIGEN_double(temp, "log1m",  vect_type_log);
+            Eigen::Matrix<double, -1, 1> log_1m_Phi_Z = fn_EIGEN_double_in_a_per_thread_buffer(temp,
+                                                                                               "log1m",
+                                                                                               vect_type_log);
             Eigen::Matrix<double, -1, 1> logit_Phi_Z =   log_Phi_Z - log_1m_Phi_Z;
-            Z_std_norm(index, t)    =  fn_EIGEN_double( logit_Phi_Z, "inv_Phi_approx_from_logit_prob",  vect_type_inv_Phi_approx_from_logit_prob);
+            Z_std_norm(index,
+                       t)    =  fn_EIGEN_double_in_a_per_thread_buffer( logit_Phi_Z,
+                       "inv_Phi_approx_from_logit_prob",
+                       vect_type_inv_Phi_approx_from_logit_prob);
 
             temp = Z_std_norm(index, t);
             temp  = stan::math::abs(temp);
-            log_Z_std_norm(index, t)   = fn_EIGEN_double(temp, "log", vect_type_log);
+            log_Z_std_norm(index, t)   = fn_EIGEN_double_in_a_per_thread_buffer(temp, "log", vect_type_log);
 
             y1_log_prob(index, t)  =    log_Bound_U_Phi_Bound_Z ;
             prob(index, t) =        Bound_U_Phi_Bound_Z(index, t) ; //// computed but not actually used
 
             ////  log_Bound_U_Phi_Bound_Z_1m =  stan::math::log1m_exp(log_Bound_U_Phi_Bound_Z); //// use log1m_exp for stability!
             temp =  Bound_U_Phi_Bound_Z(index, t);
-            Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z_1m = fn_EIGEN_double(temp, "log1m",  vect_type_log);
+            Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z_1m = fn_EIGEN_double_in_a_per_thread_buffer(temp, "log1m",  vect_type_log);
 
             temp = Bound_Z(index, t);
             Eigen::Matrix<double, -1, 1> temp_sq = stan::math::square(temp); // .array().square();
             temp.array() = a_times_3 * temp_sq.array() + b;
-            temp = fn_EIGEN_double(temp, "log", vect_type_log);
+            fn_EIGEN_double_into( temp, temp, "log", vect_type_log);
             temp.array() += log_Bound_U_Phi_Bound_Z.array();
             temp.array() += log_Bound_U_Phi_Bound_Z_1m.array();
             log_phi_Bound_Z(index, t) = temp;
@@ -360,7 +382,7 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_underflow(        const 
             temp = Z_std_norm(index, t);
             temp_sq = stan::math::square(temp); // .array().square();
             temp.array() = a_times_3 * temp_sq.array() + b;
-            temp = fn_EIGEN_double(temp, "log", vect_type_log);
+            fn_EIGEN_double_into( temp, temp, "log", vect_type_log);
             temp.array() += log_Phi_Z.array();
             temp.array() += log_1m_Phi_Z.array();
             temp = -1.0*temp;
@@ -424,31 +446,35 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_overflow(     const int 
 
          Eigen::Matrix<double, -1, 1>  temp = Bound_Z(index, t);
          temp = -1.0*temp;
-         Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z_1m =    fn_EIGEN_double( temp, "log_Phi_approx",  vect_type_log_Phi); /// TEMP
-         Eigen::Matrix<double, -1, 1> Bound_U_Phi_Bound_Z_1m =        fn_EIGEN_double( log_Bound_U_Phi_Bound_Z_1m, "exp",  vect_type_exp);
+         Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z_1m =    fn_EIGEN_double_in_a_per_thread_buffer( temp, "log_Phi_approx",  vect_type_log_Phi); /// TEMP
+         Eigen::Matrix<double, -1, 1> Bound_U_Phi_Bound_Z_1m =        fn_EIGEN_double_in_a_per_thread_buffer( log_Bound_U_Phi_Bound_Z_1m, "exp",  vect_type_exp);
 
-         Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z     =  fn_EIGEN_double(Bound_U_Phi_Bound_Z_1m, "log1m",  vect_type_log);
+         Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z     =  fn_EIGEN_double_in_a_per_thread_buffer(Bound_U_Phi_Bound_Z_1m, "log1m",  vect_type_log);
          // Eigen::Matrix<double, -1, 1>  log_Bound_U_Phi_Bound_Z =  stan::math::log1m_exp(log_Bound_U_Phi_Bound_Z_1m); //// use log1m_exp for stability!
          // log_Bound_U_Phi_Bound_Z = log_Bound_U_Phi_Bound_Z.array().min(700.0).max(-700.0);
 
          Bound_U_Phi_Bound_Z(index, t).array() =   1.0 - Bound_U_Phi_Bound_Z_1m.array(); //// this is computed but not actually used?
 
-         Eigen::Matrix<double, -1, -1>  tmp_array_2d_to_lse =   Eigen::Matrix<double, -1, -1>::Zero(num_overflows, 2);
+         Eigen::Matrix<double, -1, -1>  tmp_array_2d_to_lse =   Eigen::Matrix<double, -1, -1>::Zero(num_overflows,
+                                                                                                    2);
          temp = u_array(index, t);
-         tmp_array_2d_to_lse.col(0)  =    log_Bound_U_Phi_Bound_Z_1m + fn_EIGEN_double(temp, "log", vect_type_log);
+         tmp_array_2d_to_lse.col(0)  =    log_Bound_U_Phi_Bound_Z_1m + fn_EIGEN_double_in_a_per_thread_buffer(temp, "log", vect_type_log);
          tmp_array_2d_to_lse.col(1)  =    log_Bound_U_Phi_Bound_Z;
          Eigen::Matrix<double, -1, 1> log_Phi_Z = fn_log_sum_exp_2d_double(tmp_array_2d_to_lse, vect_type_lse);
 
-         Phi_Z(index, t) = fn_EIGEN_double( log_Phi_Z, "exp",  vect_type_exp);
+         Phi_Z(index, t) = fn_EIGEN_double_in_a_per_thread_buffer( log_Phi_Z, "exp",  vect_type_exp);
          temp =  u_array(index, t);
-         Eigen::Matrix<double, -1, 1> log_1m_Phi_Z = fn_EIGEN_double( temp, "log1m",  vect_type_log);// + log_Bound_U_Phi_Bound_Z_1m;
+         Eigen::Matrix<double, -1, 1> log_1m_Phi_Z = fn_EIGEN_double_in_a_per_thread_buffer( temp, "log1m",  vect_type_log);// + log_Bound_U_Phi_Bound_Z_1m;
          log_1m_Phi_Z.array() += log_Bound_U_Phi_Bound_Z_1m.array();
 
          Eigen::Matrix<double, -1, 1> logit_Phi_Z = log_Phi_Z;// - log_1m_Phi_Z;
          logit_Phi_Z.array() += -log_1m_Phi_Z.array();
-         Z_std_norm(index, t)   =     fn_EIGEN_double( logit_Phi_Z, "inv_Phi_approx_from_logit_prob", vect_type_inv_Phi_approx_from_logit_prob);
+         Z_std_norm(index,
+                    t)   =     fn_EIGEN_double_in_a_per_thread_buffer( logit_Phi_Z,
+                    "inv_Phi_approx_from_logit_prob",
+                    vect_type_inv_Phi_approx_from_logit_prob);
          temp = stan::math::abs(Z_std_norm(index, t));
-         log_Z_std_norm(index, t)   = fn_EIGEN_double( temp, "log", vect_type_log);
+         log_Z_std_norm(index, t)   = fn_EIGEN_double_in_a_per_thread_buffer( temp, "log", vect_type_log);
 
          y1_log_prob(index, t)  =    log_Bound_U_Phi_Bound_Z_1m;
          prob(index, t)   =              Bound_U_Phi_Bound_Z_1m;  //// this is computed but not actually used?
@@ -456,7 +482,7 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_overflow(     const int 
          temp =   Bound_Z(index, t);
          temp = stan::math::square(temp);
          temp.array() = a_times_3 * temp.array() + b;
-         temp = fn_EIGEN_double(temp, "log", vect_type_log);
+         fn_EIGEN_double_into( temp, temp, "log", vect_type_log);
          temp.array() += log_Bound_U_Phi_Bound_Z.array();
          temp.array() += log_Bound_U_Phi_Bound_Z_1m.array();
          log_phi_Bound_Z(index, t) = temp;
@@ -466,7 +492,7 @@ ALWAYS_INLINE void fn_MVP_compute_lp_GHK_cols_log_scale_overflow(     const int 
          temp =   Z_std_norm(index, t);
          temp = stan::math::square(temp);
          temp.array() = a_times_3 * temp.array() + b;
-         temp = fn_EIGEN_double(temp, "log", vect_type_log);
+         fn_EIGEN_double_into( temp, temp, "log", vect_type_log);
          temp.array() += log_Phi_Z.array();
          temp.array() += log_1m_Phi_Z.array();
          temp = -1.0*temp;
@@ -526,7 +552,8 @@ ALWAYS_INLINE  void fn_MVP_grad_prep_log_scale(          Eigen::Ref<Eigen::Matri
   
            for (int i = 0; i < n_tests; i++) {
              
-                   Eigen::Matrix<double, -1, -1>  block_temp = Eigen::Matrix<double, -1, -1>::Zero(chunk_size, i + 1);
+                   Eigen::Matrix<double, -1, -1>  block_temp = Eigen::Matrix<double, -1, -1>::Zero(chunk_size,
+                                                                                                   i + 1);
 
                    int t = n_tests - (i + 1);
                    
@@ -564,12 +591,14 @@ ALWAYS_INLINE  void fn_MVP_grad_prep_log_scale(          Eigen::Ref<Eigen::Matri
 
            } else {
 
-                 //// Same fix as fn_MVP_grad_prep_log_scale_T: was log_common_grad_term_1.setConstant(-700.0).
-                 //// The log-scale problem-row gradient functions use this term as if it were real, so the sentinel zeroed the
-                 //// problem-row gradients of a single-class model. With one class (prev = 1, prob_n = product of all test
-                 //// probabilities) the latent-class expression above reduces exactly to log(prod_{s >= t} 1 / prob_s).
-                 //// (No current caller reaches this branch: the only compiled caller is the latent_trait log-scale path,
-                 //// which always has n_class = 2 and is disabled in the selector; kept consistent so the defect cannot return.)
+                 //// As in fn_MVP_grad_prep_log_scale_T: with one class (prev = 1, prob_n = product of all test
+                 //// probabilities) the latent-class expression above reduces exactly to
+                 //// log(prod_{s >= t} 1 / prob_s). The log-scale problem-row gradient functions use this term as
+                 //// if it were real, so a constant sentinel (log_common_grad_term_1.setConstant(-700.0)) would
+                 //// zero the problem-row gradients of a single-class model. (No caller reaches this branch at
+                 //// present: the only compiled caller is the latent_trait log-scale path, which always has
+                 //// n_class = 2 and is disabled in the selector; the branch is kept consistent with
+                 //// fn_MVP_grad_prep_log_scale_T.)
                  for (int i = 0; i < n_tests; i++) {
                        int t = n_tests - (i + 1);
                        log_common_grad_term_1.col(t) = log_prob_recip_rowwise_prod_temp.col(t);
@@ -596,7 +625,7 @@ ALWAYS_INLINE  void fn_MVP_grad_prep_log_scale(          Eigen::Ref<Eigen::Matri
            
                  temp_col_t = y_m_y_sign_x_u.col(t);
                  abs_res_1 = stan::math::abs(temp_col_t);
-                 log_abs_res_1 = fn_EIGEN_double( abs_res_1, "log",  vect_type_log);
+                 fn_EIGEN_double_into( log_abs_res_1, abs_res_1, "log",  vect_type_log);
                  log_abs_res_2  =   log_abs_res_1;
                  log_abs_res_2.array() +=   log_phi_Z_recip.col(t).array();
                  log_abs_res_2.array() +=   log_phi_Bound_Z.col(t).array();
@@ -714,14 +743,14 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
   const int chunk_size = u_grad_array_CM_chunk.rows();
   const int n_tests = u_grad_array_CM_chunk.cols();
   
-  log_abs_z_grad_term.setConstant(-700.0);
-  log_abs_grad_prob.setConstant(-700.0);
-  log_abs_prod_container_or_inc_array.setConstant(-700.0);
-  log_sum_result.setConstant(-700.0);
-  log_terms.setConstant(-700.0);
-  log_abs_a.setConstant(-700.0);
-  log_abs_b.setConstant(-700.0);
-  container_max_logs.setConstant(-700.0);
+  log_abs_z_grad_term.setConstant(-INFINITY);
+  log_abs_grad_prob.setConstant(-INFINITY);
+  log_abs_prod_container_or_inc_array.setConstant(-INFINITY);
+  log_sum_result.setConstant(-INFINITY);
+  log_terms.setConstant(-INFINITY);
+  log_abs_a.setConstant(-INFINITY);
+  log_abs_b.setConstant(-INFINITY);
+  container_max_logs.setConstant(-INFINITY);
   
   sign_z_grad_term.setOnes();
   sign_grad_prob.setOnes();
@@ -747,7 +776,7 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
                                                                                       y1_log_prob.col(t - 1)(problem_index_array[t]).array()  ;
         
         //Eigen::Ref<Eigen::Matrix<double, -1, 1>> col_ref_2 = u_grad_array_CM_chunk.col(n_tests - 2);
-        u_grad_array_CM_chunk.col(n_tests - 2)(problem_index_array[t]).array()  =  fn_EIGEN_double(log_abs_u_grad_array_CM_chunk.col(n_tests - 2)(problem_index_array[t]),   "exp",  vect_type).array() *
+        u_grad_array_CM_chunk.col(n_tests - 2)(problem_index_array[t]).array()  =  fn_EIGEN_double_in_a_per_thread_buffer(log_abs_u_grad_array_CM_chunk.col(n_tests - 2)(problem_index_array[t]),   "exp",  vect_type).array() *
                                                                                  ( sign_y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t)(problem_index_array[t]).array()  * 
                                                                                    stan::math::sign(  L_Omega_double(t, t - 1)  ) ).array() ;
         
@@ -784,14 +813,14 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
         container_max_logs.resize(n_problem_array[t]);
         container_sum_exp_signed.resize(n_problem_array[t]);
     
-        log_abs_z_grad_term.setConstant(-700.0);
-        log_abs_grad_prob.setConstant(-700.0);
-        log_abs_prod_container_or_inc_array.setConstant(-700.0);
-        log_sum_result.setConstant(-700.0);
-        log_terms.setConstant(-700.0);
-        log_abs_a.setConstant(-700.0);
-        log_abs_b.setConstant(-700.0);
-        container_max_logs.setConstant(-700.0);
+        log_abs_z_grad_term.setConstant(-INFINITY);
+        log_abs_grad_prob.setConstant(-INFINITY);
+        log_abs_prod_container_or_inc_array.setConstant(-INFINITY);
+        log_sum_result.setConstant(-INFINITY);
+        log_terms.setConstant(-INFINITY);
+        log_abs_a.setConstant(-INFINITY);
+        log_abs_b.setConstant(-INFINITY);
+        container_max_logs.setConstant(-INFINITY);
     
         sign_z_grad_term.setOnes();
         sign_grad_prob.setOnes();
@@ -808,7 +837,8 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
         sign_z_grad_term.col(0).setOnes();     // since densities are always +'ve!!
     
         // 2nd z term
-        log_abs_z_grad_term.col(1).array() = log_abs_L_Omega_double(t, t - 1) +   log_abs_z_grad_term.col(0).array() +
+        log_abs_z_grad_term.col(1).array() = log_abs_L_Omega_double(t,
+                                t - 1) +   log_abs_z_grad_term.col(0).array() +
                                              log_abs_y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t)(problem_index_array[t]).array();
         sign_z_grad_term.col(1).array() =  (  stan::math::sign(L_Omega_double(t, t - 1)) *   sign_z_grad_term.col(0).array() *
                                              sign_y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t)(problem_index_array[t]).array());
@@ -820,8 +850,8 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
         sign_grad_prob.col(0).array() =       sign_y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t + 0)(problem_index_array[t]).array() *   sign_prod_container_or_inc_array.array();
     
         // 2nd prob term
-        log_abs_a.setConstant(-700.0);
-        log_abs_b.setConstant(-700.0);
+        log_abs_a.setConstant(-INFINITY);
+        log_abs_b.setConstant(-INFINITY);
         sign_a.setOnes();
         sign_b.setOnes();
     
@@ -830,9 +860,9 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
         sign_a.array() =     sign_z_grad_term.col(0).array() * stan::math::sign( L_Omega_double(t + 1, t - 1) );
         sign_b.array() =     -1.0 *  sign_z_grad_term.col(1).array() * stan::math::sign(  L_Omega_double(t + 1, t + 0) ); // need to mult by -1
     
-        log_terms.setConstant(-700.0);
+        log_terms.setConstant(-INFINITY);
         sign_terms.setOnes();
-        log_sum_result.setConstant(-700.0);
+        log_sum_result.setConstant(-INFINITY);
         sign_sum_result.setOnes();
         log_terms.col(0) = log_abs_a;  log_terms.col(1) = log_abs_b;
         sign_terms.col(0) = sign_a; sign_terms.col(1) = sign_b;
@@ -856,9 +886,9 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
         sign_a = sign_grad_prob.col(0) ;
         sign_b = sign_grad_prob.col(1) ;
     
-        log_terms.setConstant(-700.0);
+        log_terms.setConstant(-INFINITY);
         sign_terms.setOnes();
-        log_sum_result.setConstant(-700.0);
+        log_sum_result.setConstant(-INFINITY);
         sign_sum_result.setOnes();
         log_terms.col(0) = log_abs_a;  log_terms.col(1) = log_abs_b;
         sign_terms.col(0) = sign_a;    sign_terms.col(1) = sign_b;
@@ -873,7 +903,7 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
     
         log_abs_u_grad_array_CM_chunk.col(n_tests - 3)(problem_index_array[t]) =      log_common_grad_term_1.col(t)(problem_index_array[t]) +  log_sum_result;
         Eigen::Matrix<double, -1, 1> temp = log_abs_u_grad_array_CM_chunk.col(n_tests - 3)(problem_index_array[t]);
-        temp = fn_EIGEN_double( temp, "exp", vect_type);
+        fn_EIGEN_double_into( temp, temp, "exp", vect_type);
         u_grad_array_CM_chunk.col(n_tests - 3)(problem_index_array[t]) =   temp.array() *  sign_sum_result.array();
         
     }
@@ -908,14 +938,14 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
             container_max_logs.resize(n_problem_array[t]);
             container_sum_exp_signed.resize(n_problem_array[t]);
             
-            log_abs_z_grad_term.setConstant(-700.0);
-            log_abs_grad_prob.setConstant(-700.0);
-            log_abs_prod_container_or_inc_array.setConstant(-700.0);
-            log_sum_result.setConstant(-700.0);
-            log_terms.setConstant(-700.0);
-            log_abs_a.setConstant(-700.0);
-            log_abs_b.setConstant(-700.0);
-            container_max_logs.setConstant(-700.0);
+            log_abs_z_grad_term.setConstant(-INFINITY);
+            log_abs_grad_prob.setConstant(-INFINITY);
+            log_abs_prod_container_or_inc_array.setConstant(-INFINITY);
+            log_sum_result.setConstant(-INFINITY);
+            log_terms.setConstant(-INFINITY);
+            log_abs_a.setConstant(-INFINITY);
+            log_abs_b.setConstant(-INFINITY);
+            container_max_logs.setConstant(-INFINITY);
             
             sign_z_grad_term.setOnes();
             sign_grad_prob.setOnes();
@@ -954,9 +984,11 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
                     }
   
                     //// combine terms
-                    //// leftCols(ii + 1), was leftCols(ii) - columns 0..ii are filled above; see
-                    //// fn_MVP_compute_nuisance_grad_log_scale_T in MVP_log_scale_grad_calc_fns_T.hpp. This original copy is only called by the
-                    //// latent-trait log-scale path (LC_LT_lp_grad_log_scale_MD_AD_fns.hpp), which lp_grad_model_selector.hpp currently disables.
+                    //// leftCols(ii + 1): columns 0..ii are filled above; see
+                    //// fn_MVP_compute_nuisance_grad_log_scale_T in MVP_log_scale_grad_calc_fns_T.hpp. This
+                    //// original copy is only called by the latent-trait log-scale path
+                    //// (LC_LT_lp_grad_log_scale_MD_AD_fns.hpp), which lp_grad_model_selector.hpp disables at
+                    //// present.
                     log_abs_sum_exp_general_v2( log_terms.leftCols(ii + 1), 
                                                 sign_terms.leftCols(ii + 1),
                                                 vect_type, vect_type,
@@ -972,9 +1004,9 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
             }
 
             ////// final derivatives computation
-            log_terms.setConstant(-700.0);
+            log_terms.setConstant(-INFINITY);
             sign_terms.setOnes();
-            log_sum_result.setConstant(-700.0);
+            log_sum_result.setConstant(-INFINITY);
             sign_sum_result.setOnes();
 
             for (int ii = 0; ii < i + 2; ii++) {
@@ -993,7 +1025,7 @@ inline  void fn_MVP_compute_nuisance_grad_log_scale(       const std::vector<int
 
             //// update final gradients
             log_abs_u_grad_array_CM_chunk.col(n_tests - (i + 3))(problem_index_array[t])   =      log_common_grad_term_1.col(t)(problem_index_array[t]).array() +   log_sum_result.array();
-            u_grad_array_CM_chunk.col(n_tests - (i + 3))(problem_index_array[t])  =    fn_EIGEN_double( log_abs_u_grad_array_CM_chunk.col(n_tests - (i + 3))(problem_index_array[t]), "exp", vect_type).array() * sign_sum_result.array();
+            u_grad_array_CM_chunk.col(n_tests - (i + 3))(problem_index_array[t])  =    fn_EIGEN_double_in_a_per_thread_buffer( log_abs_u_grad_array_CM_chunk.col(n_tests - (i + 3))(problem_index_array[t]), "exp", vect_type).array() * sign_sum_result.array();
 
 
       }
@@ -1083,12 +1115,12 @@ inline  void      fn_MVP_compute_coefficients_grad_log_scale(      const std::ve
   const int chunk_size = log_phi_Z_recip.rows();
   const int n_tests = log_phi_Z_recip.cols();
  
-      log_abs_z_grad_term.setConstant(-700.0);
-      log_abs_grad_prob.setConstant(-700.0);
-      log_abs_prod_container_or_inc_array.setConstant(-700.0);
-      log_sum_result.setConstant(-700.0);
-      log_terms.setConstant(-700.0);
-      container_max_logs.setConstant(-700.0);
+      log_abs_z_grad_term.setConstant(-INFINITY);
+      log_abs_grad_prob.setConstant(-INFINITY);
+      log_abs_prod_container_or_inc_array.setConstant(-INFINITY);
+      log_sum_result.setConstant(-INFINITY);
+      log_terms.setConstant(-INFINITY);
+      container_max_logs.setConstant(-INFINITY);
       
       sign_z_grad_term.setOnes();
       sign_grad_prob.setOnes();
@@ -1098,7 +1130,7 @@ inline  void      fn_MVP_compute_coefficients_grad_log_scale(      const std::ve
       
       container_sum_exp_signed.setZero();
       
-      log_abs_prod_container_or_inc_array_comp.setConstant(-700.0);
+      log_abs_prod_container_or_inc_array_comp.setConstant(-INFINITY);
       sign_prod_container_or_inc_array_comp.setOnes();
   
   
@@ -1139,12 +1171,12 @@ inline  void      fn_MVP_compute_coefficients_grad_log_scale(      const std::ve
               log_abs_prod_container_or_inc_array_comp.resize(n_problem_array[t], n_tests);
               sign_prod_container_or_inc_array_comp.resize(n_problem_array[t], n_tests);
               
-              log_abs_z_grad_term.setConstant(-700.0);
-              log_abs_grad_prob.setConstant(-700.0);
-              log_abs_prod_container_or_inc_array.setConstant(-700.0); 
-              log_sum_result.setConstant(-700.0);
-              log_terms.setConstant(-700.0);
-              container_max_logs.setConstant(-700.0);
+              log_abs_z_grad_term.setConstant(-INFINITY);
+              log_abs_grad_prob.setConstant(-INFINITY);
+              log_abs_prod_container_or_inc_array.setConstant(-INFINITY); 
+              log_sum_result.setConstant(-INFINITY);
+              log_terms.setConstant(-INFINITY);
+              container_max_logs.setConstant(-INFINITY);
               
               sign_z_grad_term.setOnes();
               sign_grad_prob.setOnes();
@@ -1152,7 +1184,7 @@ inline  void      fn_MVP_compute_coefficients_grad_log_scale(      const std::ve
               sign_sum_result.setOnes();
               sign_terms.setOnes();
               
-              log_abs_prod_container_or_inc_array_comp.setConstant(-700.0);
+              log_abs_prod_container_or_inc_array_comp.setConstant(-INFINITY);
               sign_prod_container_or_inc_array_comp.setOnes();
             
             // 1st grad_prob term
@@ -1369,12 +1401,12 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
             log_abs_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
             sign_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
             
-            log_abs_z_grad_term.setConstant(-700.0);
-            log_abs_grad_prob.setConstant(-700.0);
-            log_abs_prod_container_or_inc_array.setConstant(-700.0); 
-            log_sum_result.setConstant(-700.0);
-            log_terms.setConstant(-700.0);
-            container_max_logs.setConstant(-700.0);
+            log_abs_z_grad_term.setConstant(-INFINITY);
+            log_abs_grad_prob.setConstant(-INFINITY);
+            log_abs_prod_container_or_inc_array.setConstant(-INFINITY); 
+            log_sum_result.setConstant(-INFINITY);
+            log_terms.setConstant(-INFINITY);
+            container_max_logs.setConstant(-INFINITY);
             
             sign_z_grad_term.setOnes();
             sign_grad_prob.setOnes();
@@ -1382,10 +1414,10 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
             sign_sum_result.setOnes();
             sign_terms.setOnes();
             
-            log_abs_prod_container_or_inc_array_comp.setConstant(-700.0);
+            log_abs_prod_container_or_inc_array_comp.setConstant(-INFINITY);
             sign_prod_container_or_inc_array_comp.setOnes();
             
-            log_abs_derivs_chain_container_vec_comp.setConstant(-700.0);
+            log_abs_derivs_chain_container_vec_comp.setConstant(-INFINITY);
             sign_derivs_chain_container_vec_comp.setOnes();
             
             ///// 1st grad_prob term 
@@ -1408,9 +1440,9 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
             log_abs_b = log_abs_grad_prob.col(0)  + y1_log_prob.col(t1 + 1)(problem_index_array[t1]) ;
             sign_b = sign_grad_prob.col(0) ;  // sign of probs always +'ve
             
-            log_terms.setConstant(-700.0);
+            log_terms.setConstant(-INFINITY);
             sign_terms.setOnes();
-            log_sum_result.setConstant(-700.0);
+            log_sum_result.setConstant(-INFINITY);
             sign_sum_result.setOnes();
             log_terms.col(0) = log_abs_a;  log_terms.col(1) = log_abs_b;
             sign_terms.col(0) = sign_a; sign_terms.col(1) = sign_b;
@@ -1461,12 +1493,12 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
             log_abs_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
             sign_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
 
-            log_abs_z_grad_term.setConstant(-700.0);
-            log_abs_grad_prob.setConstant(-700.0);
-            log_abs_prod_container_or_inc_array.setConstant(-700.0);
-            log_sum_result.setConstant(-700.0);
-            log_terms.setConstant(-700.0);
-            container_max_logs.setConstant(-700.0);
+            log_abs_z_grad_term.setConstant(-INFINITY);
+            log_abs_grad_prob.setConstant(-INFINITY);
+            log_abs_prod_container_or_inc_array.setConstant(-INFINITY);
+            log_sum_result.setConstant(-INFINITY);
+            log_terms.setConstant(-INFINITY);
+            container_max_logs.setConstant(-INFINITY);
 
             sign_z_grad_term.setOnes();
             sign_grad_prob.setOnes();
@@ -1474,10 +1506,10 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
             sign_sum_result.setOnes();
             sign_terms.setOnes();
 
-            log_abs_prod_container_or_inc_array_comp.setConstant(-700.0);
+            log_abs_prod_container_or_inc_array_comp.setConstant(-INFINITY);
             sign_prod_container_or_inc_array_comp.setOnes();
 
-            log_abs_derivs_chain_container_vec_comp.setConstant(-700.0);
+            log_abs_derivs_chain_container_vec_comp.setConstant(-INFINITY);
             sign_derivs_chain_container_vec_comp.setOnes();
 
             log_abs_grad_prob.col(0) = log_abs_y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t1)(problem_index_array[t1]) + log_Bound_Z.col(t1)(problem_index_array[t1]) ;
@@ -1505,7 +1537,8 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
                         // log_abs_prod_container_or_inc_array_comp.col(iii).array() = log_abs_z_grad_term.col(iii).array() +   log_abs_L_Omega_double.row(t1 + ii + 1).segment(t1, ii + 1).transpose().eval()(iii);
                         // sign_prod_container_or_inc_array_comp.col(iii).array() = sign_z_grad_term.col(iii).array() *   stan::math::sign(L_Omega_double.row(t1 + ii + 1).segment(t1, ii + 1).transpose().eval()(iii));
                         const Eigen::Matrix<double, 1, -1> log_abs_L_Omega_row = log_abs_L_Omega_double.row(t1 + ii + 1);
-                        const double log_abs_L_Omega_row_iii = log_abs_L_Omega_row.segment(t1, ii + 1).eval()(iii);
+                        const double log_abs_L_Omega_row_iii = log_abs_L_Omega_row.segment(t1,
+                                                                                           ii + 1).eval()(iii);
                         log_abs_prod_container_or_inc_array_comp.col(iii).array() = log_abs_z_grad_term.col(iii).array() + log_abs_L_Omega_row_iii;
                         const Eigen::Matrix<double, 1, -1> sign_L_Omega_row = stan::math::sign(L_Omega_double.row(t1 + ii + 1));
                         const double sign_L_Omega_row_iii = sign_L_Omega_row.segment(t1, ii + 1).eval()(iii);
@@ -1587,12 +1620,12 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
                 log_abs_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
                 sign_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
 
-                log_abs_z_grad_term.setConstant(-700.0);
-                log_abs_grad_prob.setConstant(-700.0);
-                log_abs_prod_container_or_inc_array.setConstant(-700.0);
-                log_sum_result.setConstant(-700.0);
-                log_terms.setConstant(-700.0);
-                container_max_logs.setConstant(-700.0);
+                log_abs_z_grad_term.setConstant(-INFINITY);
+                log_abs_grad_prob.setConstant(-INFINITY);
+                log_abs_prod_container_or_inc_array.setConstant(-INFINITY);
+                log_sum_result.setConstant(-INFINITY);
+                log_terms.setConstant(-INFINITY);
+                container_max_logs.setConstant(-INFINITY);
 
                 sign_z_grad_term.setOnes();
                 sign_grad_prob.setOnes();
@@ -1600,10 +1633,10 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
                 sign_sum_result.setOnes();
                 sign_terms.setOnes();
 
-                log_abs_prod_container_or_inc_array_comp.setConstant(-700.0);
+                log_abs_prod_container_or_inc_array_comp.setConstant(-INFINITY);
                 sign_prod_container_or_inc_array_comp.setOnes();
 
-                log_abs_derivs_chain_container_vec_comp.setConstant(-700.0);
+                log_abs_derivs_chain_container_vec_comp.setConstant(-INFINITY);
                 sign_derivs_chain_container_vec_comp.setOnes();
 
                   int t2 = n_tests - (t1_dash + 2); //  starts at n_tests - 2;
@@ -1663,12 +1696,12 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
           log_abs_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
           sign_derivs_chain_container_vec_comp.resize(n_problem_array[t1], n_tests);
 
-          log_abs_z_grad_term.setConstant(-700.0);
-          log_abs_grad_prob.setConstant(-700.0);
-          log_abs_prod_container_or_inc_array.setConstant(-700.0);
-          log_sum_result.setConstant(-700.0);
-          log_terms.setConstant(-700.0);
-          container_max_logs.setConstant(-700.0);
+          log_abs_z_grad_term.setConstant(-INFINITY);
+          log_abs_grad_prob.setConstant(-INFINITY);
+          log_abs_prod_container_or_inc_array.setConstant(-INFINITY);
+          log_sum_result.setConstant(-INFINITY);
+          log_terms.setConstant(-INFINITY);
+          container_max_logs.setConstant(-INFINITY);
 
           sign_z_grad_term.setOnes();
           sign_grad_prob.setOnes();
@@ -1676,10 +1709,10 @@ inline  void fn_MVP_compute_L_Omega_grad_log_scale(      const std::vector<int> 
           sign_sum_result.setOnes();
           sign_terms.setOnes();
 
-          log_abs_prod_container_or_inc_array_comp.setConstant(-700.0);
+          log_abs_prod_container_or_inc_array_comp.setConstant(-INFINITY);
           sign_prod_container_or_inc_array_comp.setOnes();
 
-          log_abs_derivs_chain_container_vec_comp.setConstant(-700.0);
+          log_abs_derivs_chain_container_vec_comp.setConstant(-INFINITY);
           sign_derivs_chain_container_vec_comp.setOnes();
 
 

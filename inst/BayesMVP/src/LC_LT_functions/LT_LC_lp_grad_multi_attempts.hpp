@@ -110,9 +110,10 @@ void                             fn_lp_grad_LT_LC_multi_attempts_InPlace_process
   
   Eigen::Matrix<double, -1, 1> out_mat_orig = out_mat; // store initial input 
   
-  //// as in MVP_lp_grad_multi_attempts.hpp. Attempt 1 is now inside try/catch, mirroring the
-  //// autodiff attempt below, so a Stan-math exception moves on to the fallback instead of escaping. The settings strings are checked
-  //// first, outside any try, so a mistyped setting still stops with a clear message (latent_trait accepts "Phi_approx_rough").
+  //// as in MVP_lp_grad_multi_attempts.hpp. Attempt 1 is inside try/catch, as the autodiff attempt below is, so a
+  //// Stan-math exception moves on to the fallback instead of escaping. The settings strings are checked first,
+  //// outside any try, so a mistyped setting still stops with a clear message (latent_trait accepts
+  //// "Phi_approx_rough").
   fn_check_settings_strings_before_multi_attempts(  Model_args_as_cpp_struct,
                                                     true,
                                                     "fn_lp_grad_LT_LC_multi_attempts_InPlace_process");

@@ -36,8 +36,10 @@
 ////     Column-major => column `col` is `rows()` contiguous doubles starting at .col(col).data().
 template <Vec vec, Fn fn, bool checks = true, typename Derived>
 inline void apply_col_inplace(Eigen::DenseBase<Derived> &M, const int col) {
+
   auto column = M.derived().col(col);
   apply_raw<vec, fn, checks>(column.data(), static_cast<int>(M.rows()));
+
 }
 
 //// 0b. The two runtime choices that are genuinely per-model (Phi vs Phi_approx, inv_Phi vs
@@ -49,23 +51,29 @@ struct KernelChoice {
 };
 
 inline KernelChoice kernel_choice_from_args(const Model_fn_args_struct &A) {
+
   const std::string &Phi_type     = A.Model_args_strings(1);
   const std::string &inv_Phi_type = A.Model_args_strings(2);
   KernelChoice k;
   k.Phi_approx     = (Phi_type == "Phi_approx") || (Phi_type == "Phi_approx_2");
   k.inv_Phi_approx = (inv_Phi_type == "inv_Phi_approx");
   return k;
+
 }
 
 template <Vec vec, typename Derived>
 ALWAYS_INLINE void Phi_col_inplace(Eigen::DenseBase<Derived> &M, const int col, const KernelChoice &k) {
+
   if (k.Phi_approx) apply_col_inplace<vec, Fn::Phi_approx>(M, col);
   else              apply_col_inplace<vec, Fn::Phi>(M, col);
+
 }
 template <Vec vec, typename Derived>
 ALWAYS_INLINE void inv_Phi_col_inplace(Eigen::DenseBase<Derived> &M, const int col, const KernelChoice &k) {
+
   if (k.inv_Phi_approx) apply_col_inplace<vec, Fn::inv_Phi_approx>(M, col);
   else                  apply_col_inplace<vec, Fn::inv_Phi>(M, col);
+
 }
 
 //// =====================================================================================
@@ -200,6 +208,7 @@ inline void fn_MVP_compute_lp_GHK_cols(   const int t,
                                           const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> u_array,
                                           const KernelChoice &k
 ) {
+
   Bound_U_Phi_Bound_Z.col(t) = Bound_Z.col(t);
   Phi_col_inplace<vec>(Bound_U_Phi_Bound_Z, t, k);
 
@@ -216,6 +225,7 @@ inline void fn_MVP_compute_lp_GHK_cols(   const int t,
 
   y1_log_prob.col(t) = prob.col(t);
   apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
+
 }
 
 //// =====================================================================================

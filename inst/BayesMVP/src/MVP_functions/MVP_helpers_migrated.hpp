@@ -10,7 +10,7 @@
 ////   fn_MVP_nuisance_deriv_of_log_det_J  -> fn_MVP_nuisance_deriv_of_log_det_J_T<vec>
 ////   log_sum_exp_general                 -> log_sum_exp_general_T<vec>
 ////
-//// UNCHANGED (they never called fn_EIGEN_double — keep the existing versions as they are):
+//// UNCHANGED (they never called fn_EIGEN_double - keep the existing versions as they are):
 ////   fn_MVP_grad_prep, compute_rowwise_products, compute_latent_class_terms, compute_final_terms,
 ////   fn_MVP_compute_nuisance_grad_v2, fn_MVP_compute_coefficients_grad_v2/v3,
 ////   fn_MVP_compute_L_Omega_grad_v2/v3.
@@ -40,13 +40,14 @@ struct KernelChoice {
 
 
 inline KernelChoice kernel_choice_from_args(const Model_fn_args_struct &A) {
+
   const std::string &Phi_type     = A.Model_args_strings(1);
   const std::string &inv_Phi_type = A.Model_args_strings(2);
   const std::string &nuis         = A.Model_args_strings(12);
   KernelChoice k;
   k.Phi_approx     = (Phi_type == "Phi_approx") || (Phi_type == "Phi_approx_2");
   k.inv_Phi_approx = (inv_Phi_type == "inv_Phi_approx");
-  //// any other Phi_type / inv_Phi_type string used to be treated silently as the exact setting; now it stops.
+  //// any other Phi_type / inv_Phi_type string stops (instead of being treated silently as the exact setting).
   if ((k.Phi_approx == false) && (Phi_type != "Phi"))
     throw std::runtime_error("kernel_choice_from_args: unknown Phi_type '" + Phi_type + "' (allowed: Phi, Phi_approx, Phi_approx_2)");
   if ((k.inv_Phi_approx == false) && (inv_Phi_type != "inv_Phi"))
@@ -57,6 +58,7 @@ inline KernelChoice kernel_choice_from_args(const Model_fn_args_struct &A) {
   else if (nuis == "tanh")       k.nuisance = NuisTf::tanh;
   else throw std::runtime_error("kernel_choice_from_args: unknown nuisance_transformation '" + nuis + "'");
   return k;
+
 }
 
 
@@ -65,16 +67,20 @@ inline KernelChoice kernel_choice_from_args(const Model_fn_args_struct &A) {
 //// (apply_col_inplace now lives in fn_dispatch_templated.hpp)
 template <Vec vec, typename Derived>
 ALWAYS_INLINE void Phi_col_inplace(Eigen::DenseBase<Derived> &M, const int col, const KernelChoice &k) {
+
   if (k.Phi_approx) apply_col_inplace<vec, Fn::Phi_approx>(M, col);
   else              apply_col_inplace<vec, Fn::Phi>(M, col);
+
 }
 
 
 
 template <Vec vec, typename Derived>
 ALWAYS_INLINE void inv_Phi_col_inplace(Eigen::DenseBase<Derived> &M, const int col, const KernelChoice &k) {
+
   if (k.inv_Phi_approx) apply_col_inplace<vec, Fn::inv_Phi_approx>(M, col);
   else                  apply_col_inplace<vec, Fn::inv_Phi>(M, col);
+
 }
 
 
@@ -82,7 +88,7 @@ ALWAYS_INLINE void inv_Phi_col_inplace(Eigen::DenseBase<Derived> &M, const int c
 
 //// =====================================================================================
 //// 1. phi(Bound_Z) column. Same maths as before: writes -x^2/2 into the output column,
-////    exp's it in place, scales — no temporary.
+////    exp's it in place, scales - no temporary.
 //// =====================================================================================
 template <Vec vec>
 inline void fn_MVP_compute_phi_Bound_Z_cols_T(  const int t,
@@ -91,19 +97,32 @@ inline void fn_MVP_compute_phi_Bound_Z_cols_T(  const int t,
                                               const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Bound_Z,
                                               const KernelChoice &k
 ) {
+
   const double sqrt_2_pi_recip = 1.0 / std::sqrt(2.0 * M_PI);
   const double a_times_3 = 3.0 * 0.07056;
   const double b = 1.5976;
 
   if (k.Phi_approx) {
+        // phi_Bound_Z.col(t).array() = (a_times_3 * Bound_Z.col(t).array().square() + b)
+        //                            * Bound_U_Phi_Bound_Z.col(t).array()
+        //                            * (1.0 - Bound_U_Phi_Bound_Z.col(t).array());
+        //// (3 a x^2 + b) s(x) (1 - s(x)) with 1 - s(x) = s(-x) = Phi_approx(-x) formed directly: 1 - s(x) is
+        //// exactly 0 once x > ~7.1, where s(x) rounds to 1 (and Bound_U_Phi_Bound_Z is now the reflected
+        //// y + sign_y * Phi_approx(sign_y * x) of fn_MVP_compute_lp_GHK_cols_T, which rounds the same way):
+        Eigen::Matrix<double, -1, -1> Phi_approx_of_x_and_of_minus_x(Bound_Z.rows(), 2);
+        Phi_approx_of_x_and_of_minus_x.col(0) =  Bound_Z.col(t);
+        Phi_approx_of_x_and_of_minus_x.col(1) = -Bound_Z.col(t);
+        Phi_col_inplace<vec>(Phi_approx_of_x_and_of_minus_x, 0, k);
+        Phi_col_inplace<vec>(Phi_approx_of_x_and_of_minus_x, 1, k);
         phi_Bound_Z.col(t).array() = (a_times_3 * Bound_Z.col(t).array().square() + b)
-                                   * Bound_U_Phi_Bound_Z.col(t).array()
-                                   * (1.0 - Bound_U_Phi_Bound_Z.col(t).array());
+                                   * Phi_approx_of_x_and_of_minus_x.col(0).array()
+                                   * Phi_approx_of_x_and_of_minus_x.col(1).array();
   } else {
         phi_Bound_Z.col(t).array() = -0.5 * Bound_Z.col(t).array().square();
         apply_col_inplace<vec, Fn::exp>(phi_Bound_Z, t);
         phi_Bound_Z.col(t).array() *= sqrt_2_pi_recip;
   }
+
 }
 
 
@@ -119,19 +138,31 @@ inline void fn_MVP_compute_phi_Z_recip_cols_T(  const int t,
                                               const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> Z_std_norm,
                                               const KernelChoice &k
 ) {
+
   const double sqrt_2_pi = std::sqrt(2.0 * M_PI);
   const double a_times_3 = 3.0 * 0.07056;
   const double b = 1.5976;
 
   if (k.Phi_approx) {
+        // phi_Z_recip.col(t).array() = 1.0 / ( (a_times_3 * Z_std_norm.col(t).array().square() + b)
+        //                                      * Phi_Z.col(t).array() * (1.0 - Phi_Z.col(t).array()) );
+        //// (with Phi_approx(Z) and 1 - Phi_approx(Z) = Phi_approx(-Z) formed directly from Z, for the same
+        ////  reason as phi(Bound_Z) above: 1 - Phi_Z is exactly 0 once Phi_Z rounds to 1)
+        Eigen::Matrix<double, -1, -1> Phi_approx_of_Z_and_of_minus_Z(Z_std_norm.rows(), 2);
+        Phi_approx_of_Z_and_of_minus_Z.col(0) =  Z_std_norm.col(t);
+        Phi_approx_of_Z_and_of_minus_Z.col(1) = -Z_std_norm.col(t);
+        Phi_col_inplace<vec>(Phi_approx_of_Z_and_of_minus_Z, 0, k);
+        Phi_col_inplace<vec>(Phi_approx_of_Z_and_of_minus_Z, 1, k);
         phi_Z_recip.col(t).array() = 1.0 / ( (a_times_3 * Z_std_norm.col(t).array().square() + b)
-                                             * Phi_Z.col(t).array() * (1.0 - Phi_Z.col(t).array()) );
+                                             * Phi_approx_of_Z_and_of_minus_Z.col(0).array()
+                                             * Phi_approx_of_Z_and_of_minus_Z.col(1).array() );
   } else {
         //// 1/phi(z) = sqrt(2 pi) * exp(+z^2/2)
         phi_Z_recip.col(t).array() = 0.5 * Z_std_norm.col(t).array().square();
         apply_col_inplace<vec, Fn::exp>(phi_Z_recip, t);
         phi_Z_recip.col(t).array() *= sqrt_2_pi;
   }
+
 }
 
 
@@ -153,6 +184,7 @@ inline void fn_MVP_compute_nuisance_T(  Eigen::Matrix<double, -1, 1> &u_vec,
                                       const Eigen::Matrix<double, -1, 1> &u_unc_vec,
                                       const KernelChoice &k
 ) {
+
   const double a = 0.07056, b = 1.5976;
   u_vec = u_unc_vec;
   switch (k.nuisance) {
@@ -165,6 +197,7 @@ inline void fn_MVP_compute_nuisance_T(  Eigen::Matrix<double, -1, 1> &u_vec,
       break;
   }
   (void)a; (void)b;
+
 }
 
 
@@ -176,6 +209,7 @@ inline double fn_MVP_compute_nuisance_log_jac_u_T(  const Eigen::Matrix<double, 
                                                   Eigen::Matrix<double, -1, 1> &scratch,     //// same length as u_vec; contents destroyed
                                                   const KernelChoice &k
 ) {
+
   const int n = static_cast<int>(u_vec.size());
   const double a_times_3 = 3.0 * 0.07056, b = 1.5976;
   const double half_log_2pi = 0.5 * std::log(2.0 * M_PI);
@@ -202,6 +236,7 @@ inline double fn_MVP_compute_nuisance_log_jac_u_T(  const Eigen::Matrix<double, 
     }
   }
   return 0.0;
+
 }
 
 
@@ -213,6 +248,7 @@ inline void fn_MVP_nuisance_first_deriv_T(  Eigen::Matrix<double, -1, 1> &du_wrt
                                           const Eigen::Matrix<double, -1, 1> &u_unc_vec,
                                           const KernelChoice &k
 ) {
+
   const double sqrt_2_pi_recip = 1.0 / std::sqrt(2.0 * M_PI);
   const double a_times_3 = 3.0 * 0.07056, b = 1.5976;
 
@@ -232,6 +268,7 @@ inline void fn_MVP_nuisance_first_deriv_T(  Eigen::Matrix<double, -1, 1> &du_wrt
       du_wrt_duu.array() = 2.0 * u_vec.array() * (1.0 - u_vec.array());
       break;
   }
+
 }
 
 
@@ -244,6 +281,7 @@ inline void fn_MVP_nuisance_deriv_of_log_det_J_T(  Eigen::Matrix<double, -1, 1> 
                                                  const Eigen::Matrix<double, -1, 1> &du_wrt_duu,   //// unused for these transforms; kept for signature parity
                                                  const KernelChoice &k
 ) {
+
   const double a = 0.07056, a_times_3 = 3.0 * a, a_times_6 = 6.0 * a, b = 1.5976;
   (void)du_wrt_duu;
 
@@ -264,6 +302,7 @@ inline void fn_MVP_nuisance_deriv_of_log_det_J_T(  Eigen::Matrix<double, -1, 1> 
       d_J_wrt_duu.array() = 2.0 * (1.0 - 2.0 * u_vec.array());
       break;
   }
+
 }
 
 
@@ -278,8 +317,12 @@ inline void log_sum_exp_general_T(  Eigen::Matrix<double, -1, -1> &lp_array,
                                   Eigen::Matrix<double, -1, 1> &log_sum_result,
                                   Eigen::Matrix<double, -1, 1> &container_max_logs
 ) {
+
   const int n_cols = static_cast<int>(lp_array.cols());
   container_max_logs = lp_array.rowwise().maxCoeff();
+  //// (the shift of a row whose terms are all log(0) = -Inf is 0, so that no -Inf - (-Inf) = NaN)
+  container_max_logs = (container_max_logs.array() == -std::numeric_limits<double>::infinity()).select(0.0,
+                        container_max_logs);
   for (int c = 0; c < n_cols; ++c) {
     lp_array.col(c).array() -= container_max_logs.array();
     apply_col_inplace<vec, Fn::exp>(lp_array, c);
@@ -287,6 +330,7 @@ inline void log_sum_exp_general_T(  Eigen::Matrix<double, -1, -1> &lp_array,
   log_sum_result = lp_array.rowwise().sum();
   apply_inplace<vec, Fn::log>(log_sum_result);
   log_sum_result.array() += container_max_logs.array();
+
 }
 
 

@@ -104,7 +104,7 @@
        }
        
        // Create temporaries EXACTLY like MVP function
-       Eigen::Matrix<double, -1, 1> temp_log_abs_deriv = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -700.0);
+       Eigen::Matrix<double, -1, 1> temp_log_abs_deriv = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_deriv = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
        // Sum using log_sum_exp
@@ -122,12 +122,13 @@
        
        // Compute grad_bound_z
        log_terms.col(0).array() = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1)(problem_index_array[t1]).array() + log_abs_L_Omega_double(t1, t1);
-       log_terms.col(1).array() = -log_abs_L_Omega_double(t1, t1) + log_abs_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]).array();
+       log_terms.col(1).array() = -log_abs_L_Omega_double(t1,
+                     t1) + log_abs_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]).array();
        sign_terms.col(0).array() = sign_deriv_L_T_T_inv * B_sign_Bound_Z.col(t1)(problem_index_array[t1]).array() * stan::math::sign(L_Omega_double(t1, t1));
        sign_terms.col(1) = stan::math::sign(1.0 / L_Omega_double(t1, t1)) * sign_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]);
        
        // Create temporaries for grad_bound_z
-       Eigen::Matrix<double, -1, 1> temp_log_abs_grad_bound = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -700.0);
+       Eigen::Matrix<double, -1, 1> temp_log_abs_grad_bound = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_grad_bound = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
        log_abs_sum_exp_general_v2(log_terms.leftCols(2),
@@ -190,10 +191,12 @@
        }
        
        // Create temporaries
-       Eigen::Matrix<double, -1, 1> temp_log_abs_deriv_0 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -700.0);
+       Eigen::Matrix<double, -1, 1> temp_log_abs_deriv_0 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_deriv_0 = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
-       log_abs_sum_exp_general_v2(log_abs_deriv_Bound_Z_x_L_comp.leftCols(t1), sign_deriv_Bound_Z_x_L_comp.leftCols(t1),
+       log_abs_sum_exp_general_v2(log_abs_deriv_Bound_Z_x_L_comp.leftCols(t1),
+                                  sign_deriv_Bound_Z_x_L_comp.leftCols(t1),
+                                  
                                   vect_type, vect_type, temp_log_abs_deriv_0,
                                   temp_sign_deriv_0,
                                   container_max_logs, container_sum_exp_signed);
@@ -203,11 +206,12 @@
        sign_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]).array() *= -1.0;
        
        log_terms.col(0).array() = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1)(problem_index_array[t1]).array() + log_abs_L_Omega_double(t1, t1);
-       log_terms.col(1).array() = -log_abs_L_Omega_double(t1, t1) + log_abs_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]).array();
+       log_terms.col(1).array() = -log_abs_L_Omega_double(t1,
+                     t1) + log_abs_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]).array();
        sign_terms.col(0).array() = sign_deriv_L_T_T_inv * B_sign_Bound_Z.col(t1)(problem_index_array[t1]).array() * stan::math::sign(L_Omega_double(t1, t1));
        sign_terms.col(1) = stan::math::sign(1.0 / L_Omega_double(t1, t1)) * sign_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]);
        
-       Eigen::Matrix<double, -1, 1> temp_log_abs_grad_bound_0 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -700.0);
+       Eigen::Matrix<double, -1, 1> temp_log_abs_grad_bound_0 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_grad_bound_0 = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
        log_abs_sum_exp_general_v2(log_terms.leftCols(2), sign_terms.leftCols(2), vect_type, vect_type,
@@ -233,12 +237,13 @@
        log_abs_deriv_L_T_T_inv = -2.0 * log_abs_L_Omega_double(t1 + 1, t1 + 1) + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1 + 1, t1 + 1);
        sign_deriv_L_T_T_inv = stan::math::sign(-1.0 / (L_Omega_double(t1 + 1, t1 + 1) * L_Omega_double(t1 + 1, t1 + 1))) * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1 + 1, t1 + 1);
        
-       log_terms.col(0).array() = log_abs_L_Omega_double(t1 + 1, t1) + B_log_abs_z_grad_term.col(0)(problem_index_array[t1]).array();
+       log_terms.col(0).array() = log_abs_L_Omega_double(t1 + 1,
+                     t1) + B_log_abs_z_grad_term.col(0)(problem_index_array[t1]).array();
        log_terms.col(1).array() = B_log_Z_std_norm.col(t1)(problem_index_array[t1]).array() + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1+1, t1);
        sign_terms.col(0).array() = stan::math::sign(L_Omega_double(t1+1, t1)) * B_sign_z_grad_term.col(0)(problem_index_array[t1]).array();
        sign_terms.col(1).array() = B_sign_Z_std_norm.col(t1)(problem_index_array[t1]).array() * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1+1, t1);
        
-       Eigen::Matrix<double, -1, 1> temp_log_abs_deriv_1 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -700.0);
+       Eigen::Matrix<double, -1, 1> temp_log_abs_deriv_1 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_deriv_1 = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
        log_abs_sum_exp_general_v2(log_terms.leftCols(2), sign_terms.leftCols(2), vect_type, vect_type,
@@ -250,11 +255,12 @@
        sign_deriv_Bound_Z_x_L.col(1)(problem_index_array[t1]) = temp_sign_deriv_1;
        
        log_terms.col(0).array() = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1 + 1)(problem_index_array[t1]).array() + log_abs_L_Omega_double(t1 + 1, t1 + 1);
-       log_terms.col(1).array() = -log_abs_L_Omega_double(t1 + 1, t1 + 1) + log_abs_deriv_Bound_Z_x_L.col(1)(problem_index_array[t1]).array();
+       log_terms.col(1).array() = -log_abs_L_Omega_double(t1 + 1,
+                     t1 + 1) + log_abs_deriv_Bound_Z_x_L.col(1)(problem_index_array[t1]).array();
        sign_terms.col(0).array() = sign_deriv_L_T_T_inv * B_sign_Bound_Z.col(t1 + 1)(problem_index_array[t1]).array() * stan::math::sign(L_Omega_double(t1 + 1, t1 + 1));
        sign_terms.col(1).array() = stan::math::sign(1.0 / L_Omega_double(t1 + 1, t1 + 1)) * -1.0 * sign_deriv_Bound_Z_x_L.col(1)(problem_index_array[t1]).array();
        
-       Eigen::Matrix<double, -1, 1> temp_log_abs_grad_bound_1 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -700.0);
+       Eigen::Matrix<double, -1, 1> temp_log_abs_grad_bound_1 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_grad_bound_1 = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
        log_abs_sum_exp_general_v2( log_terms.leftCols(2), sign_terms.leftCols(2), vect_type, vect_type,
@@ -325,7 +331,7 @@
        container_max_logs.resize(n_problem_array[t1]);
        container_sum_exp_signed.resize(n_problem_array[t1]);
        
-       B_log_abs_grad_prob.setConstant(-700.0);
+       B_log_abs_grad_prob.setConstant(-INFINITY);
        B_sign_grad_prob.setOnes();
        
        double log_abs_deriv_L_T_T_inv = -2.0 * log_abs_L_Omega_double(t1, t1) + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t1);
@@ -380,7 +386,8 @@
        
        // Create temporary for indexed view
        Eigen::Matrix<double, -1, 1> temp_col = B_log_Z_std_norm.col(t1)(problem_index_array[t1]);
-       log_terms.col(1).array() = temp_col.array() + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1+1, t1);
+       log_terms.col(1).array() = temp_col.array() + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1+1,
+                     t1);
        
        sign_terms.col(0).array() = stan::math::sign(L_Omega_double(t1+1, t1)) * B_sign_z_grad_term.col(0).array();
        sign_terms.col(1).array() = B_sign_Z_std_norm.col(t1)(problem_index_array[t1]).array() * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1+1, t1);
@@ -394,7 +401,8 @@
                                   container_sum_exp_signed);
        
        log_terms.col(0).array() = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1 + 1)(problem_index_array[t1]).array() + log_abs_L_Omega_double(t1 + 1, t1 + 1);
-       log_terms.col(1).array() = -log_abs_L_Omega_double(t1 + 1, t1 + 1) + log_abs_deriv_Bound_Z_x_L.col(1).array();
+       log_terms.col(1).array() = -log_abs_L_Omega_double(t1 + 1,
+                     t1 + 1) + log_abs_deriv_Bound_Z_x_L.col(1).array();
        sign_terms.col(0).array() = sign_deriv_L_T_T_inv * B_sign_Bound_Z.col(t1 + 1)(problem_index_array[t1]).array() * stan::math::sign(L_Omega_double(t1 + 1, t1 + 1));
        sign_terms.col(1).array() = stan::math::sign(1.0 / L_Omega_double(t1 + 1, t1 + 1)) * -1.0 * sign_deriv_Bound_Z_x_L.col(1).array();
        
@@ -447,7 +455,8 @@
                                     container_sum_exp_signed);
          
          log_terms.col(0).array() = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1 + ii + 1)(problem_index_array[t1]).array() + log_abs_L_Omega_double(t1 + ii + 1, t1 + ii + 1);
-         log_terms.col(1).array() = -log_abs_L_Omega_double(t1 + ii + 1, t1 + ii + 1) + log_abs_deriv_Bound_Z_x_L.col(ii + 1).array();
+         log_terms.col(1).array() = -log_abs_L_Omega_double(t1 + ii + 1,
+                       t1 + ii + 1) + log_abs_deriv_Bound_Z_x_L.col(ii + 1).array();
          sign_terms.col(0).array() = sign_deriv_L_T_T_inv * B_sign_Bound_Z.col(t1 + ii + 1)(problem_index_array[t1]).array() * stan::math::sign(L_Omega_double(t1 + ii + 1, t1 + ii + 1));
          sign_terms.col(1).array() = stan::math::sign(1.0 / L_Omega_double(t1 + ii + 1, t1 + ii + 1)) * -1.0 * sign_deriv_Bound_Z_x_L.col(ii + 1).array();
          

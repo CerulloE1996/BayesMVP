@@ -17,12 +17,13 @@
 #include <Eigen/Dense>
 #include <Eigen/Core>
  
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)   //// (x86-64 only: ARM CPUs have no AVX)
 #include <immintrin.h>
+#endif
 
  
 
  
-using namespace Eigen;
 
 
  
@@ -32,37 +33,59 @@ using namespace Eigen;
 
 
 ALWAYS_INLINE double mvp_std_exp(double x) { 
+
      return stan::math::exp(x);
+
 }
 ALWAYS_INLINE double mvp_std_log(double x) { 
+
   return stan::math::log(x);
+
 }
 ALWAYS_INLINE double mvp_std_log1p(double x) { 
+
   return stan::math::log1p(x);
+
 }
 ALWAYS_INLINE double mvp_std_log1m(double x) { 
+
   return stan::math::log1m(x);
+
 } 
 ALWAYS_INLINE double mvp_std_logit(double x) { 
+
   return stan::math::logit(x);
+
 } 
 ALWAYS_INLINE double mvp_std_tanh(double x) { 
+
   return stan::math::tanh(x);
+
 } 
 ALWAYS_INLINE double mvp_std_Phi_approx(double x) { 
+
   return stan::math::Phi_approx(x);
+
 }
 ALWAYS_INLINE double mvp_std_Phi(double x) { 
+
   return stan::math::Phi(x);
+
 }
 ALWAYS_INLINE double mvp_std_inv_Phi(double x) { 
+
   return stan::math::inv_Phi(x);
+
 }
 ALWAYS_INLINE double mvp_std_inv_logit(double x) { 
+
   return stan::math::inv_logit(x);
+
 }
 ALWAYS_INLINE double mvp_std_log_inv_logit(double x) { 
+
   return stan::math::log_inv_logit(x); 
+
 }
 
 

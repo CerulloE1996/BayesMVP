@@ -395,3 +395,9 @@ $(SHLIB): $(OBJECTS)
 ##
 # Package-local provider headers and the canonical installed NicoStan runtime.
 override PKG_CPPFLAGS += -I. -I../inst/include
+##
+## ---- NicoSIMD: the one home of every AVX2 / AVX-512 kernel (BayesMVP's C++ includes
+##      <NicoSIMD/math/nico_and_approx_AVX2_fns.hpp> and <NicoSIMD/math/nico_and_approx_AVX512_fns.hpp>);
+##      the include folder of the installed NicoSIMD (also given by LinkingTo: NicoSIMD):
+override NICOSIMD_INCLUDE_PATH:=$(shell "${R_HOME}/bin${R_ARCH_BIN}/Rscript" --vanilla -e "cat(system.file('include', package = 'NicoSIMD'))")
+override PKG_CPPFLAGS += -I"$(NICOSIMD_INCLUDE_PATH)"

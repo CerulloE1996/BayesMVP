@@ -118,9 +118,10 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   ////
   const std::string LT_prior_corr_bs =   Model_args_as_cpp_struct.Model_args_strings(13);
   
-  //// Phi_type and inv_Phi_type are validated here (unknown strings throw; previously an unknown Phi_type
-  //// matched neither likelihood branch below, so the likelihood was silently left out) and honoured independently, as the latent_trait
-  //// manual path does (fn_MVP_compute_lp_GHK_cols reads Phi_type and inv_Phi_type separately). See fn_AD_Phi_setting_from_strings.
+  //// Phi_type and inv_Phi_type are validated here (unknown strings throw; an unknown Phi_type would match
+  //// neither likelihood branch below, so the likelihood would be silently left out) and honoured independently,
+  //// as the latent_trait manual path does (fn_MVP_compute_lp_GHK_cols reads Phi_type and inv_Phi_type
+  //// separately). See fn_AD_Phi_setting_from_strings.
   const AD_Phi_setting_struct AD_Phi_setting = fn_AD_Phi_setting_from_strings(  Phi_type,
                                                                               inv_Phi_type,
                                                                               "fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_process");
@@ -219,8 +220,10 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
    //////////////
    // corrs  -  b's (latent_trait only)
    Eigen::Matrix<stan::math::var, -1, 1>  bs_raw_vec_var = theta_var.segment(n_us, n_bs_LT) ; // stan::math::to_var(bs_raw_vec_double) ;
-   Eigen::Matrix<stan::math::var, -1, -1> bs_mat =       Eigen::Matrix<stan::math::var, -1, -1 >::Zero(n_class, n_tests);
-   Eigen::Matrix<stan::math::var, -1, -1> bs_raw_mat =   Eigen::Matrix<stan::math::var, -1, -1 >::Zero(n_class, n_tests);
+   Eigen::Matrix<stan::math::var, -1, -1> bs_mat =       Eigen::Matrix<stan::math::var, -1, -1 >::Zero(n_class,
+                                                                                                       n_tests);
+   Eigen::Matrix<stan::math::var, -1, -1> bs_raw_mat =   Eigen::Matrix<stan::math::var, -1, -1 >::Zero(n_class,
+                                                                                                       n_tests);
    
    bs_raw_mat.row(0) =  bs_raw_vec_var.segment(0, n_tests).transpose();
    bs_raw_mat.row(1) =  bs_raw_vec_var.segment(n_tests, n_tests).transpose();
@@ -228,7 +231,9 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
    if (LT_prior_corr_bs == "uniform") {
        for (int c = 0; c < n_class; ++c) {
          for (int t = 0; t < n_tests; ++t) {
-           Eigen::Matrix<stan::math::var, -1, 1> outs = lb_ub_lp(bs_raw_mat(c, t), LT_b_priors_1(c, t), LT_b_priors_2(c, t));
+           Eigen::Matrix<stan::math::var, -1, 1> outs = lb_ub_lp(bs_raw_mat(c, t),
+                                                                 LT_b_priors_1(c, t),
+                                                                 LT_b_priors_2(c, t));
            target_AD += outs(0);
            bs_mat(c, t) = outs(1);
          }
@@ -371,13 +376,14 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   } else if (nuisance_transformation == "tanh") {
     Eigen::Matrix<stan::math::var, -1, 1> tanh_u_unc = tanh(u_unconstrained_vec_var);   // correct
     u_vec.array() =     0.5 * (  tanh_u_unc.array() + 1.0).array() ;   // correct
-    log_jac_u   +=   u_unconstrained_vec_var.size() * log(2.0) ;   //// du/dx = 2 u (1 - u), so +log(2) per coordinate (was -log(2) previously)   // correct
+    //// du/dx = 2 u (1 - u), so +log(2) per coordinate:
+    log_jac_u   +=   u_unconstrained_vec_var.size() * log(2.0) ;   // correct
     log_jac_u   +=    sum(log(u_vec));  // correct
     log_jac_u   +=    sum(log1m(u_vec));  // correct
   } else if (nuisance_transformation == "inv_logit") {
-    //// branch added. Without it u_vec (var) stayed uninitialised and the process segfaulted.
-    //// Same transform and log-Jacobian as the latent_trait manual path (fn_MVP_compute_nuisance / _log_jac_u, MVP_manual_trans_and_J_fns.hpp):
-    //// u = inv_logit(x), du/dx = u (1 - u).
+    //// "inv_logit" branch (without it u_vec (var) would stay uninitialised and the process would segfault). Same
+    //// transform and log-Jacobian as the latent_trait manual path (fn_MVP_compute_nuisance / _log_jac_u,
+    //// MVP_manual_trans_and_J_fns.hpp): u = inv_logit(x), du/dx = u (1 - u).
     u_vec.array() =   inv_logit(u_unconstrained_vec_var).array();
     log_jac_u   +=    sum(log(u_vec));
     log_jac_u   +=    sum(log1m(u_vec));
@@ -387,8 +393,12 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   }
 
   ///////////////// get cholesky factor's (lower-triangular) of corr matrices
-  std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  L_Omega_var = vec_of_mats<stan::math::var>(n_tests, n_tests, n_class);
-  std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  Omega_var   = vec_of_mats<stan::math::var>(n_tests, n_tests, n_class);
+  std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  L_Omega_var = vec_of_mats<stan::math::var>(n_tests,
+                                                                                                  n_tests,
+                                                                                                  n_class);
+  std::vector<Eigen::Matrix<stan::math::var, -1, -1>>  Omega_var   = vec_of_mats<stan::math::var>(n_tests,
+                                                                                                  n_tests,
+                                                                                                  n_class);
   Eigen::Matrix<stan::math::var, -1, -1 > identity_dim_T =     Eigen::Matrix<stan::math::var, -1, -1 > ::Zero(n_tests, n_tests) ; //  stan::math::diag_matrix(  stan::math::rep_vector(1, n_tests)  ) ;
 
   for (int i = 0; i < n_tests; ++i) {
@@ -409,7 +419,9 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   if (exclude_priors == false)
   for (int c = 0; c < n_class; ++c) {
     for (int t = 0; t < n_tests; ++t) {
-      target_AD += stan::math::normal_lpdf(LT_theta(c, t), prior_coeffs_mean[c](0, t), prior_coeffs_sd[c](0, t)); //// Prior on theta
+      target_AD += stan::math::normal_lpdf(LT_theta(c, t),
+                                           prior_coeffs_mean[c](0, t),
+                                           prior_coeffs_sd[c](0, t)); //// Prior on theta
       target_AD +=  - 0.5 * stan::math::log(1.0 + stan::math::square(stan::math::abs(bs_mat(c, t) ))); // Jacobian for LT_theta -> LT_a
     }
   }
@@ -419,11 +431,19 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
   if (exclude_priors == false)
   for (int t = 0; t < n_tests; ++t) {
       if (LT_prior_corr_bs == "Weibull") {
-        target_AD += stan::math::weibull_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = scale/sigma
-        target_AD += stan::math::weibull_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = shape/alpha, b = scale/sigma
+        target_AD += stan::math::weibull_lpdf(  bs_nd(t) ,
+                                              LT_b_priors_1(0, t),
+                                              LT_b_priors_2(0, t)  ); // a = shape/alpha, b = scale/sigma
+        target_AD += stan::math::weibull_lpdf(  bs_d(t)  ,
+                                              LT_b_priors_1(1, t),
+                                              LT_b_priors_2(1, t)  ); // a = shape/alpha, b = scale/sigma
       } else if (LT_prior_corr_bs == "gamma") {
-        target_AD += stan::math::gamma_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = shape/alpha, b = inv_scale/beta
-        target_AD += stan::math::gamma_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = shape/alpha, b = inv_scale/beta
+        target_AD += stan::math::gamma_lpdf(  bs_nd(t) ,
+                                            LT_b_priors_1(0, t),
+                                            LT_b_priors_2(0, t)  ); // a = shape/alpha, b = inv_scale/beta
+        target_AD += stan::math::gamma_lpdf(  bs_d(t)  ,
+                                            LT_b_priors_1(1, t),
+                                            LT_b_priors_2(1, t)  ); // a = shape/alpha, b = inv_scale/beta
       } else if (LT_prior_corr_bs == "uniform") {
         // target_AD += stan::math::uniform_lpdf(  bs_nd(t) ,   LT_b_priors_1(0, t), LT_b_priors_2(0, t)  ); // a = min, b = max
         // target_AD += stan::math::uniform_lpdf(  bs_d(t)  ,   LT_b_priors_1(1, t), LT_b_priors_2(1, t)  ); // a = min, b = max
@@ -499,36 +519,44 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
           if ( (Bound_Z > overflow_threshold) &&  (y_ref(n, t) == 1) )   {
 
                 using namespace stan::math;
-                //// EXACT normal tail (was the Phi_approx tail for every Phi_type).
-                //// y1 = log(1 - Phi(B)) = log Phi(-B);  1 - Phi_Z = (1 - u)(1 - Phi(B));  Z = Phi^{-1}(Phi_Z) from (log Phi_Z, log(1 - Phi_Z)).
-                //// Derivatives come from log_Phi_exact_var / inv_Phi_from_log_p_exact_var (double_fns.hpp): d/dx log Phi(x) = phi(x)/Phi(x),
-                //// dZ/dlog(1 - Phi_Z) = -(1 - Phi_Z)/phi(Z).
+                //// EXACT normal tail.
+                //// y1 = log(1 - Phi(B)) = log Phi(-B);  1 - Phi_Z = (1 - u)(1 - Phi(B));
+                //// Z = Phi^{-1}(Phi_Z) from (log Phi_Z, log(1 - Phi_Z)).
+                //// Derivatives come from log_Phi_exact_var / inv_Phi_from_log_p_exact_var (double_fns.hpp):
+                //// d/dx log Phi(x) = phi(x)/Phi(x), dZ/dlog(1 - Phi_Z) = -(1 - Phi_Z)/phi(Z).
                 stan::math::var  log_1m_Phi_Bound_Z = log_Phi_exact_var( - Bound_Z );
                 stan::math::var  log_Phi_Bound_Z    = log1m_exp(log_1m_Phi_Bound_Z);
                 stan::math::var  log_Phi_Z          = log_sum_exp(log_1m_Phi_Bound_Z + stan::math::log(u_array(n, t)), log_Phi_Bound_Z);
                 stan::math::var  log_1m_Phi_Z       = log1m(u_array(n, t)) + log_1m_Phi_Bound_Z;
-                Z_std_norm(t) =  fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z, log_1m_Phi_Z, use_inv_Phi_approx);   //// exact inverse unless inv_Phi_type = "inv_Phi_approx"
+                Z_std_norm(t) =  fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z,
+                           log_1m_Phi_Z,
+                           use_inv_Phi_approx); //// exact inverse unless inv_Phi_type = "inv_Phi_approx"
                 y1(t) =  log_1m_Phi_Bound_Z ;
 
           } else if  ( (Bound_Z < underflow_threshold) &&  (y_ref(n, t) == 0) ) { // y == 0
 
                 using namespace stan::math;
-                //// EXACT normal tail (was the Phi_approx tail for every Phi_type).
-                //// y1 = log Phi(B);  Phi_Z = u Phi(B);  Z = Phi^{-1}(Phi_Z) from (log Phi_Z, log(1 - Phi_Z)); dZ/dlog Phi_Z = Phi_Z/phi(Z).
+                //// EXACT normal tail.
+                //// y1 = log Phi(B);  Phi_Z = u Phi(B);
+                //// Z = Phi^{-1}(Phi_Z) from (log Phi_Z, log(1 - Phi_Z)); dZ/dlog Phi_Z = Phi_Z/phi(Z).
                 stan::math::var  log_Phi_Bound_Z = log_Phi_exact_var( Bound_Z );
                 stan::math::var  log_Phi_Z       = stan::math::log(u_array(n, t)) + log_Phi_Bound_Z;
                 stan::math::var  log_1m_Phi_Z    = log1m_exp(log_Phi_Z);
-                Z_std_norm(t) = fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z, log_1m_Phi_Z, use_inv_Phi_approx);   //// exact inverse unless inv_Phi_type = "inv_Phi_approx"
+                Z_std_norm(t) = fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z,
+                           log_1m_Phi_Z,
+                           use_inv_Phi_approx); //// exact inverse unless inv_Phi_type = "inv_Phi_approx"
                 y1(t)  =  log_Phi_Bound_Z ;
 
           } else {
 
                 if  (y_ref(n, t) == 1) {
-                  //// right-side seam fixed by reflection. 1 - Phi(B) = Phi(-B) and
-                  //// 1 - Phi_Z = (1 - u)(1 - Phi(B)), so Z = Phi^{-1}(Phi_Z) = -Phi^{-1}((1 - u) Phi(-B)); no cancellation near B = +7.5.
+                  //// right-side seam handled by reflection. 1 - Phi(B) = Phi(-B) and
+                  //// 1 - Phi_Z = (1 - u)(1 - Phi(B)), so Z = Phi^{-1}(Phi_Z) = -Phi^{-1}((1 - u) Phi(-B)); no
+                  //// cancellation near B = +7.5.
                   stan::math::var  prob_y_equals_1_reflected = stan::math::Phi( - Bound_Z );
                   y1(t) = stan::math::log(prob_y_equals_1_reflected);
-                  Z_std_norm(t) = - fn_AD_inv_Phi_var( (1.0 - u_array(n, t)) * prob_y_equals_1_reflected, use_inv_Phi_approx );   //// both inverses are odd about 1/2
+                  Z_std_norm(t) = - fn_AD_inv_Phi_var( (1.0 - u_array(n, t)) * prob_y_equals_1_reflected,
+                             use_inv_Phi_approx ); //// both inverses are odd about 1/2
                 } else {
                   stan::math::var  Bound_U_Phi_Bound_Z = stan::math::Phi( Bound_Z );
                   y1(t) = stan::math::log(Bound_U_Phi_Bound_Z);
@@ -601,12 +629,14 @@ void                             fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_proce
                   stan::math::var  Bound_U_Phi_Bound_Z = stan::math::Phi_approx( Bound_Z );
                   y1(t) = stan::math::log1m(Bound_U_Phi_Bound_Z);
                   Phi_Z  = Bound_U_Phi_Bound_Z + (1.0 - Bound_U_Phi_Bound_Z) * u_array(n, t);
-                  Z_std_norm(t) =   fn_AD_inv_Phi_var(Phi_Z, use_inv_Phi_approx) ;   //// inverse follows inv_Phi_type
+                  Z_std_norm(t) =   fn_AD_inv_Phi_var(Phi_Z,
+                             use_inv_Phi_approx) ; //// inverse follows inv_Phi_type
                 } else {
                   stan::math::var  Bound_U_Phi_Bound_Z = stan::math::Phi_approx( Bound_Z );
                   y1(t) = stan::math::log(Bound_U_Phi_Bound_Z);
                   Phi_Z  =  Bound_U_Phi_Bound_Z * u_array(n, t);
-                  Z_std_norm(t) =   fn_AD_inv_Phi_var(Phi_Z, use_inv_Phi_approx) ;   //// inverse follows inv_Phi_type
+                  Z_std_norm(t) =   fn_AD_inv_Phi_var(Phi_Z,
+                             use_inv_Phi_approx) ; //// inverse follows inv_Phi_type
                 }
 
           }

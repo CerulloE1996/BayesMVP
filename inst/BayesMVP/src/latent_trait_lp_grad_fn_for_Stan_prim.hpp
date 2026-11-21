@@ -110,8 +110,10 @@
  
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_Stan.hpp"
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_Loop.hpp"
-#include "general_functions/fns_SIMD_and_wrappers/fast_and_approx_AVX2_fns.hpp" // will only compile if  AVX2 is available
-#include "general_functions/fns_SIMD_and_wrappers/fast_and_approx_AVX512_fns.hpp" // will only compile if  AVX-512 is available
+// will only compile if  AVX2 is available
+#include "general_functions/fns_SIMD_and_wrappers/nico_and_approx_AVX2_fns.hpp"
+// will only compile if  AVX-512 is available
+#include "general_functions/fns_SIMD_and_wrappers/nico_and_approx_AVX512_fns.hpp"
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_SIMD_AVX_general.hpp" // will only compile if AVX-512 (1st choice) or AVX2 available
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_overall.hpp"
 #include "general_functions/fns_SIMD_and_wrappers/fn_wrappers_log_sum_exp_dbl.hpp"

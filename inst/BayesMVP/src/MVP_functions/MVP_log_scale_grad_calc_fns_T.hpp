@@ -34,6 +34,9 @@ inline void log_abs_sum_exp_general_v2_T(  const Eigen::Ref<const Eigen::Matrix<
         const int n = static_cast<int>(log_terms.rows());
         const int k = static_cast<int>(log_terms.cols());
         container_max_logs = log_terms.rowwise().maxCoeff();
+        //// (the shift of a row whose terms are all log(0) = -Inf is 0, so that no -Inf - (-Inf) = NaN)
+        container_max_logs = (container_max_logs.array() == -std::numeric_limits<double>::infinity()).select(0.0,
+                              container_max_logs);
         container_sum_exp_signed.setZero();
         for (int j = 0; j < k; ++j) {
           out_log = log_terms.col(j) - container_max_logs;                 //// scratch
@@ -46,7 +49,8 @@ inline void log_abs_sum_exp_general_v2_T(  const Eigen::Ref<const Eigen::Matrix<
           out_log(i)  = std::abs(s);
         }
         apply_inplace<vec, Fn::log>(out_log);                                //// log(0) -> -Inf is fine (Stan log)
-        for (int i = 0; i < n; ++i) if (!std::isfinite(out_log(i))) out_log(i) = -700.0;
+        //// for (int i = 0; i < n; ++i) if (!std::isfinite(out_log(i))) out_log(i) = -700.0;
+        //// (removed: log(0) stays -Inf; no -700 floor)
         out_log.array() += container_max_logs.array();
   
 }
@@ -63,13 +67,14 @@ inline LogSumSignedResult_T log_sum_vec_signed_T(  const Eigen::Ref<const Eigen:
 ) {
   
         const double mx = log_abs.maxCoeff();
-        //// every term is exactly zero (log_abs = -Inf throughout, e.g. the per-row gradients w.r.t. L_Omega(0, 0)
-        //// when test 1's bound is exactly 0). Before this guard, -Inf - (-Inf) = NaN made the whole sum NaN, and the chain rule then turned the
-        //// correlation gradient into NaN (0 * NaN). Return the same "log zero" as the s == 0 case below.
+        //// every term is exactly zero (log_abs = -Inf throughout, e.g. the per-row gradients w.r.t.
+        //// L_Omega(0, 0) when test 1's bound is exactly 0). Without this guard, -Inf - (-Inf) = NaN would make
+        //// the whole sum NaN, and the chain rule would then turn the correlation gradient into NaN (0 * NaN).
+        //// Return the same "log zero" as the s == 0 case below.
         if (std::isinf(mx) && (mx < 0.0)) {
           LogSumSignedResult_T r_all_zero;
           r_all_zero.sign    = 1.0;
-          r_all_zero.log_sum = -700.0;
+          r_all_zero.log_sum = -INFINITY;
           return r_all_zero;
         }
         Eigen::Matrix<double, -1, 1> tmp = log_abs.array() - mx;
@@ -77,7 +82,7 @@ inline LogSumSignedResult_T log_sum_vec_signed_T(  const Eigen::Ref<const Eigen:
         const double s = (sign.array() * tmp.array()).sum();
         LogSumSignedResult_T r;
         r.sign    = (s < 0.0) ? -1.0 : 1.0;
-        r.log_sum = (s == 0.0) ? -700.0 : std::log(std::abs(s)) + mx;
+        r.log_sum = (s == 0.0) ? -INFINITY : std::log(std::abs(s)) + mx;
         return r;
   
 }
@@ -90,6 +95,8 @@ template <Vec vec>
 inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> M) {
   
         Eigen::Matrix<double, -1, 1> mx = M.rowwise().maxCoeff();
+        //// (the shift of a row whose terms are all log(0) = -Inf is 0, so that no -Inf - (-Inf) = NaN)
+        mx = (mx.array() == -std::numeric_limits<double>::infinity()).select(0.0, mx);
         Eigen::Matrix<double, -1, 1> a = M.col(0) - mx;  apply_inplace<vec, Fn::exp>(a);
         Eigen::Matrix<double, -1, 1> b = M.col(1) - mx;  apply_inplace<vec, Fn::exp>(b);
         Eigen::Matrix<double, -1, 1> out = a + b;
@@ -105,95 +112,101 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 //// =====================================================================================
 //// 1a. Exact normal-tail kernels over a gathered vector (tail rows only).
 ////
-//// The tail fix-ups below
-//// previously used the Phi_approx pair (log_Phi_approx + inv_Phi_approx_from_logit_prob) for
-//// EVERY Phi_type, which spliced the exact interior (Phi_type = "Phi") onto cubic-logistic tails
-//// at overflow_threshold / underflow_threshold (a jump of ~10.7 nats in log Phi at -7.5).
-//// For the exact setting these two helpers supply the exact log-space functions instead:
+//// For the exact setting, the tail fix-ups below use these two helpers, which supply the exact log-space
+//// functions (the Phi_approx pair, log_Phi_approx + inv_Phi_approx_from_logit_prob, would splice the exact
+//// interior (Phi_type = "Phi") onto cubic-logistic tails at overflow_threshold / underflow_threshold: a jump of
+//// ~10.7 nats in log Phi at -7.5):
 ////
-////   fn_apply_log_Phi_exact_inplace_T:      x -> log Phi(x)       (fast_log_Phi_AVX512 / _AVX2 / scalar fast_log_Phi;
-////                                                                 Mills-ratio continued fraction for x < -2.5, so
-////                                                                 relative-accurate at every tail argument)
+////   fn_apply_log_Phi_exact_inplace_T:      x -> log Phi(x)
+////       (nico_log_Phi_AVX512 / _AVX2 / scalar nico_log_Phi; Mills-ratio continued fraction for x < -2.5, so
+////        relative-accurate at every tail argument)
 ////   fn_inv_Phi_from_log_p_exact_T:         (log p, log(1-p)) -> Phi^{-1}(p)
-////                                                                (AS241 / Wichura 1988, fed r = sqrt(-log min(p, 1-p))
-////                                                                 directly, so no exp/log of an extreme probability)
+////       (AS241 / Wichura 1988, fed r = sqrt(-log min(p, 1-p)) directly, so no exp/log of an extreme
+////        probability)
 ////
-//// The kernels are the existing ones in inst/include/BayesMVP/math/fast_and_approx_AVX*_fns.hpp and
+//// The kernels are the existing ones in inst/include/BayesMVP/math/nico_and_approx_AVX*_fns.hpp and
 //// general_functions/double_fns.hpp. The level falls back AVX512 -> AVX2 -> scalar exactly as apply_raw
 //// does; the scalar remainder (and Vec::Scalar) uses the double versions.
 //// =====================================================================================
-template <Vec vec>
-inline void fn_apply_log_Phi_exact_inplace_T(Eigen::Matrix<double, -1, 1> &values_in_log_Phi_out) {
-  
-        double *data_pointer = values_in_log_Phi_out.data();
-        const int n_values = static_cast<int>(values_in_log_Phi_out.size());
-        int index_value = 0;
-        if constexpr (vec == Vec::AVX512) {
-          #if BMVP_HAS_AVX512
-            for (; index_value + 8 <= n_values; index_value += 8) {
-              _mm512_storeu_pd(data_pointer + index_value, fast_log_Phi_AVX512(_mm512_loadu_pd(data_pointer + index_value)));
-            }
-          #elif BMVP_HAS_AVX2
-            for (; index_value + 4 <= n_values; index_value += 4) {
-              _mm256_storeu_pd(data_pointer + index_value, fast_log_Phi_AVX2(_mm256_loadu_pd(data_pointer + index_value)));
-            }
-          #endif
-        } else if constexpr (vec == Vec::AVX2) {
-          #if BMVP_HAS_AVX2
-            for (; index_value + 4 <= n_values; index_value += 4) {
-              _mm256_storeu_pd(data_pointer + index_value, fast_log_Phi_AVX2(_mm256_loadu_pd(data_pointer + index_value)));
-            }
-          #endif
-        }
-        for (; index_value < n_values; ++index_value) {
-          data_pointer[index_value] = fast_log_Phi(data_pointer[index_value]);
-        }
-  
-}
-
-
-
-
-template <Vec vec>
-inline void fn_inv_Phi_from_log_p_exact_T(  const Eigen::Matrix<double, -1, 1> &log_p_vec,
-                                            const Eigen::Matrix<double, -1, 1> &log_1m_p_vec,
-                                            Eigen::Matrix<double, -1, 1> &Z_out_vec
-) {
-  
-        const int n_values = static_cast<int>(log_p_vec.size());
-        Z_out_vec.resize(n_values);
-        const double *log_p_pointer = log_p_vec.data();
-        const double *log_1m_p_pointer = log_1m_p_vec.data();
-        double *Z_out_pointer = Z_out_vec.data();
-        int index_value = 0;
-        if constexpr (vec == Vec::AVX512) {
-          #if BMVP_HAS_AVX512
-            for (; index_value + 8 <= n_values; index_value += 8) {
-              _mm512_storeu_pd(Z_out_pointer + index_value,
-                               fast_inv_Phi_from_log_p_wo_checks_AVX512(_mm512_loadu_pd(log_p_pointer + index_value),
-                                                                        _mm512_loadu_pd(log_1m_p_pointer + index_value)));
-            }
-          #elif BMVP_HAS_AVX2
-            for (; index_value + 4 <= n_values; index_value += 4) {
-              _mm256_storeu_pd(Z_out_pointer + index_value,
-                               fast_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p_pointer + index_value),
-                                                                      _mm256_loadu_pd(log_1m_p_pointer + index_value)));
-            }
-          #endif
-        } else if constexpr (vec == Vec::AVX2) {
-          #if BMVP_HAS_AVX2
-            for (; index_value + 4 <= n_values; index_value += 4) {
-              _mm256_storeu_pd(Z_out_pointer + index_value,
-                               fast_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p_pointer + index_value),
-                                                                      _mm256_loadu_pd(log_1m_p_pointer + index_value)));
-            }
-          #endif
-        }
-        for (; index_value < n_values; ++index_value) {
-          Z_out_pointer[index_value] = fast_inv_Phi_from_log_p(log_p_pointer[index_value], log_1m_p_pointer[index_value]);
-        }
-  
-}
+//// log_Phi_and_inv_Phi_from_log_p_over_an_Eigen_vector_templated_by_the_SIMD_level.hpp
+////
+//// ---- Moved into NicoSIMD, where every SIMD function lives: this header only includes NicoSIMD's, word for
+////      word the code that was here
+////      (the copy is on the 20 TB drive, Work_backup_cumulative).
+#include <NicoSIMD/kernel_dispatch_and_vector_loops_of_the_BayesMVP_manual_gradient_models/log_Phi_and_inv_Phi_from_log_p_over_an_Eigen_vector_templated_by_the_SIMD_level.hpp>
+//// (the old lines, kept as comments:)
+// template <Vec vec>
+// inline void fn_apply_log_Phi_exact_inplace_T(Eigen::Matrix<double, -1, 1> &values_in_log_Phi_out) {
+//   
+//         double *data_pointer = values_in_log_Phi_out.data();
+//         const int n_values = static_cast<int>(values_in_log_Phi_out.size());
+//         int index_value = 0;
+//         if constexpr (vec == Vec::AVX512) {
+//           #if BMVP_HAS_AVX512
+//             for (; index_value + 8 <= n_values; index_value += 8) {
+//               _mm512_storeu_pd(data_pointer + index_value, nico_log_Phi_AVX512(_mm512_loadu_pd(data_pointer + index_value)));
+//             }
+//           #elif BMVP_HAS_AVX2
+//             for (; index_value + 4 <= n_values; index_value += 4) {
+//               _mm256_storeu_pd(data_pointer + index_value, nico_log_Phi_AVX2(_mm256_loadu_pd(data_pointer + index_value)));
+//             }
+//           #endif
+//         } else if constexpr (vec == Vec::AVX2) {
+//           #if BMVP_HAS_AVX2
+//             for (; index_value + 4 <= n_values; index_value += 4) {
+//               _mm256_storeu_pd(data_pointer + index_value, nico_log_Phi_AVX2(_mm256_loadu_pd(data_pointer + index_value)));
+//             }
+//           #endif
+//         }
+//         for (; index_value < n_values; ++index_value) {
+//           data_pointer[index_value] = nico_log_Phi(data_pointer[index_value]);
+//         }
+//   
+// }
+// 
+// 
+// 
+// 
+// template <Vec vec>
+// inline void fn_inv_Phi_from_log_p_exact_T(  const Eigen::Matrix<double, -1, 1> &log_p_vec,
+//                                             const Eigen::Matrix<double, -1, 1> &log_1m_p_vec,
+//                                             Eigen::Matrix<double, -1, 1> &Z_out_vec
+// ) {
+//   
+//         const int n_values = static_cast<int>(log_p_vec.size());
+//         Z_out_vec.resize(n_values);
+//         const double *log_p_pointer = log_p_vec.data();
+//         const double *log_1m_p_pointer = log_1m_p_vec.data();
+//         double *Z_out_pointer = Z_out_vec.data();
+//         int index_value = 0;
+//         if constexpr (vec == Vec::AVX512) {
+//           #if BMVP_HAS_AVX512
+//             for (; index_value + 8 <= n_values; index_value += 8) {
+//               _mm512_storeu_pd(Z_out_pointer + index_value,
+//                                nico_inv_Phi_from_log_p_wo_checks_AVX512(_mm512_loadu_pd(log_p_pointer + index_value),
+//                                                                         _mm512_loadu_pd(log_1m_p_pointer + index_value)));
+//             }
+//           #elif BMVP_HAS_AVX2
+//             for (; index_value + 4 <= n_values; index_value += 4) {
+//               _mm256_storeu_pd(Z_out_pointer + index_value,
+//                                nico_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p_pointer + index_value),
+//                                                                       _mm256_loadu_pd(log_1m_p_pointer + index_value)));
+//             }
+//           #endif
+//         } else if constexpr (vec == Vec::AVX2) {
+//           #if BMVP_HAS_AVX2
+//             for (; index_value + 4 <= n_values; index_value += 4) {
+//               _mm256_storeu_pd(Z_out_pointer + index_value,
+//                                nico_inv_Phi_from_log_p_wo_checks_AVX2(_mm256_loadu_pd(log_p_pointer + index_value),
+//                                                                       _mm256_loadu_pd(log_1m_p_pointer + index_value)));
+//             }
+//           #endif
+//         }
+//         for (; index_value < n_values; ++index_value) {
+//           Z_out_pointer[index_value] = nico_inv_Phi_from_log_p(log_p_pointer[index_value], log_1m_p_pointer[index_value]);
+//         }
+//   
+// }
 
 
 
@@ -202,9 +215,9 @@ inline void fn_inv_Phi_from_log_p_exact_T(  const Eigen::Matrix<double, -1, 1> &
 //// 1. GHK log-scale fix-ups for the problem rows (index). Eigen indexed views need a
 ////    temporary per expression; those allocations are unavoidable and small (|index| rows).
 ////
-////    Both functions now take the KernelChoice.
-////     - Phi_approx AND inv_Phi_approx (the fully approximate setting): the original code,
-////       unchanged, runs first and returns.
+////    Both functions take the KernelChoice.
+////     - Phi_approx AND inv_Phi_approx (the fully approximate setting): the original code runs first and
+////       returns.
 ////     - otherwise the tail CDF follows kernel_choice.Phi_approx and the tail inverse follows
 ////       kernel_choice.inv_Phi_approx, each with its OWN matching derivative, so the value and
 ////       the manual gradient stay consistent in every combination:
@@ -221,9 +234,12 @@ inline void fn_inv_Phi_from_log_p_exact_T(  const Eigen::Matrix<double, -1, 1> &
 ////       setting (fn_MVP_compute_phi_Bound_Z_cols_T / fn_MVP_compute_phi_Z_recip_cols_T), and the
 ////       downstream GHK chain rule consumes only y1_log_prob, log_phi_Bound_Z, log_phi_Z_recip,
 ////       Z_std_norm and u, so no other gradient code needs to change:
-////         d y1 / d Bound_Z   = (1 - 2y) phi(Bound_Z) / prob                [underflow: +phi(B)/Phi(B); overflow: -phi(B)/(1-Phi(B))]
-////         d Z / d Bound_Z    = (y - (2y - 1) u) phi(Bound_Z) / phi(Z)      [underflow: u phi(B)/phi(Z); overflow: (1-u) phi(B)/phi(Z)]
-////         d Z / d u          = prob / phi(Z)                               [underflow: Phi(B)/phi(Z); overflow: (1-Phi(B))/phi(Z)]
+////         d y1 / d Bound_Z   = (1 - 2y) phi(Bound_Z) / prob
+////                              [underflow: +phi(B)/Phi(B); overflow: -phi(B)/(1-Phi(B))]
+////         d Z / d Bound_Z    = (y - (2y - 1) u) phi(Bound_Z) / phi(Z)
+////                              [underflow: u phi(B)/phi(Z); overflow: (1-u) phi(B)/phi(Z)]
+////         d Z / d u          = prob / phi(Z)
+////                              [underflow: Phi(B)/phi(Z); overflow: (1-Phi(B))/phi(Z)]
 //// =====================================================================================
 template <Vec vec>
 inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
@@ -246,7 +262,7 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
         
         if (kernel_choice.Phi_approx && kernel_choice.inv_Phi_approx) {
           
-                //// ---- fully approximate setting: original code, unchanged ----
+                //// ---- fully approximate setting: the original code ----
                 V log_Bound_U_Phi_Bound_Z = Bound_Z(index, t);
                 apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z);
                 V tmp = log_Bound_U_Phi_Bound_Z;  apply_inplace<vec, Fn::exp>(tmp);
@@ -314,11 +330,13 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                 V Phi_Z_vec = log_Phi_Z_vec;
                 apply_inplace<vec, Fn::exp>(Phi_Z_vec);
                 Phi_Z(index, t) = Phi_Z_vec;
-                V log_1m_Phi_Z_vec = Phi_Bound_Z_vec.array() * u_array(index, t).array();    //// tiny argument, so log1m is accurate
+                V log_1m_Phi_Z_vec = Phi_Bound_Z_vec.array() * u_array(index,
+                                                           t).array(); //// tiny argument, so log1m is accurate
                 apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z_vec);
                 
                 ////
-                //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)), or the Phi_approx inverse:
+                //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)), or the Phi_approx
+                ////      inverse:
                 ////
                 V Z_vec;
                 if (!kernel_choice.inv_Phi_approx) {
@@ -393,7 +411,7 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
         
         if (kernel_choice.Phi_approx && kernel_choice.inv_Phi_approx) {
           
-                //// ---- fully approximate setting: original code, unchanged ----
+                //// ---- fully approximate setting: the original code ----
                 V log_Bound_U_Phi_Bound_Z_1m = -Bound_Z(index, t);
                 apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z_1m);
                 V Bound_U_Phi_Bound_Z_1m = log_Bound_U_Phi_Bound_Z_1m;  apply_inplace<vec, Fn::exp>(Bound_U_Phi_Bound_Z_1m);
@@ -446,7 +464,8 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
         {
           
                 ////
-                //// ---- log(1 - Phi(Bound_Z)) = log Phi(-Bound_Z) (reflection, so no 1 - Phi cancellation): exact, or the Phi_approx tail:
+                //// ---- log(1 - Phi(Bound_Z)) = log Phi(-Bound_Z) (reflection, so no 1 - Phi cancellation):
+                ////      exact, or the Phi_approx tail:
                 ////
                 V log_1m_Phi_Bound_Z_vec = -Bound_Z(index, t);
                 if (!kernel_choice.Phi_approx) fn_apply_log_Phi_exact_inplace_T<vec>(log_1m_Phi_Bound_Z_vec);
@@ -458,7 +477,8 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                 Bound_U_Phi_Bound_Z(index, t).array() = 1.0 - one_m_Phi_Bound_Z_vec.array();
                 
                 ////
-                //// ---- Phi_Z = Phi(Bound_Z) + u (1 - Phi(Bound_Z)):  log Phi_Z = LSE(log(1 - Phi(B)) + log u, log Phi(B)),
+                //// ---- Phi_Z = Phi(Bound_Z) + u (1 - Phi(Bound_Z)):
+                ////      log Phi_Z = LSE(log(1 - Phi(B)) + log u, log Phi(B)),
                 ////      log(1 - Phi_Z) = log(1 - u) + log(1 - Phi(B))   (no cancellation):
                 ////
                 Eigen::Matrix<double, -1, -1> log_sum_exp_input_mat(num_overflows, 2);
@@ -475,8 +495,8 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                 log_1m_Phi_Z_vec.array() += log_1m_Phi_Bound_Z_vec.array();
                 
                 ////
-                //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)) (upper-tail case driven by log(1 - Phi_Z)),
-                ////      or the Phi_approx inverse:
+                //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)) (upper-tail case driven
+                ////      by log(1 - Phi_Z)), or the Phi_approx inverse:
                 ////
                 V Z_vec;
                 if (!kernel_choice.inv_Phi_approx) {
@@ -555,7 +575,10 @@ inline void fn_MVP_grad_prep_log_scale_T(  Eigen::Ref<Eigen::Matrix<double, -1, 
         for (int i = 0; i < n_tests; i++) {
           const int t = n_tests - (i + 1);
           log_prob_rowwise_prod_temp.col(t)       = y1_log_prob.block(0, t, chunk_size, i + 1).rowwise().sum();
-          log_prob_recip_rowwise_prod_temp.col(t) = y1_log_prob_recip.block(0, t, chunk_size, i + 1).rowwise().sum();
+          log_prob_recip_rowwise_prod_temp.col(t) = y1_log_prob_recip.block(0,
+                                               t,
+                                               chunk_size,
+                                               i + 1).rowwise().sum();
         }
         log_prob_rowwise_prod_temp_all = y1_log_prob.rowwise().sum();
       
@@ -567,13 +590,13 @@ inline void fn_MVP_grad_prep_log_scale_T(  Eigen::Ref<Eigen::Matrix<double, -1, 
                                                   + log_prob_recip_rowwise_prod_temp.col(t).array();
           }
         } else {
-          //// was log_common_grad_term_1.setConstant(-700.0), a sentinel that the problem-row
-          //// replacement functions then used as if it were the real term, zeroing the log-scale nuisance / L_Omega
-          //// gradients of every problem row of tests 2..n_tests in the standard (single-class) MVP. With one class,
-          //// prev = 1 and the likelihood prob_n is the product of ALL the test probabilities, so the latent-class
-          //// expression above, log(1 / prob_n) + log(prev) + log(prod_all) + log(prod_{s >= t} 1 / prob_s), reduces
-          //// exactly to log(prod_{s >= t} 1 / prob_s). That is used directly here (it avoids the -lp + lp cancellation,
-          //// which would give NaN if a row's lp were -inf).
+          //// With one class, prev = 1 and the likelihood prob_n is the product of ALL the test probabilities, so
+          //// the latent-class expression above,
+          //// log(1 / prob_n) + log(prev) + log(prod_all) + log(prod_{s >= t} 1 / prob_s), reduces exactly to
+          //// log(prod_{s >= t} 1 / prob_s). That is used directly here (it avoids the -lp + lp cancellation,
+          //// which would give NaN if a row's lp were -inf). A constant sentinel such as -700 would be used by
+          //// the problem-row replacement functions as if it were the real term, zeroing the log-scale nuisance /
+          //// L_Omega gradients of every problem row of tests 2..n_tests in the standard (single-class) MVP.
           for (int i = 0; i < n_tests; i++) {
             const int t = n_tests - (i + 1);
             log_common_grad_term_1.col(t) = log_prob_recip_rowwise_prod_temp.col(t);
@@ -603,7 +626,10 @@ inline void fn_MVP_grad_prep_log_scale_T(  Eigen::Ref<Eigen::Matrix<double, -1, 
 
 //// Small helper used by the three grad functions: exp() of an indexed view, times a sign, into an indexed view.
 template <Vec vec>
-ALWAYS_INLINE void exp_indexed_times_sign_T(Eigen::Matrix<double, -1, -1> &dst, const int col, const std::vector<int> &idx,
+ALWAYS_INLINE void exp_indexed_times_sign_T(Eigen::Matrix<double, -1, -1> &dst,
+                                            const int col,
+                                            const std::vector<int> &idx,
+                                            
                                             const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> log_abs_src, const int src_col,
                                             const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> sign) {
   
@@ -657,16 +683,18 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
         const int n_tests    = u_grad_array_CM_chunk.cols();
       
         auto resize_all = [&](const int m) {
+
           log_abs_z_grad_term.resize(m, n_tests); sign_z_grad_term.resize(m, n_tests);
           log_abs_grad_prob.resize(m, n_tests);   sign_grad_prob.resize(m, n_tests);
           log_terms.resize(m, n_tests);           sign_terms.resize(m, n_tests);
           log_abs_prod.resize(m); sign_prod.resize(m); log_abs_a.resize(m); log_abs_b.resize(m); sign_a.resize(m); sign_b.resize(m);
           log_sum_result.resize(m); sign_sum_result.resize(m); container_max_logs.resize(m); container_sum_exp_signed.resize(m);
-          log_abs_z_grad_term.setConstant(-700.0); log_abs_grad_prob.setConstant(-700.0); log_abs_prod.setConstant(-700.0);
-          log_sum_result.setConstant(-700.0); log_terms.setConstant(-700.0); log_abs_a.setConstant(-700.0); log_abs_b.setConstant(-700.0);
-          container_max_logs.setConstant(-700.0);
+          log_abs_z_grad_term.setConstant(-INFINITY); log_abs_grad_prob.setConstant(-INFINITY); log_abs_prod.setConstant(-INFINITY);
+          log_sum_result.setConstant(-INFINITY); log_terms.setConstant(-INFINITY); log_abs_a.setConstant(-INFINITY); log_abs_b.setConstant(-INFINITY);
+          container_max_logs.setConstant(-INFINITY);
           sign_z_grad_term.setOnes(); sign_grad_prob.setOnes(); sign_prod.setOnes(); sign_sum_result.setOnes(); sign_terms.setOnes();
           sign_a.setOnes(); sign_b.setOnes(); container_sum_exp_signed.setZero();
+
         };
         resize_all(chunk_size);
       
@@ -678,7 +706,12 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
                 log_common_grad_term_1.col(t)(idx).array() + log_abs_ys.col(t)(idx).array() + log_abs_L_Omega_double(t, t - 1)
                 + log_phi_Z_recip.col(t - 1)(idx).array() + y1_log_prob.col(t - 1)(idx).array();
             Eigen::Matrix<double, -1, 1> sg = sign_ys.col(t)(idx).array() * stan::math::sign(L_Omega_double(t, t - 1));
-            exp_indexed_times_sign_T<vec>(u_grad_array_CM_chunk, n_tests - 2, idx, log_abs_u_grad_array_CM_chunk, n_tests - 2, sg);
+            exp_indexed_times_sign_T<vec>(u_grad_array_CM_chunk,
+                                          n_tests - 2,
+                                          idx,
+                                          log_abs_u_grad_array_CM_chunk,
+                                          n_tests - 2,
+                                          sg);
           }
         }
       
@@ -695,7 +728,8 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
       
             log_abs_z_grad_term.col(0) = log_phi_Z_recip.col(t - 1)(idx) + y1_log_prob.col(t - 1)(idx);
             sign_z_grad_term.col(0).setOnes();
-            log_abs_z_grad_term.col(1).array() = log_abs_L_Omega_double(t, t - 1) + log_abs_z_grad_term.col(0).array() + log_abs_ym.col(t)(idx).array();
+            log_abs_z_grad_term.col(1).array() = log_abs_L_Omega_double(t,
+                                    t - 1) + log_abs_z_grad_term.col(0).array() + log_abs_ym.col(t)(idx).array();
             sign_z_grad_term.col(1).array()    = stan::math::sign(L_Omega_double(t, t - 1)) * sign_z_grad_term.col(0).array() * sign_ym.col(t)(idx).array();
       
             log_abs_prod.array() = log_abs_z_grad_term.col(0).array() + log_abs_L_Omega_double(t, t - 1);
@@ -708,7 +742,12 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
             sign_a.array() =  sign_z_grad_term.col(0).array() * stan::math::sign(L_Omega_double(t + 1, t - 1));
             sign_b.array() = -sign_z_grad_term.col(1).array() * stan::math::sign(L_Omega_double(t + 1, t));
             log_terms.col(0) = log_abs_a; log_terms.col(1) = log_abs_b; sign_terms.col(0) = sign_a; sign_terms.col(1) = sign_b;
-            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(2), sign_terms.leftCols(2), log_abs_prod, sign_prod, container_max_logs, container_sum_exp_signed);
+            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(2),
+                                              sign_terms.leftCols(2),
+                                              log_abs_prod,
+                                              sign_prod,
+                                              container_max_logs,
+                                              container_sum_exp_signed);
       
             log_abs_grad_prob.col(1).array() = log_abs_ys.col(t + 1)(idx).array() + log_abs_prod.array();
             sign_grad_prob.col(1).array()    = sign_ys.col(t + 1)(idx).array() * sign_prod.array();
@@ -717,10 +756,20 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
             log_abs_b = log_abs_grad_prob.col(1) + y1_log_prob.col(t)(idx);
             sign_a = sign_grad_prob.col(0); sign_b = sign_grad_prob.col(1);
             log_terms.col(0) = log_abs_a; log_terms.col(1) = log_abs_b; sign_terms.col(0) = sign_a; sign_terms.col(1) = sign_b;
-            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(2), sign_terms.leftCols(2), log_sum_result, sign_sum_result, container_max_logs, container_sum_exp_signed);
+            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(2),
+                                              sign_terms.leftCols(2),
+                                              log_sum_result,
+                                              sign_sum_result,
+                                              container_max_logs,
+                                              container_sum_exp_signed);
       
             log_abs_u_grad_array_CM_chunk.col(n_tests - 3)(idx) = log_common_grad_term_1.col(t)(idx) + log_sum_result;
-            exp_indexed_times_sign_T<vec>(u_grad_array_CM_chunk, n_tests - 3, idx, log_abs_u_grad_array_CM_chunk, n_tests - 3, sign_sum_result);
+            exp_indexed_times_sign_T<vec>(u_grad_array_CM_chunk,
+                                          n_tests - 3,
+                                          idx,
+                                          log_abs_u_grad_array_CM_chunk,
+                                          n_tests - 3,
+                                          sign_sum_result);
           }
         }
       
@@ -740,31 +789,50 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
             for (int ii = 1; ii < i + 2; ii++) {
               log_abs_z_grad_term.col(ii).array() = log_abs_ym.col(t + ii - 1)(idx).array() + log_abs_prod.array();
               sign_z_grad_term.col(ii).array()    = sign_ym.col(t + ii - 1)(idx).array() * sign_prod.array();
-              log_terms.col(0).array()  = log_abs_z_grad_term.col(0).array() + log_abs_L_Omega_double(t + ii, t - 1);
+              log_terms.col(0).array()  = log_abs_z_grad_term.col(0).array() + log_abs_L_Omega_double(t + ii,
+                            t - 1);
               sign_terms.col(0).array() = sign_z_grad_term.col(0).array() * stan::math::sign(L_Omega_double(t + ii, t - 1));
               for (int j = 1; j <= ii; j++) {
-                log_terms.col(j).array()  = log_abs_z_grad_term.col(j).array() + log_abs_L_Omega_double(t + ii, t + j - 1);
+                log_terms.col(j).array()  = log_abs_z_grad_term.col(j).array() + log_abs_L_Omega_double(t + ii,
+                              t + j - 1);
                 sign_terms.col(j).array() = -sign_z_grad_term.col(j).array() * stan::math::sign(L_Omega_double(t + ii, t + j - 1));
               }
-              //// leftCols(ii + 1), was leftCols(ii). Columns 0..ii are filled just above (the positive
-              //// L(t + ii, t - 1) term and the ii negative terms j = 1..ii), matching the natural-scale recursion in
-              //// fn_MVP_compute_nuisance_grad_v2 (zg0 * L(t + ii, t - 1) - zg[1..ii] . L(t + ii, t..t + ii - 1)). leftCols(ii) dropped the
-              //// j = ii term, so every problem row of the nuisance columns 0..n_tests - 4 was wrong for n_tests >= 4 (the 3-test fixtures
-              //// never reach this loop). The same line is in the original fn_MVP_compute_nuisance_grad_log_scale (fixed there too).
-              log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(ii + 1), sign_terms.leftCols(ii + 1), log_abs_prod, sign_prod, container_max_logs, container_sum_exp_signed);
+              //// leftCols(ii + 1): columns 0..ii are filled just above (the positive L(t + ii, t - 1) term and
+              //// the ii negative terms j = 1..ii), matching the natural-scale recursion in
+              //// fn_MVP_compute_nuisance_grad_v2
+              //// (zg0 * L(t + ii, t - 1) - zg[1..ii] . L(t + ii, t..t + ii - 1)). leftCols(ii) would drop the
+              //// j = ii term, which matters for every problem row of the nuisance columns 0..n_tests - 4 when
+              //// n_tests >= 4 (the 3-test fixtures never reach this loop). The same line is in
+              //// fn_MVP_compute_nuisance_grad_log_scale.
+              log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(ii + 1),
+                                                sign_terms.leftCols(ii + 1),
+                                                log_abs_prod,
+                                                sign_prod,
+                                                container_max_logs,
+                                                container_sum_exp_signed);
               log_abs_grad_prob.col(ii).array() = log_abs_ys.col(t + ii)(idx).array() + log_abs_prod.array();
               sign_grad_prob.col(ii).array()    = sign_ys.col(t + ii)(idx).array() * sign_prod.array();
             }
       
-            log_terms.setConstant(-700.0); sign_terms.setOnes();
+            log_terms.setConstant(-INFINITY); sign_terms.setOnes();
             for (int ii = 0; ii < i + 2; ii++) {
               log_terms.col(ii)  = log_abs_grad_prob.col(ii).array() + log_prob_rowwise_prod_temp.col(t)(idx).array() + log_prob_recip.col(t + ii)(idx).array();
               sign_terms.col(ii) = sign_grad_prob.col(ii);
             }
-            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(i + 2), sign_terms.leftCols(i + 2), log_sum_result, sign_sum_result, container_max_logs, container_sum_exp_signed);
+            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(i + 2),
+                                              sign_terms.leftCols(i + 2),
+                                              log_sum_result,
+                                              sign_sum_result,
+                                              container_max_logs,
+                                              container_sum_exp_signed);
       
             log_abs_u_grad_array_CM_chunk.col(n_tests - (i + 3))(idx) = log_common_grad_term_1.col(t)(idx).array() + log_sum_result.array();
-            exp_indexed_times_sign_T<vec>(u_grad_array_CM_chunk, n_tests - (i + 3), idx, log_abs_u_grad_array_CM_chunk, n_tests - (i + 3), sign_sum_result);
+            exp_indexed_times_sign_T<vec>(u_grad_array_CM_chunk,
+                                          n_tests - (i + 3),
+                                          idx,
+                                          log_abs_u_grad_array_CM_chunk,
+                                          n_tests - (i + 3),
+                                          sign_sum_result);
           }
         }
       
@@ -815,17 +883,19 @@ inline void fn_MVP_compute_coefficients_grad_log_scale_T(  const std::vector<int
         (void)beta_grad_array;
       
         auto resize_all = [&](const int m) {
+
           log_abs_z_grad_term.resize(m, n_tests); sign_z_grad_term.resize(m, n_tests);
           log_abs_grad_prob.resize(m, n_tests);   sign_grad_prob.resize(m, n_tests);
           log_terms.resize(m, n_tests);           sign_terms.resize(m, n_tests);
           log_abs_prod.resize(m); sign_prod.resize(m); log_sum_result.resize(m); sign_sum_result.resize(m);
           container_max_logs.resize(m); container_sum_exp_signed.resize(m);
           log_abs_prod_comp.resize(m, n_tests); sign_prod_comp.resize(m, n_tests);
-          log_abs_z_grad_term.setConstant(-700.0); log_abs_grad_prob.setConstant(-700.0); log_abs_prod.setConstant(-700.0);
-          log_sum_result.setConstant(-700.0); log_terms.setConstant(-700.0); container_max_logs.setConstant(-700.0);
-          log_abs_prod_comp.setConstant(-700.0);
+          log_abs_z_grad_term.setConstant(-INFINITY); log_abs_grad_prob.setConstant(-INFINITY); log_abs_prod.setConstant(-INFINITY);
+          log_sum_result.setConstant(-INFINITY); log_terms.setConstant(-INFINITY); container_max_logs.setConstant(-INFINITY);
+          log_abs_prod_comp.setConstant(-INFINITY);
           sign_z_grad_term.setOnes(); sign_grad_prob.setOnes(); sign_prod.setOnes(); sign_sum_result.setOnes(); sign_terms.setOnes();
           sign_prod_comp.setOnes(); container_sum_exp_signed.setZero();
+
         };
         resize_all(chunk_size);
       
@@ -874,7 +944,12 @@ inline void fn_MVP_compute_coefficients_grad_log_scale_T(  const std::vector<int
                   log_abs_prod_comp.col(iii).array() = log_abs_z_grad_term.col(iii).array() + lo;
                   sign_prod_comp.col(iii).array()    = sign_z_grad_term.col(iii).array() * so;
                 }
-                log_abs_sum_exp_general_v2_T<vec>(log_abs_prod_comp.leftCols(ii + 1), sign_prod_comp.leftCols(ii + 1), log_abs_prod, sign_prod, container_max_logs, container_sum_exp_signed);
+                log_abs_sum_exp_general_v2_T<vec>(log_abs_prod_comp.leftCols(ii + 1),
+                                                  sign_prod_comp.leftCols(ii + 1),
+                                                  log_abs_prod,
+                                                  sign_prod,
+                                                  container_max_logs,
+                                                  container_sum_exp_signed);
                 log_abs_grad_prob.col(ii + 1) = log_abs_ys.col(t + ii + 1)(idx).array() + log_abs_prod.array();
                 sign_grad_prob.col(ii + 1)    = sign_ys.col(t + ii + 1)(idx).array() * sign_prod.array();
               }
@@ -884,7 +959,12 @@ inline void fn_MVP_compute_coefficients_grad_log_scale_T(  const std::vector<int
               log_terms.col(ii).array()  = log_abs_grad_prob.col(ii).array() + log_prob_rowwise_prod_temp.col(t)(idx).array() - y1_log_prob.col(t + ii)(idx).array();
               sign_terms.col(ii).array() = sign_grad_prob.col(ii).array();
             }
-            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(i + 2), sign_terms.leftCols(i + 2), log_sum_result, sign_sum_result, container_max_logs, container_sum_exp_signed);
+            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(i + 2),
+                                              sign_terms.leftCols(i + 2),
+                                              log_sum_result,
+                                              sign_sum_result,
+                                              container_max_logs,
+                                              container_sum_exp_signed);
       
             log_abs_beta_grad_array_for_each_n[0].col(t)(idx).array() = log_common_grad_term_1.col(t)(idx).array() + log_sum_result.array();
             sign_beta_grad_array_for_each_n[0].col(t)(idx).array()    = sign_sum_result.array();
@@ -948,6 +1028,7 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
         (void)L_Omega_grad_array;
       
         auto resize_all = [&](const int m) {
+
           log_abs_z_grad_term.resize(m, n_tests); sign_z_grad_term.resize(m, n_tests);
           log_abs_grad_prob.resize(m, n_tests);   sign_grad_prob.resize(m, n_tests);
           log_terms.resize(m, n_tests);           sign_terms.resize(m, n_tests);
@@ -956,11 +1037,12 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
           log_abs_prod_comp.resize(m, n_tests); sign_prod_comp.resize(m, n_tests);
           log_abs_dcc.resize(m, n_tests); sign_dcc.resize(m, n_tests);
           log_abs_a.resize(m); log_abs_b.resize(m); sign_a.resize(m); sign_b.resize(m);
-          log_abs_z_grad_term.setConstant(-700.0); log_abs_grad_prob.setConstant(-700.0); log_abs_prod.setConstant(-700.0);
-          log_sum_result.setConstant(-700.0); log_terms.setConstant(-700.0); container_max_logs.setConstant(-700.0);
-          log_abs_prod_comp.setConstant(-700.0); log_abs_dcc.setConstant(-700.0); log_abs_a.setConstant(-700.0); log_abs_b.setConstant(-700.0);
+          log_abs_z_grad_term.setConstant(-INFINITY); log_abs_grad_prob.setConstant(-INFINITY); log_abs_prod.setConstant(-INFINITY);
+          log_sum_result.setConstant(-INFINITY); log_terms.setConstant(-INFINITY); container_max_logs.setConstant(-INFINITY);
+          log_abs_prod_comp.setConstant(-INFINITY); log_abs_dcc.setConstant(-INFINITY); log_abs_a.setConstant(-INFINITY); log_abs_b.setConstant(-INFINITY);
           sign_z_grad_term.setOnes(); sign_grad_prob.setOnes(); sign_prod.setOnes(); sign_sum_result.setOnes(); sign_terms.setOnes();
           sign_prod_comp.setOnes(); sign_dcc.setOnes(); sign_a.setOnes(); sign_b.setOnes(); container_sum_exp_signed.setZero();
+
         };
       
         //// ---- last diagonal ----
@@ -990,7 +1072,12 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
             log_abs_a = log_abs_grad_prob.col(1) + y1_log_prob.col(t1)(idx);      sign_a = sign_grad_prob.col(1);
             log_abs_b = log_abs_grad_prob.col(0) + y1_log_prob.col(t1 + 1)(idx);  sign_b = sign_grad_prob.col(0);
             log_terms.col(0) = log_abs_a; log_terms.col(1) = log_abs_b; sign_terms.col(0) = sign_a; sign_terms.col(1) = sign_b;
-            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(2), sign_terms.leftCols(2), log_sum_result, sign_sum_result, container_max_logs, container_sum_exp_signed);
+            log_abs_sum_exp_general_v2_T<vec>(log_terms.leftCols(2),
+                                              sign_terms.leftCols(2),
+                                              log_sum_result,
+                                              sign_sum_result,
+                                              container_max_logs,
+                                              container_sum_exp_signed);
       
             log_abs_LO[t1].col(t1)(idx) = log_common_grad_term_1.col(t1)(idx) + log_sum_result;
             sign_LO[t1].col(t1)(idx)    = sign_sum_result;
@@ -1020,7 +1107,12 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
                 log_abs_prod_comp.col(iii).array() = log_abs_z_grad_term.col(iii).array() + log_abs_L_Omega_double(t1 + ii + 1, t1 + iii);
                 sign_prod_comp.col(iii)            = sign_z_grad_term.col(iii) * stan::math::sign(L_Omega_double(t1 + ii + 1, t1 + iii));
               }
-              log_abs_sum_exp_general_v2_T<vec>(log_abs_prod_comp.leftCols(ii + 1), sign_prod_comp.leftCols(ii + 1), log_abs_prod, sign_prod, container_max_logs, container_sum_exp_signed);
+              log_abs_sum_exp_general_v2_T<vec>(log_abs_prod_comp.leftCols(ii + 1),
+                                                sign_prod_comp.leftCols(ii + 1),
+                                                log_abs_prod,
+                                                sign_prod,
+                                                container_max_logs,
+                                                container_sum_exp_signed);
               log_abs_grad_prob.col(ii + 1)        = log_abs_ys.col(t1 + ii + 1)(idx) + log_abs_prod;
               sign_grad_prob.col(ii + 1).array()   = sign_ys.col(t1 + ii + 1)(idx).array() * sign_prod.array();
             }
@@ -1028,7 +1120,12 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
               log_abs_dcc.col(iii) = log_abs_grad_prob.col(iii) + log_prop_rowwise_prod_temp.col(t1)(idx) - y1_log_prob.col(t1 + iii)(idx);
               sign_dcc.col(iii)    = sign_grad_prob.col(iii);
             }
-            log_abs_sum_exp_general_v2_T<vec>(log_abs_dcc.leftCols(i), sign_dcc.leftCols(i), log_sum_result, sign_sum_result, container_max_logs, container_sum_exp_signed);
+            log_abs_sum_exp_general_v2_T<vec>(log_abs_dcc.leftCols(i),
+                                              sign_dcc.leftCols(i),
+                                              log_sum_result,
+                                              sign_sum_result,
+                                              container_max_logs,
+                                              container_sum_exp_signed);
             log_abs_LO[t1].col(t1)(idx) = log_common_grad_term_1.col(t1)(idx) + log_sum_result;
             sign_LO[t1].col(t1)(idx)    = sign_sum_result;
           }
@@ -1040,8 +1137,10 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
           if (n_problem_array[t1] > 0) {
             const std::vector<int> &idx = problem_index_array[t1];
             auto fill = [&](const int t2) {
+
               sign_LO[t1].col(t2)(idx).array() = sign_ys.col(t1)(idx).array() * sign_Z_std_norm.col(t2)(idx).array();
               log_abs_LO[t1].col(t2)(idx)      = log_common_grad_term_1.col(t1)(idx) + log_abs_ys.col(t1)(idx) + log_Z_std_norm.col(t2)(idx);
+
             };
             fill(n_tests - 2);
             if (t1 > 1) fill(n_tests - 3);
@@ -1077,7 +1176,12 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
                   log_abs_prod_comp.col(iii).array() = log_abs_z_grad_term.col(iii).array() + log_abs_L_Omega_double(t1 + t1_dash_dash, t1 + iii);
                   sign_prod_comp.col(iii).array()    = sign_z_grad_term.col(iii).array() * stan::math::sign(L_Omega_double(t1 + t1_dash_dash, t1 + iii));
                 }
-                log_abs_sum_exp_general_v2_T<vec>(log_abs_prod_comp.leftCols(t1_dash_dash), sign_prod_comp.leftCols(t1_dash_dash), log_abs_prod, sign_prod, container_max_logs, container_sum_exp_signed);
+                log_abs_sum_exp_general_v2_T<vec>(log_abs_prod_comp.leftCols(t1_dash_dash),
+                                                  sign_prod_comp.leftCols(t1_dash_dash),
+                                                  log_abs_prod,
+                                                  sign_prod,
+                                                  container_max_logs,
+                                                  container_sum_exp_signed);
                 log_abs_grad_prob.col(t1_dash_dash)        = log_abs_ys.col(t1 + t1_dash_dash)(idx) + log_abs_prod;
                 sign_grad_prob.col(t1_dash_dash).array()   = sign_ys.col(t1 + t1_dash_dash)(idx).array() * sign_prod.array();
               }
@@ -1085,7 +1189,12 @@ inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_
                 log_abs_dcc.col(ii) = log_abs_grad_prob.col(ii) + log_prop_rowwise_prod_temp.col(t1)(idx) - y1_log_prob.col(t1 + ii)(idx);
                 sign_dcc.col(ii)    = sign_grad_prob.col(ii);
               }
-              log_abs_sum_exp_general_v2_T<vec>(log_abs_dcc.leftCols(t1_dash + 1), sign_dcc.leftCols(t1_dash + 1), log_sum_result, sign_sum_result, container_max_logs, container_sum_exp_signed);
+              log_abs_sum_exp_general_v2_T<vec>(log_abs_dcc.leftCols(t1_dash + 1),
+                                                sign_dcc.leftCols(t1_dash + 1),
+                                                log_sum_result,
+                                                sign_sum_result,
+                                                container_max_logs,
+                                                container_sum_exp_signed);
               log_abs_LO[t1].col(t2)(idx) = log_common_grad_term_1.col(t1)(idx) + log_sum_result;
               sign_LO[t1].col(t2)(idx)    = sign_sum_result;
             }

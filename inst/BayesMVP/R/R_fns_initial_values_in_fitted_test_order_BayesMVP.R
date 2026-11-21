@@ -31,13 +31,21 @@ fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector <-  functio
                                                                                    lb_corr,
                                                                                    ub_corr,
                                                                                    known_values_indicator,
-                                                                                   known_values) {
+                                                                                   known_values
+) {
 
         n_tests <-  nrow(lb_corr)
         stopifnot(length(raw_vector) == n_tests * (n_tests - 1) / 2)
-        fn_bounded_value <-  function(raw_value, lower, upper) {
+        ##
+        fn_bounded_value <-  function( raw_value,
+                                       lower,
+                                       upper) {
+
               return(lower + (upper - lower) * 0.5 * (1 + tanh(raw_value)))
+
         }
+        ##
+        ## ---- the raw coordinates, row by row (i > j):
         ##
         raw_matrix <-  matrix(0, n_tests, n_tests)
         counter <-  1
@@ -47,6 +55,8 @@ fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector <-  functio
                     counter <-  counter + 1
               }
         }
+        ##
+        ## ---- first column:
         ##
         L <-  diag(n_tests)
         D <-  numeric(n_tests)
@@ -59,13 +69,18 @@ fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector <-  functio
               }
               D[i] <-  1 - L[i, 1]^2
         }
+        ##
+        ## ---- the other columns (rows 3 onwards), each bounded by what is left of the row:
+        ##
         if (n_tests >= 3) {
               for (i in 3:n_tests) {
                     D[i] <-  1 - L[i, 1]^2
                     L[i, 2:(i - 1)] <-  1 - L[i, 1]^2
                     remainder <-  L[i, 2]
+                    ##
                     for (j in 2:(i - 1)) {
                           b1 <-  sum(L[j, 1:(j - 1)] * D[1:(j - 1)] * L[i, 1:(j - 1)])
+                          ##
                           if (known_values_indicator[i, j] == 1) {
                                 L[i, j] <-  (known_values[i, j] - b1) / D[j]
                           } else {
@@ -74,11 +89,14 @@ fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector <-  functio
                                 upper <-  min( half_width, ub_corr[i, j] - b1)
                                 L[i, j] <-  fn_bounded_value(raw_matrix[i, j], lower, upper) / D[j]
                           }
+                          ##
                           remainder <-  remainder - D[j] * L[i, j]^2
                     }
+                    ##
                     D[i] <-  remainder
               }
         }
+        ##
         return(L %*% diag(sqrt(D), n_tests))
 
 }
@@ -100,17 +118,31 @@ fn_bounded_LDL_raw_vector_from_correlation_matrix <-  function( Omega,
                                                                 lb_corr,
                                                                 ub_corr,
                                                                 known_values_indicator,
-                                                                known_values) {
+                                                                known_values
+) {
 
         n_tests <-  nrow(Omega)
-        fn_raw_value <-  function(value, lower, upper) atanh(2 * (value - lower) / (upper - lower) - 1)
+        ##
+        fn_raw_value <-  function( value,
+                                   lower,
+                                   upper) {
+
+              return(atanh(2 * (value - lower) / (upper - lower) - 1))
+
+        }
         ##
         ## ---- unit lower-triangular L and diagonal D with Omega = L diag(D) t(L):
         ##
         L <-  diag(n_tests)
         D <-  numeric(n_tests)
         for (j in 1:n_tests) {
-              D[j] <-  Omega[j, j] - (if (j > 1) sum(L[j, 1:(j - 1)]^2 * D[1:(j - 1)]) else 0)
+              ##
+              sum_of_earlier_columns <-  0
+              if (j > 1) {
+                    sum_of_earlier_columns <-  sum(L[j, 1:(j - 1)]^2 * D[1:(j - 1)])
+              }
+              D[j] <-  Omega[j, j] - sum_of_earlier_columns
+              ##
               if (j < n_tests) {
                     for (i in (j + 1):n_tests) {
                           before_j <-  seq_len(j - 1)
@@ -118,6 +150,8 @@ fn_bounded_LDL_raw_vector_from_correlation_matrix <-  function( Omega,
                     }
               }
         }
+        ##
+        ## ---- the raw coordinates, row by row (i > j):
         ##
         raw_vector <-  numeric(n_tests * (n_tests - 1) / 2)
         counter <-  1
@@ -138,6 +172,7 @@ fn_bounded_LDL_raw_vector_from_correlation_matrix <-  function( Omega,
                     counter <-  counter + 1
               }
         }
+        ##
         return(raw_vector)
 
 }
@@ -155,15 +190,22 @@ fn_bounded_LDL_raw_vector_from_correlation_matrix <-  function( Omega,
 #' @keywords internal
 fn_u_raw_initial_values_in_fitted_test_order <-  function( u_raw,
                                                            test_perm,
-                                                           N) {
+                                                           N
+) {
 
         n_tests <-  length(test_perm)
+        ##
         if (is.matrix(u_raw)) {
               stopifnot(nrow(u_raw) == N, ncol(u_raw) == n_tests)
               return(u_raw[, test_perm, drop = FALSE])
         }
+        ##
+        ## ---- a vector, read column by column:
+        ##
         stopifnot(length(u_raw) == N * n_tests)
-        return(as.vector(matrix(u_raw, nrow = N, ncol = n_tests)[, test_perm, drop = FALSE]))
+        u_raw_as_matrix <-  matrix(u_raw, nrow = N, ncol = n_tests)
+        ##
+        return(as.vector(u_raw_as_matrix[, test_perm, drop = FALSE]))
 
 }
 
@@ -196,62 +238,101 @@ fn_Omega_unconstrained_vec_initial_values_in_fitted_test_order <-  function(
                                             n_class,
                                             bounds_and_known_values_in_original_test_order,
                                             bounds_and_known_values_in_fitted_test_order,
-                                            corr_force_positive = FALSE) {
+                                            corr_force_positive
+) {
 
         n_tests <-  length(test_perm)
         n_pairs <-  n_tests * (n_tests - 1) / 2
         ##
         ## ---- one raw vector per class, whatever the format given:
         ##
+        raw_per_class <-  list()
+        ##
         if (is.list(Omega_unconstrained_vec)) {
-              raw_per_class <-  lapply(Omega_unconstrained_vec, as.numeric)
+              for (class_index in seq_along(Omega_unconstrained_vec)) {
+                    raw_per_class[[class_index]] <-  as.numeric(Omega_unconstrained_vec[[class_index]])
+              }
         } else if (is.matrix(Omega_unconstrained_vec)) {
-              raw_per_class <-  lapply(seq_len(nrow(Omega_unconstrained_vec)),
-                                       function(c) Omega_unconstrained_vec[c, ])
+              for (class_index in seq_len(nrow(Omega_unconstrained_vec))) {
+                    raw_per_class[[class_index]] <-  Omega_unconstrained_vec[class_index, ]
+              }
         } else {
               stopifnot(length(Omega_unconstrained_vec) == n_class * n_pairs)
-              raw_per_class <-  lapply(seq_len(n_class),
-                                       function(c) Omega_unconstrained_vec[(c - 1) * n_pairs + seq_len(n_pairs)])
+              for (class_index in seq_len(n_class)) {
+                    positions_of_class <-  (class_index - 1) * n_pairs + seq_len(n_pairs)
+                    raw_per_class[[class_index]] <-  Omega_unconstrained_vec[positions_of_class]
+              }
         }
+        ##
         stopifnot(length(raw_per_class) == n_class, all(lengths(raw_per_class) == n_pairs))
         ##
-        fn_class_matrices <-  function(bounds_and_known_values, c) {
-              lb_corr_of_class <-  bounds_and_known_values$lb_corr[[c]]
-              if (isTRUE(corr_force_positive)) lb_corr_of_class[lower.tri(lb_corr_of_class)] <-  0
-              list( lb_corr = lb_corr_of_class,
-                    ub_corr = bounds_and_known_values$ub_corr[[c]],
-                    known_values_indicator = bounds_and_known_values$known_values_indicator_list[[c]],
-                    known_values = bounds_and_known_values$known_values_list[[c]])
+        ## ---- the bounds and known values of one class (with corr_force_positive, the lower bound of every
+        ##      correlation is 0, as in the C++):
+        ##
+        fn_bounds_and_known_values_of_class <-  function( bounds_and_known_values,
+                                                          class_index) {
+
+              lb_corr_of_class <-  bounds_and_known_values$lb_corr[[class_index]]
+              if (isTRUE(corr_force_positive)) {
+                    lb_corr_of_class[lower.tri(lb_corr_of_class)] <-  0
+              }
+              known_values_indicator_list <-  bounds_and_known_values$known_values_indicator_list
+              known_values_list <-  bounds_and_known_values$known_values_list
+              ##
+              return(list( lb_corr = lb_corr_of_class,
+                           ub_corr = bounds_and_known_values$ub_corr[[class_index]],
+                           known_values_indicator = known_values_indicator_list[[class_index]],
+                           known_values = known_values_list[[class_index]]))
+
         }
+        ##
+        ## ---- each class: raw (original order) -> Omega -> Omega[test_perm, test_perm] -> raw (fitted order):
+        ##
         raw_per_class_in_fitted_order <-  vector("list", n_class)
-        for (c in seq_len(n_class)) {
-              original <-  fn_class_matrices(bounds_and_known_values_in_original_test_order, c)
-              fitted   <-  fn_class_matrices(bounds_and_known_values_in_fitted_test_order, c)
-              L_original <-  fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector(
-                                    raw_vector = raw_per_class[[c]],
-                                    lb_corr = original$lb_corr, ub_corr = original$ub_corr,
-                                    known_values_indicator = original$known_values_indicator,
-                                    known_values = original$known_values)
-              Omega_in_fitted_order <-  (L_original %*% t(L_original))[test_perm, test_perm]
-              raw_per_class_in_fitted_order[[c]] <-  fn_bounded_LDL_raw_vector_from_correlation_matrix(
-                                    Omega = Omega_in_fitted_order,
-                                    lb_corr = fitted$lb_corr, ub_corr = fitted$ub_corr,
-                                    known_values_indicator = fitted$known_values_indicator,
-                                    known_values = fitted$known_values)
+        ##
+        for (class_index in seq_len(n_class)) {
+
+              in_original_order <-  fn_bounds_and_known_values_of_class(
+                                        bounds_and_known_values = bounds_and_known_values_in_original_test_order,
+                                        class_index = class_index)
+              in_fitted_order <-  fn_bounds_and_known_values_of_class(
+                                        bounds_and_known_values = bounds_and_known_values_in_fitted_test_order,
+                                        class_index = class_index)
+              ##
+              L_in_original_order <-  fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector(
+                                            raw_vector = raw_per_class[[class_index]],
+                                            lb_corr = in_original_order$lb_corr,
+                                            ub_corr = in_original_order$ub_corr,
+                                            known_values_indicator = in_original_order$known_values_indicator,
+                                            known_values = in_original_order$known_values)
+              ##
+              Omega_in_fitted_order <-  (L_in_original_order %*% t(L_in_original_order))[test_perm, test_perm]
+              ##
+              raw_in_fitted_order <-  fn_bounded_LDL_raw_vector_from_correlation_matrix(
+                                            Omega = Omega_in_fitted_order,
+                                            lb_corr = in_fitted_order$lb_corr,
+                                            ub_corr = in_fitted_order$ub_corr,
+                                            known_values_indicator = in_fitted_order$known_values_indicator,
+                                            known_values = in_fitted_order$known_values)
+              raw_per_class_in_fitted_order[[class_index]] <-  raw_in_fitted_order
               ##
               ## ---- check: the forward transform of the mapped vector gives back the permuted matrix:
               ##
               L_check <-  fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector(
-                                    raw_vector = raw_per_class_in_fitted_order[[c]],
-                                    lb_corr = fitted$lb_corr, ub_corr = fitted$ub_corr,
-                                    known_values_indicator = fitted$known_values_indicator,
-                                    known_values = fitted$known_values)
+                                raw_vector = raw_in_fitted_order,
+                                lb_corr = in_fitted_order$lb_corr,
+                                ub_corr = in_fitted_order$ub_corr,
+                                known_values_indicator = in_fitted_order$known_values_indicator,
+                                known_values = in_fitted_order$known_values)
+              ##
               largest_difference <-  max(abs(L_check %*% t(L_check) - Omega_in_fitted_order))
+              ##
               if (!is.finite(largest_difference) || largest_difference > 1e-8) {
-                    stop(paste0("Omega_unconstrained_vec initial values of class ", c, " could not be mapped ",
-                                "into the fitted test order (largest difference in Omega ", largest_difference,
-                                ")."))
+                    stop(paste0("Omega_unconstrained_vec initial values of class ", class_index, " could not be ",
+                                "mapped into the fitted test order (largest difference in Omega ",
+                                largest_difference, ")."))
               }
+
         }
         ##
         ## ---- back in the format given:

@@ -54,7 +54,6 @@
 
  
 
-using namespace Eigen;
 
  
 #define EIGEN_NO_DEBUG
@@ -68,7 +67,8 @@ using namespace Eigen;
 ////
 //// Function to manually construct a cutpoint vector from raw unconstrained parameters - using exp() / log-differences.
 ////
-inline  Eigen::Matrix<stan::math::var, -1, 1> construct_C_var( Eigen::Matrix<stan::math::var, -1, 1> C_raw_vec, // parameter - log_diffs
+inline  Eigen::Matrix<stan::math::var, -1, 1> construct_C_var( Eigen::Matrix<stan::math::var, -1, 1> C_raw_vec,
+                                                               // parameter - log_diffs
                                                               bool softplus) {
        
        const int n_total_cutpoints = C_raw_vec.size();
@@ -92,7 +92,8 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> construct_C_var( Eigen::Matrix<sta
 }
 
 
-inline  stan::math::var raw_C_to_C_log_det_J_lp_var( Eigen::Matrix<stan::math::var, -1, 1> raw_C, // parameter - log_diffs
+inline  stan::math::var raw_C_to_C_log_det_J_lp_var( Eigen::Matrix<stan::math::var, -1, 1> raw_C,
+                                                     // parameter - log_diffs
                                                     bool softplus) {
          
        const int n_cutpoints = raw_C.size();
@@ -355,8 +356,13 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_LDL_bounds_opt_dbl( int K,
            ////      quantity changes):
            target += stan::math::std_normal_lpdf(Omega_theta_unconstrained_array(i-1, 0));
          } else {
-           stan::math::check_greater("Pinkney_LDL_bounds_opt_dbl", "first-column upper bound", ub(i-1, 0), lb(i-1, 0));
-           Eigen::VectorXd lb_ub_lp_outs = lb_ub_lp_dbl(Omega_theta_unconstrained_array(i-1, 0), lb(i-1, 0), ub(i-1, 0));
+           stan::math::check_greater("Pinkney_LDL_bounds_opt_dbl",
+                                     "first-column upper bound",
+                                     ub(i-1, 0),
+                                     lb(i-1, 0));
+           Eigen::Matrix<double, -1, 1> lb_ub_lp_outs = lb_ub_lp_dbl(Omega_theta_unconstrained_array(i-1, 0),
+                                                                     lb(i-1, 0),
+                                                                     ub(i-1, 0));
            target += lb_ub_lp_outs(0); // Only free entries contribute a transform Jacobian.
            L(i-1, 0) = lb_ub_lp_outs(1);
          }
@@ -382,10 +388,10 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_LDL_bounds_opt_dbl( int K,
                      //// R(i,j) = b1 + x, and the running Schur complement is updated by
                      ////     l_ij_old -= D(j) * L(i,j)^2 = x^2 / D(j),
                      //// so keeping it positive requires x^2 < l_ij_old * D(j), i.e. |x| < sqrt(l_ij_old * D(j)).
-                     //// This previously read sqrt(l_ij_old) * D(j), which is the correct bound multiplied by
-                     //// sqrt(D(j)) and therefore TOO TIGHT whenever D(j) < 1: valid correlation matrices were
+                     //// The bound sqrt(l_ij_old) * D(j) would be the correct bound multiplied by sqrt(D(j)),
+                     //// and therefore TOO TIGHT whenever D(j) < 1: valid correlation matrices would be
                      //// unreachable. E.g. for R = [1,.8,.2; .8,1,.6; .2,.6,1] (det 0.152 > 0) the (3,2) entry
-                     //// needs x = 0.44, the old bound capped |x| at 0.353 and the correct bound is 0.588.
+                     //// needs x = 0.44; sqrt(l_ij_old) * D(j) caps |x| at 0.353 and the correct bound is 0.588.
                      low_vec_to_max(0) = - stan::math::sqrt(l_ij_old * D(j-1));
                      low_vec_to_max(1) = (lb(i-1, j-1) - b1);
                      up_vec_to_min(0) =   stan::math::sqrt(l_ij_old * D(j-1));
@@ -397,8 +403,8 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_LDL_bounds_opt_dbl( int K,
                      if (known_values_indicator(i-1, j-1) == 1) {
                        //// R(i,j) = b1 + L(i,j)*D(j), so pinning R(i,j) to a known value must subtract the
                        //// b1 already accumulated from columns < j. Without it the realised entry is
-                       //// b1 + known_value, not known_value; the M3 / M4 zero patterns happen to have
-                       //// b1 = 0 so they were unaffected, but any other fixed pattern is wrong.
+                       //// b1 + known_value, not known_value (the M3 / M4 zero patterns happen to have
+                       //// b1 = 0, but any other fixed pattern would be wrong).
                        L(i-1, j-1) = (known_values(i-1, j-1) - b1) / D(j-1);
                        //// ---- the raw coordinate of a known (fixed) correlation is not read by the
                        ////      transform: it gets an independent standard normal density, so that it is
@@ -469,8 +475,13 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
            ////      quantity changes):
            target += stan::math::std_normal_lpdf(Omega_theta_unconstrained_array(i-1, 0));
          } else {
-           stan::math::check_greater("Pinkney_LDL_bounds_opt", "first-column upper bound", ub(i-1, 0), lb(i-1, 0));
-           Eigen::Matrix<stan::math::var, -1, 1> lb_ub_lp_outs = lb_ub_lp(Omega_theta_unconstrained_array(i-1, 0), lb(i-1, 0), ub(i-1, 0));
+           stan::math::check_greater("Pinkney_LDL_bounds_opt",
+                                     "first-column upper bound",
+                                     ub(i-1, 0),
+                                     lb(i-1, 0));
+           Eigen::Matrix<stan::math::var, -1, 1> lb_ub_lp_outs = lb_ub_lp(Omega_theta_unconstrained_array(i-1, 0),
+                                                                          lb(i-1, 0),
+                                                                          ub(i-1, 0));
            target += lb_ub_lp_outs(0); // Only free entries contribute a transform Jacobian.
            L(i-1, 0) = lb_ub_lp_outs(1);
          }
@@ -494,8 +505,8 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
                    Eigen::Matrix<stan::math::var, -1, 1 > up_vec_to_min(2);
                    //// ---- POSITIVE-DEFINITENESS BOUND on x := L(i,j) * D(j). See the dbl version above:
                    //// l_ij_old -= x^2 / D(j) must stay positive, so |x| < sqrt(l_ij_old * D(j)).
-                   //// This previously read sqrt(l_ij_old) * D(j) - too tight by a factor sqrt(D(j)) - and
-                   //// excluded valid correlation matrices.
+                   //// The bound sqrt(l_ij_old) * D(j) would be too tight by a factor sqrt(D(j)) and would
+                   //// exclude valid correlation matrices.
                    low_vec_to_max(0) = - stan::math::sqrt(l_ij_old * D(j-1)) ;
                    low_vec_to_max(1) =   (lb(i-1, j-1) - b1) ;
                    up_vec_to_min(0) =    stan::math::sqrt(l_ij_old * D(j-1)) ;
@@ -623,7 +634,9 @@ inline  Eigen::Matrix<double, -1, 1> lb_ub_lp_cvine_dbl( double y,
 }
 
 
-inline  Eigen::Matrix<stan::math::var, -1, 1> lb_ub_lp_cvine( stan::math::var y, stan::math::var lb, stan::math::var ub) {
+inline  Eigen::Matrix<stan::math::var, -1, 1> lb_ub_lp_cvine( stan::math::var y,
+                                                             stan::math::var lb,
+                                                             stan::math::var ub) {
    
        Eigen::Matrix<stan::math::var, -1, 1> out(2);
        stan::math::var tanh_y = stan::math::tanh(y);
@@ -784,7 +797,9 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
                  double P_up  = std::min( 1.0 - 1e-10, (ub_C - c_val) / a_val);
                  
                  // Map unconstrained -> bounded partial correlation
-                 Eigen::Matrix<double, -1, 1> out = lb_ub_lp_cvine_dbl( Omega_theta_unconstrained_array(j, i), P_low, P_up);
+                 Eigen::Matrix<double, -1, 1> out = lb_ub_lp_cvine_dbl( Omega_theta_unconstrained_array(j, i),
+                                                                       P_low,
+                                                                       P_up);
                  target += out(0);
                  P(i, j) = out(1);
                  
@@ -831,7 +846,8 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
        stan::math::var log_det_C = 0.0;
        
        Eigen::Matrix<stan::math::var, -1, -1> C = Eigen::Matrix<double, -1, -1>::Identity(K, K).cast<stan::math::var>();
-       Eigen::Matrix<stan::math::var, -1, -1> P = Eigen::Matrix<double, -1, -1>::Zero(K, K).cast<stan::math::var>();
+       Eigen::Matrix<stan::math::var, -1, -1> P = Eigen::Matrix<double, -1, -1>::Zero(K,
+                                                                                      K).cast<stan::math::var>();
        
        // =========================================================================
        // Column 0
@@ -1150,6 +1166,7 @@ inline  int fn_detect_corr_constraint_type( const int K,
 inline  Eigen::Matrix<double, -1, 1> fn_corr_unc_mat_to_flat_dbl( const int K,
                                                                          const Eigen::Matrix<double, -1, -1> Omega_unc
 ) {
+
        Eigen::Matrix<double, -1, 1> y(K * (K - 1) / 2);
        int counter = 0;
        for (int i = 1; i < K; ++i) {
@@ -1160,12 +1177,14 @@ inline  Eigen::Matrix<double, -1, 1> fn_corr_unc_mat_to_flat_dbl( const int K,
        }
        
        return y;
+
 }
 
 
 inline  Eigen::Matrix<stan::math::var, -1, 1> fn_corr_unc_mat_to_flat_var( const int K,
                                                                                   const Eigen::Matrix<stan::math::var, -1, -1> Omega_unc
 ) {
+
        Eigen::Matrix<stan::math::var, -1, 1> y(K * (K - 1) / 2);
        int counter = 0;
        for (int i = 1; i < K; ++i) {
@@ -1176,6 +1195,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> fn_corr_unc_mat_to_flat_var( const
        }
        
        return y;
+
 }
 
 
@@ -1305,9 +1325,8 @@ inline stan::math::var fn_log_density_of_beta_or_normal_prior_on_correlations_on
 
 
 //// ---- corr_prior_beta and corr_prior_norm are alternatives (a Beta or a normal prior on every
-////      correlation): both TRUE is not a model (the functions used to give different priors on different
-////      evaluation paths). The R argument check stops first (init_hard_coded_model_args); this guard stops any
-////      other caller:
+////      correlation): both TRUE is not a model (the evaluation paths would give different priors). The R
+////      argument check stops first (init_hard_coded_model_args); this guard stops any other caller:
 inline void fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true( const bool corr_prior_beta,
                                                                           const bool corr_prior_norm,
                                                                           const std::string &function_name
@@ -1627,27 +1646,33 @@ inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> fn_convert_Eigen_vec_
  
  
 inline stan::math::var  inv_Phi_approx_var( stan::math::var x )  {
+
    stan::math::var m_logit_p =   stan::math::log( 1.0/x  - 1.0)  ;
    stan::math::var x_i = -0.34176618822627863*m_logit_p;
    stan::math::var asinh_stuff_div_3 =  0.33333333333333331483 *  stan::math::log( x_i  +   stan::math::sqrt(  stan::math::fma(x_i, x_i, 1.0) ) )  ;          // now do arc_sinh part
    stan::math::var exp_x_i =   stan::math::exp(asinh_stuff_div_3);
    return  2.7472242570765295 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
+
 }
 
 
 inline Eigen::Matrix<stan::math::var, -1, 1  >  inv_Phi_approx_var( Eigen::Matrix<stan::math::var, -1, 1  > x )  {
+
    Eigen::Matrix<stan::math::var, -1, 1  > x_i = -0.34176618822627863*stan::math::log( ( 1.0/x.array()  - 1.0).matrix() );
    Eigen::Matrix<stan::math::var, -1, 1  > asinh_stuff_div_3 =  0.33333333333333331483 *  stan::math::log( x_i  +   stan::math::sqrt(  stan::math::fma(x_i, x_i, 1.0) ) )  ;          // now do arc_sinh part
    Eigen::Matrix<stan::math::var, -1, 1  > exp_x_i =   stan::math::exp(asinh_stuff_div_3);
    return  2.7472242570765295 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0).array() / exp_x_i.array() ) ;  //   now do sinh parth part
+
 }
 
 
 inline stan::math::var  inv_Phi_approx_from_logit_prob_var( stan::math::var logit_p )  {
+
    stan::math::var x_i = 0.34176618822627863*logit_p;
    stan::math::var asinh_stuff_div_3 =  0.33333333333333331483 *  stan::math::log( x_i  +   stan::math::sqrt(  stan::math::fma(x_i, x_i, 1.0) ) )  ;          // now do arc_sinh part
    stan::math::var exp_x_i =   stan::math::exp(asinh_stuff_div_3);
    return  2.7472242570765295 * (  stan::math::fma(exp_x_i, exp_x_i , -1.0) / exp_x_i ) ;  //   now do sinh parth part
+
 }
 
 
@@ -1683,14 +1708,14 @@ inline Eigen::Matrix<stan::math::var, -1, 1  >   log_sum_exp_2d_Stan_var(   Eige
 //     } else if (vect_type == "Stan") {
 //       return  log_sum_exp_2d_Stan_double(x);
 //     } else if (vect_type == "AVX2") {
-//       if (skip_checks == false)   return  fast_log_sum_exp_2d_AVX2_double(x);
-//       else                        return  fast_log_sum_exp_2d_AVX2_double(x);
+//       if (skip_checks == false)   return  nico_log_sum_exp_2d_AVX2_double(x);
+//       else                        return  nico_log_sum_exp_2d_AVX2_double(x);
 //     } else if (vect_type == "AVX512") {
-//       if (skip_checks == false)   return  fast_log_sum_exp_2d_AVX512_double(x);
-//       else                        return  fast_log_sum_exp_2d_AVX512_double(x);
+//       if (skip_checks == false)   return  nico_log_sum_exp_2d_AVX512_double(x);
+//       else                        return  nico_log_sum_exp_2d_AVX512_double(x);
 //     } else if (vect_type == "Loop") {
-//       //if (skip_checks == false)   return  fast_log_sum_exp_2d_double(x);
-//       // else                        return  fast_log_sum_exp_2d_double(x);
+//       //if (skip_checks == false)   return  nico_log_sum_exp_2d_double(x);
+//       // else                        return  nico_log_sum_exp_2d_double(x);
 //     } else { 
 //       std::stringstream os;
 //       os << "Invalid input argument to log_sum_exp_2d_double"  ;
