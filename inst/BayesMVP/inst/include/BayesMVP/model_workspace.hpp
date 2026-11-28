@@ -298,9 +298,84 @@ struct LC_MVP_workspace_struct {
     log_prev_per_obs_given_c.resize(allocated_chunk_size);
     prev_per_obs_given_c.resize(allocated_chunk_size);
     //////////////////////////////////////////////
-    
+
   }
-  
+
+};
+
+
+
+
+//// -------------------------------------------------------------------------------------
+//// The workspace of the marginal log-likelihood of each posterior draw (Rcpp_marginal_log_lik_of_each_draw,
+//// main.cpp): one per thread, sized once in its constructor before the threads start, filled in place at every
+//// draw and every fresh nuisance value.
+//// -------------------------------------------------------------------------------------
+struct marginal_log_lik_workspace_of_one_thread {
+
+  Eigen::Matrix<double, -1, 1> lp_grad_outs;   //// (1 + N + n_params: lp, gradient, then each person's log-likelihood)
+  Eigen::Matrix<double, -1, 1> theta_us_vec;   //// (N x n_tests fresh nuisance values)
+  Eigen::Matrix<double, -1, 1> running_max;    //// (N: the running log-sum-exp over the fresh values)
+  Eigen::Matrix<double, -1, 1> running_sum;    //// (N)
+  Eigen::Matrix<double, -1, 1> new_max;        //// (N: the running maximum after the current fresh value)
+  Eigen::Matrix<double, -1, 1> term_a;         //// (N: exp(old maximum - new maximum))
+  Eigen::Matrix<double, -1, 1> term_b;         //// (N: exp(log-likelihood - new maximum))
+  std::vector<LC_MVP_workspace_struct> LC_MVP_ws_structs;   //// (the model's chunk workspace, as Rcpp_wrapper_fn_lp_grad)
+
+  marginal_log_lik_workspace_of_one_thread(int N,
+                                           int n_us,
+                                           int n_params,
+                                           int chunk_size,
+                                           int n_tests,
+                                           int n_class,
+                                           int n_covariates_max,
+                                           int n_corrs,
+                                           int n_covariates_total)
+    : lp_grad_outs(1 + N + n_params),
+      theta_us_vec(n_us),
+      running_max(N),
+      running_sum(N),
+      new_max(N),
+      term_a(N),
+      term_b(N),
+      LC_MVP_ws_structs(1) {
+
+    LC_MVP_ws_structs[0].allocate(chunk_size,
+                                  n_tests,
+                                  n_class,
+                                  n_covariates_max,
+                                  n_corrs,
+                                  n_covariates_total);
+
+  }
+
+};
+
+struct marginal_log_lik_workspaces_of_every_thread {
+
+  std::vector<marginal_log_lik_workspace_of_one_thread> of_each_thread;
+
+  marginal_log_lik_workspaces_of_every_thread(int n_threads,
+                                              int N,
+                                              int n_us,
+                                              int n_params,
+                                              int chunk_size,
+                                              int n_tests,
+                                              int n_class,
+                                              int n_covariates_max,
+                                              int n_corrs,
+                                              int n_covariates_total)
+    : of_each_thread(n_threads,
+                     marginal_log_lik_workspace_of_one_thread(N,
+                                                              n_us,
+                                                              n_params,
+                                                              chunk_size,
+                                                              n_tests,
+                                                              n_class,
+                                                              n_covariates_max,
+                                                              n_corrs,
+                                                              n_covariates_total)) {}
+
 };
 
 

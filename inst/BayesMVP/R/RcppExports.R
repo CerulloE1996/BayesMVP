@@ -74,6 +74,10 @@ Rcpp_wrapper_fn_lp_grad <- function(Model_type, force_autodiff, force_PartialLog
     .Call(`_BayesMVP_Rcpp_wrapper_fn_lp_grad`, Model_type, force_autodiff, force_PartialLog, multi_attempts, theta_main_vec, theta_us_vec, y, grad_option, Model_args_as_Rcpp_List)
 }
 
+Rcpp_marginal_log_lik_of_each_draw <- function(Model_type, theta_main_draws, y, n_nuisance_values, seed, n_threads, Model_args_as_Rcpp_List) {
+    .Call(`_BayesMVP_Rcpp_marginal_log_lik_of_each_draw`, Model_type, theta_main_draws, y, n_nuisance_values, seed, n_threads, Model_args_as_Rcpp_List)
+}
+
 Rcpp_compute_chain_stats <- function(mcmc_3D_array, stat_type, n_threads) {
     .Call(`_BayesMVP_Rcpp_compute_chain_stats`, mcmc_3D_array, stat_type, n_threads)
 }

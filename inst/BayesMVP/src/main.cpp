@@ -902,6 +902,204 @@ Eigen::Matrix<double, -1, 1>        Rcpp_wrapper_fn_lp_grad(             const s
 
 
 
+//// -------------------------------------------------------------------------------------
+//// The marginal log-likelihood of each person at each posterior draw, for leave-one-out: each person's likelihood
+//// averaged over n_nuisance_values fresh nuisance values (u_raw ~ N(0, 1), i.e. u uniform on the unit cube),
+//// log(mean_m exp(log_lik_i(theta, u_m))), for the built-in probit models. Block t of the draws is evaluated by one
+//// thread with workspace t (marginal_log_lik_workspaces_of_every_thread, BayesMVP's model_workspace.hpp), made once
+//// before the threads start and filled in place at every draw and fresh nuisance value; exp and log through
+//// fn_EIGEN_Ref_double. Built-in models only, so it is compiled into BayesMVP (NICOSTAN_WITH_BUILTINS).
+//// -------------------------------------------------------------------------------------
+#if defined(NICOSTAN_WITH_BUILTINS)
+struct MarginalLogLikOfEachDrawWorker : public RcppParallel::Worker {
+
+        const std::string &Model_type;
+        const Eigen::Map<const Eigen::Matrix<double, -1, -1>> &theta_main_draws;
+        const Eigen::Map<const Eigen::Matrix<int, -1, -1>> &y;
+        const Model_fn_args_struct &Model_args_as_cpp_struct;
+        marginal_log_lik_workspaces_of_every_thread &workspaces;
+        const int n_nuisance_values;
+        const int draws_per_block;
+        const unsigned long long seed;
+        RcppParallel::RMatrix<double> log_lik_marginal;
+
+        MarginalLogLikOfEachDrawWorker( const std::string &Model_type_,
+                                        const Eigen::Map<const Eigen::Matrix<double, -1, -1>> &theta_main_draws_,
+                                        const Eigen::Map<const Eigen::Matrix<int, -1, -1>> &y_,
+                                        const Model_fn_args_struct &Model_args_as_cpp_struct_,
+                                        marginal_log_lik_workspaces_of_every_thread &workspaces_,
+                                        const int n_nuisance_values_,
+                                        const int draws_per_block_,
+                                        const unsigned long long seed_,
+                                        Rcpp::NumericMatrix log_lik_marginal_)
+          : Model_type(Model_type_),
+            theta_main_draws(theta_main_draws_),
+            y(y_),
+            Model_args_as_cpp_struct(Model_args_as_cpp_struct_),
+            workspaces(workspaces_),
+            n_nuisance_values(n_nuisance_values_),
+            draws_per_block(draws_per_block_),
+            seed(seed_),
+            log_lik_marginal(log_lik_marginal_) {}
+
+        void operator()(std::size_t begin, std::size_t end) {
+
+              const int N = y.rows();
+              const int n_draws = theta_main_draws.cols();
+              const int n_params_main = theta_main_draws.rows();
+              const int n_us = N * y.cols();
+              const int n_params = n_params_main + n_us;
+              const std::string &vect_type = Model_args_as_cpp_struct.Model_args_strings(0);
+              Stan_model_struct Stan_model_as_cpp_struct;
+
+              for (std::size_t block_index = begin; block_index < end; block_index++) {
+
+                    marginal_log_lik_workspace_of_one_thread &ws = workspaces.of_each_thread[block_index];
+                    //// (this block's own stream of standard normal draws)
+                    dqrng::xoshiro256plus rng(seed + 1000003ULL * static_cast<unsigned long long>(block_index + 1));
+                    std::normal_distribution<double> std_normal(0.0, 1.0);
+                    const int first_draw = static_cast<int>(block_index) * draws_per_block;
+                    const int last_draw = std::min(n_draws, first_draw + draws_per_block);
+
+                    for (int draw_index = first_draw; draw_index < last_draw; draw_index++) {
+
+                          for (int m = 0; m < n_nuisance_values; m++) {
+
+                                for (int k = 0; k < n_us; k++) {
+                                      ws.theta_us_vec(k) = std_normal(rng);
+                                }
+                                ws.lp_grad_outs.setZero();
+                                fn_lp_grad_InPlace( ws.lp_grad_outs,
+                                                    Model_type,
+                                                    false,
+                                                    false,
+                                                    false,
+                                                    theta_main_draws.col(draw_index),
+                                                    ws.theta_us_vec,
+                                                    y,
+                                                    "none",
+                                                    Model_args_as_cpp_struct,
+                                                    Stan_model_as_cpp_struct,
+                                                    ws.LC_MVP_ws_structs,
+                                                    1);
+
+                                //// (the per-person log-likelihoods are the last N entries; the running log-sum-exp over m,
+                                ////  started at the first value so that exp never sees minus infinity)
+                                if (m == 0) {
+                                      ws.running_max = ws.lp_grad_outs.segment(1 + n_params, N);
+                                      ws.running_sum.setOnes();
+                                } else {
+                                      ws.new_max = ws.running_max.cwiseMax(ws.lp_grad_outs.segment(1 + n_params, N));
+                                      ws.term_a = ws.running_max - ws.new_max;
+                                      fn_EIGEN_Ref_double(Eigen::Ref<Eigen::Matrix<double, -1, -1>>(ws.term_a), "exp", vect_type, true);
+                                      ws.term_b = ws.lp_grad_outs.segment(1 + n_params, N) - ws.new_max;
+                                      fn_EIGEN_Ref_double(Eigen::Ref<Eigen::Matrix<double, -1, -1>>(ws.term_b), "exp", vect_type, true);
+                                      ws.running_sum = ws.running_sum.cwiseProduct(ws.term_a) + ws.term_b;
+                                      ws.running_max = ws.new_max;
+                                }
+
+                          }
+
+                          ws.term_a = ws.running_sum / static_cast<double>(n_nuisance_values);
+                          fn_EIGEN_Ref_double(Eigen::Ref<Eigen::Matrix<double, -1, -1>>(ws.term_a), "log", vect_type, true);
+                          for (int i = 0; i < N; i++) {
+                                log_lik_marginal(draw_index, i) = ws.running_max(i) + ws.term_a(i);
+                          }
+
+                    }
+
+              }
+
+        }
+
+};
+#endif
+
+
+// [[Rcpp::export]]
+Rcpp::NumericMatrix  Rcpp_marginal_log_lik_of_each_draw(  const std::string Model_type,
+                                                          const Rcpp::NumericMatrix theta_main_draws,
+                                                          const Rcpp::IntegerMatrix y,
+                                                          const int n_nuisance_values,
+                                                          const double seed,
+                                                          const int n_threads,
+                                                          const Rcpp::List Model_args_as_Rcpp_List) {
+
+#ifndef NICOSTAN_WITH_BUILTINS
+        Rcpp::stop("Rcpp_marginal_log_lik_of_each_draw is provided by BayesMVP.");
+        return Rcpp::NumericMatrix(0, 0);
+#else
+        if (Model_type == "Stan") {
+              Rcpp::stop("Rcpp_marginal_log_lik_of_each_draw is for the built-in probit models (MVP, MVOP, LC_MVP, LC_MVOP, CLC_MVOP)");
+        }
+        //// (theta_main_draws: one column per draw, in the C++'s unconstrained layout; y in the fitted test order)
+        const Eigen::Map<const Eigen::Matrix<double, -1, -1>> theta_main_draws_map(theta_main_draws.begin(), theta_main_draws.nrow(), theta_main_draws.ncol());
+        const Eigen::Map<const Eigen::Matrix<int, -1, -1>> y_map(y.begin(), y.nrow(), y.ncol());
+        const int n_draws = theta_main_draws.ncol();
+        const int N = y.nrow();
+        const int n_tests = y.ncol();
+        //// (the model's arguments are converted from the R list once, here, before the threads start)
+        const Model_fn_args_struct Model_args_as_cpp_struct = convert_R_List_to_Model_fn_args_struct(Model_args_as_Rcpp_List);
+
+        //// ---- the sizes of the model's chunk workspace, as Rcpp_wrapper_fn_lp_grad:
+        const int n_class = Model_args_as_cpp_struct.Model_args_ints(1);
+        const int n_chunks = Model_args_as_cpp_struct.Model_args_ints(3);
+        const std::string &vect_type = Model_args_as_cpp_struct.Model_args_strings(0);
+        const Eigen::Matrix<int, -1, -1> &n_covariates_per_outcome_vec = Model_args_as_cpp_struct.Model_args_mats_int[0];
+        const int n_corrs = n_class * n_tests * (n_tests - 1) / 2;
+        int n_covariates_total;
+        int n_covariates_max;
+        if (n_class > 1) {
+              n_covariates_total = n_covariates_per_outcome_vec.row(0).sum() + n_covariates_per_outcome_vec.row(1).sum();
+              n_covariates_max = std::max(n_covariates_per_outcome_vec.row(0).maxCoeff(), n_covariates_per_outcome_vec.row(1).maxCoeff());
+        } else {
+              n_covariates_total = n_covariates_per_outcome_vec.sum();
+              n_covariates_max = n_covariates_per_outcome_vec.array().maxCoeff();
+        }
+        int vec_size;
+        if      (vect_type == "AVX512") vec_size = 8;
+        else if (vect_type == "AVX2")   vec_size = 4;
+        else if (vect_type == "AVX")    vec_size = 2;
+        else                            vec_size = 1;
+        ChunkSizeInfo chunk_info = calculate_chunk_sizes( N,
+                                                          vec_size,
+                                                          n_chunks);
+
+        //// ---- the workspace of every thread, made once, here, before the threads start:
+        const int n_blocks = std::max(1, std::min(n_threads, n_draws));
+        const int draws_per_block = (n_draws + n_blocks - 1) / n_blocks;
+        marginal_log_lik_workspaces_of_every_thread workspaces( n_blocks,
+                                                                N,
+                                                                N * n_tests,
+                                                                theta_main_draws.nrow() + N * n_tests,
+                                                                chunk_info.normal_chunk_size,
+                                                                n_tests,
+                                                                n_class,
+                                                                n_covariates_max,
+                                                                n_corrs,
+                                                                n_covariates_total);
+        Rcpp::NumericMatrix log_lik_marginal(n_draws, N);
+
+        MarginalLogLikOfEachDrawWorker worker( Model_type,
+                                               theta_main_draws_map,
+                                               y_map,
+                                               Model_args_as_cpp_struct,
+                                               workspaces,
+                                               n_nuisance_values,
+                                               draws_per_block,
+                                               static_cast<unsigned long long>(seed),
+                                               log_lik_marginal);
+        //// (one block of draws per thread: block t takes draws t * draws_per_block onwards, with workspace t)
+        RcppParallel::parallelFor(0, n_blocks, worker, 1, n_blocks);
+
+        return log_lik_marginal;
+#endif
+
+}
+
+
+
+
 
 
 

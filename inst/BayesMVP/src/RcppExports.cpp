@@ -204,6 +204,23 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// Rcpp_marginal_log_lik_of_each_draw
+Rcpp::NumericMatrix Rcpp_marginal_log_lik_of_each_draw(const std::string Model_type, const Rcpp::NumericMatrix theta_main_draws, const Rcpp::IntegerMatrix y, const int n_nuisance_values, const double seed, const int n_threads, const Rcpp::List Model_args_as_Rcpp_List);
+RcppExport SEXP _BayesMVP_Rcpp_marginal_log_lik_of_each_draw(SEXP Model_typeSEXP, SEXP theta_main_drawsSEXP, SEXP ySEXP, SEXP n_nuisance_valuesSEXP, SEXP seedSEXP, SEXP n_threadsSEXP, SEXP Model_args_as_Rcpp_ListSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const std::string >::type Model_type(Model_typeSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::NumericMatrix >::type theta_main_draws(theta_main_drawsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::IntegerMatrix >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const int >::type n_nuisance_values(n_nuisance_valuesSEXP);
+    Rcpp::traits::input_parameter< const double >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< const int >::type n_threads(n_threadsSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List >::type Model_args_as_Rcpp_List(Model_args_as_Rcpp_ListSEXP);
+    rcpp_result_gen = Rcpp::wrap(Rcpp_marginal_log_lik_of_each_draw(Model_type, theta_main_draws, y, n_nuisance_values, seed, n_threads, Model_args_as_Rcpp_List));
+    return rcpp_result_gen;
+END_RCPP
+}
 // Rcpp_compute_chain_stats
 Rcpp::List Rcpp_compute_chain_stats(const std::vector<Eigen::Matrix<double, -1, -1>> mcmc_3D_array, const std::string stat_type, const int n_threads);
 RcppExport SEXP _BayesMVP_Rcpp_compute_chain_stats(SEXP mcmc_3D_arraySEXP, SEXP stat_typeSEXP, SEXP n_threadsSEXP) {
@@ -1205,6 +1222,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_mat", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_mat, 4},
     {"_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_EIGEN_double_colvec, 4},
     {"_BayesMVP_Rcpp_wrapper_fn_lp_grad", (DL_FUNC) &_BayesMVP_Rcpp_wrapper_fn_lp_grad, 9},
+    {"_BayesMVP_Rcpp_marginal_log_lik_of_each_draw", (DL_FUNC) &_BayesMVP_Rcpp_marginal_log_lik_of_each_draw, 7},
     {"_BayesMVP_Rcpp_compute_chain_stats", (DL_FUNC) &_BayesMVP_Rcpp_compute_chain_stats, 3},
     {"_BayesMVP_Rcpp_compute_MCMC_diagnostics", (DL_FUNC) &_BayesMVP_Rcpp_compute_MCMC_diagnostics, 3},
     {"_BayesMVP_Rcpp_compute_all_summaries", (DL_FUNC) &_BayesMVP_Rcpp_compute_all_summaries, 6},
