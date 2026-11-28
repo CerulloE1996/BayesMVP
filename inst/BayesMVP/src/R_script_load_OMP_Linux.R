@@ -26,18 +26,39 @@ get_OMP <- function() {
                             ## new_ld_path <- omp_path_vec[i]
                             # new_ld_path <- if (current_ld_path == "") omp_path_vec[i] else paste0(omp_path_vec[i], ":", current_ld_path)
                             ##Sys.setenv(LD_LIBRARY_PATH = new_ld_path)
-                            return(writeLines(as.character(omp_path_vec[i])))
+                            return(as.character(omp_path_vec[i]))
                         }
                   }
               }
         }
         
-        return(0)
+        ## (none of the paths above: the libgomp of the C++ compiler R builds with; else -fopenmp, which links it)
+        CXX_of_R <-  tryCatch(system2(file.path(R.home("bin"), "R"),
+                                      args = c("CMD", "config", "CXX"),
+                                      stdout = TRUE,
+                                      stderr = FALSE),
+                              error = function(e) character(0))
+        words_of_CXX <-  strsplit(trimws(paste(CXX_of_R, collapse = " ")), " +")[[1]]
+        words_of_CXX <-  words_of_CXX[!grepl("ccache$", words_of_CXX)]
+        if (length(words_of_CXX) > 0) {
+              omp_path_of_the_compiler <-  tryCatch(system2(words_of_CXX[1],
+                                                            args = "-print-file-name=libgomp.so",
+                                                            stdout = TRUE,
+                                                            stderr = FALSE),
+                                                    error = function(e) character(0))
+              if ((length(omp_path_of_the_compiler) == 1) && (dirname(omp_path_of_the_compiler) != ".") &&
+                  file.exists(omp_path_of_the_compiler)) {
+                    return(as.character(omp_path_of_the_compiler))
+              }
+        }
+
+        return("-fopenmp")   ## no libgomp file found: the compiler's own OpenMP flag, which links its library
 
 }
 
-
-get_OMP()
+## the only output make reads: one line, the library path or the flag; never an auto-printed value such as "[1] 0",
+## which went into PKG_LIBS and broke the link on a machine without the paths above
+writeLines(get_OMP())
 
 ## writeLines(as.character(Sys.getenv("LD_LIBRARY_PATH")))
 

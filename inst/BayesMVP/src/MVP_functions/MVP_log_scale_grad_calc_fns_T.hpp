@@ -16,9 +16,9 @@
 #pragma once
 // #include "MVP_helpers_migrated.hpp"
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 0. Signed log-sum-exp utilities
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 
 //// Row-wise: out_log = log|sum_j sign_j exp(log_j)|, out_sign = sign(sum). All k columns of
 //// log_terms/sign_terms are used (pass .leftCols(k) at the call site). out_log doubles as scratch.
@@ -38,12 +38,12 @@ inline void log_abs_sum_exp_general_v2_T(  const Eigen::Ref<const Eigen::Matrix<
         container_max_logs = (container_max_logs.array() == -std::numeric_limits<double>::infinity()).select(0.0,
                               container_max_logs);
         container_sum_exp_signed.setZero();
-        for (int j = 0; j < k; ++j) {
+        for (int j = 0; j < k; j++) {
           out_log = log_terms.col(j) - container_max_logs;                 //// scratch
           apply_inplace<vec, Fn::exp>(out_log);
           container_sum_exp_signed.array() += sign_terms.col(j).array() * out_log.array();
         }
-        for (int i = 0; i < n; ++i) {
+        for (int i = 0; i < n; i++) {
           const double s = container_sum_exp_signed(i);
           out_sign(i) = (s > 0.0) ? 1.0 : ((s < 0.0) ? -1.0 : 1.0);
           out_log(i)  = std::abs(s);
@@ -109,7 +109,7 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 1a. Exact normal-tail kernels over a gathered vector (tail rows only).
 ////
 //// For the exact setting, the tail fix-ups below use these two helpers, which supply the exact log-space
@@ -127,7 +127,7 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 //// The kernels are the existing ones in inst/include/BayesMVP/math/nico_and_approx_AVX*_fns.hpp and
 //// general_functions/double_fns.hpp. The level falls back AVX512 -> AVX2 -> scalar exactly as apply_raw
 //// does; the scalar remainder (and Vec::Scalar) uses the double versions.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// log_Phi_and_inv_Phi_from_log_p_over_an_Eigen_vector_templated_by_the_SIMD_level.hpp
 ////
 //// ---- Moved into NicoSIMD, where every SIMD function lives: this header only includes NicoSIMD's, word for
@@ -135,7 +135,7 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 ////      (the copy is on the 20 TB drive, Work_backup_cumulative).
 #include <NicoSIMD/kernel_dispatch_and_vector_loops_of_the_BayesMVP_manual_gradient_models/log_Phi_and_inv_Phi_from_log_p_over_an_Eigen_vector_templated_by_the_SIMD_level.hpp>
 //// (the old lines, kept as comments:)
-// template <Vec vec>
+//// template <Vec vec>
 // inline void fn_apply_log_Phi_exact_inplace_T(Eigen::Matrix<double, -1, 1> &values_in_log_Phi_out) {
 //   
 //         double *data_pointer = values_in_log_Phi_out.data();
@@ -167,7 +167,7 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 // 
 // 
 // 
-// template <Vec vec>
+//// template <Vec vec>
 // inline void fn_inv_Phi_from_log_p_exact_T(  const Eigen::Matrix<double, -1, 1> &log_p_vec,
 //                                             const Eigen::Matrix<double, -1, 1> &log_1m_p_vec,
 //                                             Eigen::Matrix<double, -1, 1> &Z_out_vec
@@ -211,7 +211,7 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 1. GHK log-scale fix-ups for the problem rows (index). Eigen indexed views need a
 ////    temporary per expression; those allocations are unavoidable and small (|index| rows).
 ////
@@ -240,7 +240,7 @@ inline Eigen::Matrix<double, -1, 1> fn_log_sum_exp_2d_T( const Eigen::Ref<const 
 ////                              [underflow: u phi(B)/phi(Z); overflow: (1-u) phi(B)/phi(Z)]
 ////         d Z / d u          = prob / phi(Z)
 ////                              [underflow: Phi(B)/phi(Z); overflow: (1-Phi(B))/phi(Z)]
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                                                                const std::vector<int> &index,
@@ -257,25 +257,25 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                                                                const KernelChoice &kernel_choice
 ) {
   
-        const double a_times_3 = 3.0 * 0.07056, b = 1.5976;
-        typedef Eigen::Matrix<double, -1, 1> V;
+        const double a_times_3 = 3.0 * 0.07056;
+        const double b = 1.5976;
         
         if (kernel_choice.Phi_approx && kernel_choice.inv_Phi_approx) {
           
                 //// ---- fully approximate setting: the original code ----
-                V log_Bound_U_Phi_Bound_Z = Bound_Z(index, t);
+                Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z = Bound_Z(index, t);
                 apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z);
-                V tmp = log_Bound_U_Phi_Bound_Z;  apply_inplace<vec, Fn::exp>(tmp);
+                Eigen::Matrix<double, -1, 1> tmp = log_Bound_U_Phi_Bound_Z;  apply_inplace<vec, Fn::exp>(tmp);
                 Bound_U_Phi_Bound_Z(index, t) = tmp;
               
-                V u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
-                V log_Phi_Z = u_log + log_Bound_U_Phi_Bound_Z;
+                Eigen::Matrix<double, -1, 1> u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
+                Eigen::Matrix<double, -1, 1> log_Phi_Z = u_log + log_Bound_U_Phi_Bound_Z;
                 tmp = log_Phi_Z;  apply_inplace<vec, Fn::exp>(tmp);
                 Phi_Z(index, t) = tmp;
               
-                V log_1m_Phi_Z = Bound_U_Phi_Bound_Z(index, t).array() * u_array(index, t).array();
+                Eigen::Matrix<double, -1, 1> log_1m_Phi_Z = Bound_U_Phi_Bound_Z(index, t).array() * u_array(index, t).array();
                 apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z);
-                V logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
+                Eigen::Matrix<double, -1, 1> logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
                 apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(logit_Phi_Z);
                 Z_std_norm(index, t) = logit_Phi_Z;
               
@@ -285,7 +285,7 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                 y1_log_prob(index, t) = log_Bound_U_Phi_Bound_Z;
                 prob(index, t)        = Bound_U_Phi_Bound_Z(index, t);
               
-                V log_Bound_U_Phi_Bound_Z_1m = Bound_U_Phi_Bound_Z(index, t);
+                Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z_1m = Bound_U_Phi_Bound_Z(index, t);
                 apply_inplace<vec, Fn::log1m>(log_Bound_U_Phi_Bound_Z_1m);
               
                 tmp = Bound_Z(index, t);
@@ -314,23 +314,23 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                 ////
                 //// ---- log Phi(Bound_Z): exact log-space normal CDF, or the Phi_approx tail:
                 ////
-                V log_Phi_Bound_Z_vec = Bound_Z(index, t);
+                Eigen::Matrix<double, -1, 1> log_Phi_Bound_Z_vec = Bound_Z(index, t);
                 if (!kernel_choice.Phi_approx) fn_apply_log_Phi_exact_inplace_T<vec>(log_Phi_Bound_Z_vec);
                 else                           apply_inplace<vec, Fn::log_Phi_approx>(log_Phi_Bound_Z_vec);
-                V Phi_Bound_Z_vec = log_Phi_Bound_Z_vec;
+                Eigen::Matrix<double, -1, 1> Phi_Bound_Z_vec = log_Phi_Bound_Z_vec;
                 apply_inplace<vec, Fn::exp>(Phi_Bound_Z_vec);
                 Bound_U_Phi_Bound_Z(index, t) = Phi_Bound_Z_vec;
                 
                 ////
                 //// ---- Phi_Z = u * Phi(Bound_Z), held on the log scale:
                 ////
-                V log_u_vec = u_array(index, t);
+                Eigen::Matrix<double, -1, 1> log_u_vec = u_array(index, t);
                 apply_inplace<vec, Fn::log>(log_u_vec);
-                V log_Phi_Z_vec = log_u_vec + log_Phi_Bound_Z_vec;
-                V Phi_Z_vec = log_Phi_Z_vec;
+                Eigen::Matrix<double, -1, 1> log_Phi_Z_vec = log_u_vec + log_Phi_Bound_Z_vec;
+                Eigen::Matrix<double, -1, 1> Phi_Z_vec = log_Phi_Z_vec;
                 apply_inplace<vec, Fn::exp>(Phi_Z_vec);
                 Phi_Z(index, t) = Phi_Z_vec;
-                V log_1m_Phi_Z_vec = Phi_Bound_Z_vec.array() * u_array(index,
+                Eigen::Matrix<double, -1, 1> log_1m_Phi_Z_vec = Phi_Bound_Z_vec.array() * u_array(index,
                                                            t).array(); //// tiny argument, so log1m is accurate
                 apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z_vec);
                 
@@ -338,15 +338,17 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                 //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)), or the Phi_approx
                 ////      inverse:
                 ////
-                V Z_vec;
+                Eigen::Matrix<double, -1, 1> Z_vec;
                 if (!kernel_choice.inv_Phi_approx) {
-                  fn_inv_Phi_from_log_p_exact_T<vec>(log_Phi_Z_vec, log_1m_Phi_Z_vec, Z_vec);
+                  fn_inv_Phi_from_log_p_exact_T<vec>( log_Phi_Z_vec,
+                                                      log_1m_Phi_Z_vec,
+                                                      Z_vec);
                 } else {
                   Z_vec = log_Phi_Z_vec - log_1m_Phi_Z_vec;
                   apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(Z_vec);
                 }
                 Z_std_norm(index, t) = Z_vec;
-                V log_abs_Z_vec = Z_vec.cwiseAbs();
+                Eigen::Matrix<double, -1, 1> log_abs_Z_vec = Z_vec.cwiseAbs();
                 apply_inplace<vec, Fn::log>(log_abs_Z_vec);
                 log_Z_std_norm(index, t) = log_abs_Z_vec;
                 
@@ -356,11 +358,11 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                 ////
                 //// ---- log |d prob / d Bound_Z|: exact log phi(Bound_Z), or the Phi_approx derivative:
                 ////
-                V log_phi_Bound_Z_vec = Bound_Z(index, t);
+                Eigen::Matrix<double, -1, 1> log_phi_Bound_Z_vec = Bound_Z(index, t);
                 if (!kernel_choice.Phi_approx) {
                   log_phi_Bound_Z_vec.array() = -0.5 * log_phi_Bound_Z_vec.array().square() - half_log_two_pi;
                 } else {
-                  V log_1m_Phi_Bound_Z_vec = Phi_Bound_Z_vec;
+                  Eigen::Matrix<double, -1, 1> log_1m_Phi_Bound_Z_vec = Phi_Bound_Z_vec;
                   apply_inplace<vec, Fn::log1m>(log_1m_Phi_Bound_Z_vec);
                   log_phi_Bound_Z_vec.array() = a_times_3 * log_phi_Bound_Z_vec.array().square() + b;
                   apply_inplace<vec, Fn::log>(log_phi_Bound_Z_vec);
@@ -371,7 +373,7 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_underflow_T(  const int t,
                 ////
                 //// ---- log(dZ / d Phi_Z): exact -log phi(Z), or the Phi_approx inverse derivative:
                 ////
-                V log_phi_Z_recip_vec = Z_vec;
+                Eigen::Matrix<double, -1, 1> log_phi_Z_recip_vec = Z_vec;
                 if (!kernel_choice.inv_Phi_approx) {
                   log_phi_Z_recip_vec.array() = 0.5 * log_phi_Z_recip_vec.array().square() + half_log_two_pi;
                 } else {
@@ -406,32 +408,32 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                                                               const KernelChoice &kernel_choice
 ) {
   
-        const double a_times_3 = 3.0 * 0.07056, b = 1.5976;
-        typedef Eigen::Matrix<double, -1, 1> V;
+        const double a_times_3 = 3.0 * 0.07056;
+        const double b = 1.5976;
         
         if (kernel_choice.Phi_approx && kernel_choice.inv_Phi_approx) {
           
                 //// ---- fully approximate setting: the original code ----
-                V log_Bound_U_Phi_Bound_Z_1m = -Bound_Z(index, t);
+                Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z_1m = -Bound_Z(index, t);
                 apply_inplace<vec, Fn::log_Phi_approx>(log_Bound_U_Phi_Bound_Z_1m);
-                V Bound_U_Phi_Bound_Z_1m = log_Bound_U_Phi_Bound_Z_1m;  apply_inplace<vec, Fn::exp>(Bound_U_Phi_Bound_Z_1m);
-                V log_Bound_U_Phi_Bound_Z = Bound_U_Phi_Bound_Z_1m;     apply_inplace<vec, Fn::log1m>(log_Bound_U_Phi_Bound_Z);
+                Eigen::Matrix<double, -1, 1> Bound_U_Phi_Bound_Z_1m = log_Bound_U_Phi_Bound_Z_1m;  apply_inplace<vec, Fn::exp>(Bound_U_Phi_Bound_Z_1m);
+                Eigen::Matrix<double, -1, 1> log_Bound_U_Phi_Bound_Z = Bound_U_Phi_Bound_Z_1m;     apply_inplace<vec, Fn::log1m>(log_Bound_U_Phi_Bound_Z);
               
                 Bound_U_Phi_Bound_Z(index, t).array() = 1.0 - Bound_U_Phi_Bound_Z_1m.array();
               
                 Eigen::Matrix<double, -1, -1> lse2(num_overflows, 2);
-                V u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
+                Eigen::Matrix<double, -1, 1> u_log = u_array(index, t);  apply_inplace<vec, Fn::log>(u_log);
                 lse2.col(0) = log_Bound_U_Phi_Bound_Z_1m + u_log;
                 lse2.col(1) = log_Bound_U_Phi_Bound_Z;
-                V log_Phi_Z = fn_log_sum_exp_2d_T<vec>(lse2);
+                Eigen::Matrix<double, -1, 1> log_Phi_Z = fn_log_sum_exp_2d_T<vec>(lse2);
               
-                V tmp = log_Phi_Z;  apply_inplace<vec, Fn::exp>(tmp);
+                Eigen::Matrix<double, -1, 1> tmp = log_Phi_Z;  apply_inplace<vec, Fn::exp>(tmp);
                 Phi_Z(index, t) = tmp;
               
-                V log_1m_Phi_Z = u_array(index, t);  apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z);
+                Eigen::Matrix<double, -1, 1> log_1m_Phi_Z = u_array(index, t);  apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z);
                 log_1m_Phi_Z.array() += log_Bound_U_Phi_Bound_Z_1m.array();
               
-                V logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
+                Eigen::Matrix<double, -1, 1> logit_Phi_Z = log_Phi_Z - log_1m_Phi_Z;
                 apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(logit_Phi_Z);
                 Z_std_norm(index, t) = logit_Phi_Z;
                 tmp = logit_Phi_Z.cwiseAbs();  apply_inplace<vec, Fn::log>(tmp);
@@ -467,12 +469,12 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                 //// ---- log(1 - Phi(Bound_Z)) = log Phi(-Bound_Z) (reflection, so no 1 - Phi cancellation):
                 ////      exact, or the Phi_approx tail:
                 ////
-                V log_1m_Phi_Bound_Z_vec = -Bound_Z(index, t);
+                Eigen::Matrix<double, -1, 1> log_1m_Phi_Bound_Z_vec = -Bound_Z(index, t);
                 if (!kernel_choice.Phi_approx) fn_apply_log_Phi_exact_inplace_T<vec>(log_1m_Phi_Bound_Z_vec);
                 else                           apply_inplace<vec, Fn::log_Phi_approx>(log_1m_Phi_Bound_Z_vec);
-                V one_m_Phi_Bound_Z_vec = log_1m_Phi_Bound_Z_vec;
+                Eigen::Matrix<double, -1, 1> one_m_Phi_Bound_Z_vec = log_1m_Phi_Bound_Z_vec;
                 apply_inplace<vec, Fn::exp>(one_m_Phi_Bound_Z_vec);
-                V log_Phi_Bound_Z_vec = one_m_Phi_Bound_Z_vec;      //// log(1 - tiny): accurate
+                Eigen::Matrix<double, -1, 1> log_Phi_Bound_Z_vec = one_m_Phi_Bound_Z_vec;      //// log(1 - tiny): accurate
                 apply_inplace<vec, Fn::log1m>(log_Phi_Bound_Z_vec);
                 Bound_U_Phi_Bound_Z(index, t).array() = 1.0 - one_m_Phi_Bound_Z_vec.array();
                 
@@ -482,15 +484,15 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                 ////      log(1 - Phi_Z) = log(1 - u) + log(1 - Phi(B))   (no cancellation):
                 ////
                 Eigen::Matrix<double, -1, -1> log_sum_exp_input_mat(num_overflows, 2);
-                V log_u_vec = u_array(index, t);
+                Eigen::Matrix<double, -1, 1> log_u_vec = u_array(index, t);
                 apply_inplace<vec, Fn::log>(log_u_vec);
                 log_sum_exp_input_mat.col(0) = log_1m_Phi_Bound_Z_vec + log_u_vec;
                 log_sum_exp_input_mat.col(1) = log_Phi_Bound_Z_vec;
-                V log_Phi_Z_vec = fn_log_sum_exp_2d_T<vec>(log_sum_exp_input_mat);
-                V Phi_Z_vec = log_Phi_Z_vec;
+                Eigen::Matrix<double, -1, 1> log_Phi_Z_vec = fn_log_sum_exp_2d_T<vec>(log_sum_exp_input_mat);
+                Eigen::Matrix<double, -1, 1> Phi_Z_vec = log_Phi_Z_vec;
                 apply_inplace<vec, Fn::exp>(Phi_Z_vec);
                 Phi_Z(index, t) = Phi_Z_vec;
-                V log_1m_Phi_Z_vec = u_array(index, t);
+                Eigen::Matrix<double, -1, 1> log_1m_Phi_Z_vec = u_array(index, t);
                 apply_inplace<vec, Fn::log1m>(log_1m_Phi_Z_vec);
                 log_1m_Phi_Z_vec.array() += log_1m_Phi_Bound_Z_vec.array();
                 
@@ -498,15 +500,17 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                 //// ---- Z = inverse CDF of Phi_Z: exact from (log Phi_Z, log(1 - Phi_Z)) (upper-tail case driven
                 ////      by log(1 - Phi_Z)), or the Phi_approx inverse:
                 ////
-                V Z_vec;
+                Eigen::Matrix<double, -1, 1> Z_vec;
                 if (!kernel_choice.inv_Phi_approx) {
-                  fn_inv_Phi_from_log_p_exact_T<vec>(log_Phi_Z_vec, log_1m_Phi_Z_vec, Z_vec);
+                  fn_inv_Phi_from_log_p_exact_T<vec>( log_Phi_Z_vec,
+                                                      log_1m_Phi_Z_vec,
+                                                      Z_vec);
                 } else {
                   Z_vec = log_Phi_Z_vec - log_1m_Phi_Z_vec;
                   apply_inplace<vec, Fn::inv_Phi_approx_from_logit_prob>(Z_vec);
                 }
                 Z_std_norm(index, t) = Z_vec;
-                V log_abs_Z_vec = Z_vec.cwiseAbs();
+                Eigen::Matrix<double, -1, 1> log_abs_Z_vec = Z_vec.cwiseAbs();
                 apply_inplace<vec, Fn::log>(log_abs_Z_vec);
                 log_Z_std_norm(index, t) = log_abs_Z_vec;
                 
@@ -516,7 +520,7 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                 ////
                 //// ---- log |d prob / d Bound_Z| = log phi(Bound_Z) (exact), or the Phi_approx derivative:
                 ////
-                V log_phi_Bound_Z_vec = Bound_Z(index, t);
+                Eigen::Matrix<double, -1, 1> log_phi_Bound_Z_vec = Bound_Z(index, t);
                 if (!kernel_choice.Phi_approx) {
                   log_phi_Bound_Z_vec.array() = -0.5 * log_phi_Bound_Z_vec.array().square() - half_log_two_pi;
                 } else {
@@ -529,7 +533,7 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
                 ////
                 //// ---- log(dZ / d Phi_Z) = -log phi(Z) (exact), or the Phi_approx inverse derivative:
                 ////
-                V log_phi_Z_recip_vec = Z_vec;
+                Eigen::Matrix<double, -1, 1> log_phi_Z_recip_vec = Z_vec;
                 if (!kernel_choice.inv_Phi_approx) {
                   log_phi_Z_recip_vec.array() = 0.5 * log_phi_Z_recip_vec.array().square() + half_log_two_pi;
                 } else {
@@ -544,9 +548,9 @@ inline void fn_MVP_compute_lp_GHK_cols_log_scale_overflow_T(  const int t,
   
 }
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 2. grad prep on the log scale
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVP_grad_prep_log_scale_T(  Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_prob_rowwise_prod_temp,
                                            Eigen::Ref<Eigen::Matrix<double, -1, -1>> log_prob_recip_rowwise_prod_temp,
@@ -629,8 +633,8 @@ template <Vec vec>
 ALWAYS_INLINE void exp_indexed_times_sign_T(Eigen::Matrix<double, -1, -1> &dst,
                                             const int col,
                                             const std::vector<int> &idx,
-                                            
-                                            const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> log_abs_src, const int src_col,
+                                            const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> log_abs_src,
+                                            const int src_col,
                                             const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> sign) {
   
         Eigen::Matrix<double, -1, 1> tmp = log_abs_src.col(src_col)(idx);
@@ -642,9 +646,9 @@ ALWAYS_INLINE void exp_indexed_times_sign_T(Eigen::Matrix<double, -1, -1> &dst,
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 3. nuisance grad on the log scale (problem rows only)
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n_problem_array,
                                                        const std::vector<std::vector<int>> &problem_index_array,
@@ -843,9 +847,9 @@ inline void fn_MVP_compute_nuisance_grad_log_scale_T(  const std::vector<int> &n
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 4. coefficients grad on the log scale (intercept-only, problem rows only)
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVP_compute_coefficients_grad_log_scale_T(  const std::vector<int> &n_problem_array,
                                                            const std::vector<std::vector<int>> &problem_index_array,
@@ -978,9 +982,9 @@ inline void fn_MVP_compute_coefficients_grad_log_scale_T(  const std::vector<int
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 5. L_Omega grad on the log scale (problem rows only)
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVP_compute_L_Omega_grad_log_scale_T(  const std::vector<int> &n_problem_array,
                                                       const std::vector<std::vector<int>> &problem_index_array,

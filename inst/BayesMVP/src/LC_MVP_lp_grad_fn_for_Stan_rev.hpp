@@ -24,7 +24,7 @@
 #include <stan/math/prim/meta/is_var_matrix.hpp> 
  
 #if defined(__AVX2__) || defined(__AVX512F__)
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
 
  
@@ -75,7 +75,7 @@ double                                         Stan_wrapper_lp_fn_LC_MVP_var(   
                                                                                        const std::vector<Eigen::Matrix<double, -1, -1>> &known_values,
                                                                                        const std::vector<Eigen::Matrix<double, -1, -1>> &known_values_indicator,
                                                                                        const std::vector<std::vector<Eigen::Matrix<double, -1, -1>>>  &X,
-                                                                                       std::ostream* pstream__ = nullptr) {
+                                                                                       std::ostream* pstream__) {
    
    const int N = y.rows();
    const int n_nuisance = theta_us_vec.rows()  ; 
@@ -207,23 +207,27 @@ double                                         Stan_wrapper_lp_fn_LC_MVP_var(   
    //stan::arena_t<Eigen::Matrix<double, -1, 1>> lp_grad_outs = Eigen::Matrix<double, -1, 1>::Zero(1 + N + n_params);
    Eigen::Matrix<double, -1, 1> lp_grad_outs = Eigen::Matrix<double, -1, 1>::Zero(1 + N + n_params);
    //stan::math::start_nested();
-   fn_lp_grad_InPlace(   lp_grad_outs,  Model_type, 
-                         force_autodiff, force_PartialLog, multi_attempts, 
-                         value_of(theta_main_vec), value_of(theta_us_vec),
-                         y, 
-                         grad_option,
-                         Model_args_as_cpp_struct);
+   fn_lp_grad_InPlace( lp_grad_outs,
+                       Model_type,
+                       force_autodiff,
+                       force_PartialLog,
+                       multi_attempts,
+                       value_of(theta_main_vec),
+                       value_of(theta_us_vec),
+                       y,
+                       grad_option,
+                       Model_args_as_cpp_struct);
 
 
-   // set adjoints for nuisance
-   for(int i = 0; i < n_nuisance; ++i) {
+   //// set adjoints for nuisance
+   for(int i = 0; i < n_nuisance; i++) {
      theta_us_vec(i).adj() = lp_grad_outs(1 + i);
    }
    
  //  stan::math::set_zero_all_adjoints();
    
-   // set adjoints for main
-   for(int i = 0; i < n_params_main; ++i) {
+   //// set adjoints for main
+   for(int i = 0; i < n_params_main; i++) {
      theta_main_vec(i).adj() = lp_grad_outs(1 + n_nuisance + i);
    }
    

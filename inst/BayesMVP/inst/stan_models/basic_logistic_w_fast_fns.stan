@@ -77,7 +77,9 @@ functions {
   
   
    
-   vector lb_ub_lp (vector y, real lb, real ub) {
+   vector lb_ub_lp ( vector y,
+                     real lb,
+                     real ub) {
  
     int N = num_elements(y); 
     vector[N] tanh_y; 
@@ -87,7 +89,9 @@ functions {
     
   }  
  
-    real lb_ub_lp (real y, real lb, real ub) {
+    real lb_ub_lp ( real y,
+                    real lb,
+                    real ub) {
       
        real  tanh_y = mvp_tanh_approx(y);
        target +=  - mvp_log_approx(2)  +  mvp_log_approx( (ub - lb) * (1 - square(tanh_y))) ;

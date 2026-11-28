@@ -10,49 +10,47 @@
 // [[Rcpp::depends(RcppEigen)]]
 // [[Rcpp::plugins(cpp17)]]
 
-using namespace Rcpp;
 
 
-//' Compute Se/Sp at custom baseline covariate values for LC-MVOP models
-//' (mixed binary + ordinal latent class multivariate probit).
-//'
-//' All internal storage and computation uses Eigen.
-//' Output is reshaped back into R arrays at the end.
-//'
-//' Se/Sp formulas (probit link):
-//'   Binary test t:
+//// ' Compute Se/Sp at custom baseline covariate values for LC-MVOP models
+//// ' (mixed binary + ordinal latent class multivariate probit).
+//// '
+//// ' All internal storage and computation uses Eigen.
+//// ' Output is reshaped back into R arrays at the end.
+//// '
+//// ' Se/Sp formulas (probit link):
+//// '   Binary test t:
 //'     Se      = Phi( X_d' * beta[2][, t] )
 //'     Fp      = Phi( X_nd' * beta[1][, t] )
-//'   Ordinal test t_ord at threshold k:
+//// '   Ordinal test t_ord at threshold k:
 //'     Se[k]   = Phi( X_d' * beta[2][, t]  - C_d[k] )
 //'     Sp[k]   = Phi( C_nd[k] - X_nd' * beta[1][, t] )
-//'
-//' Test order: the traces (beta, C), n_covs_nd / n_covs_d, n_thr_per_ord_test and
-//' n_cat_per_test_in_trace_order are in the TRACE layout, i.e. the order of the columns of y the model was
+//// '
+//// ' Test order: the traces (beta, C), n_covs_nd / n_covs_d, n_thr_per_ord_test and
+//// ' n_cat_per_test_in_trace_order are in the TRACE layout, i.e. the order of the columns of y the model was
 //' fitted to; n_cat_per_test_in_trace_order[s] = 2 for a binary test and the number of categories for an
 //' ordinal test (NULL = the binary tests first, then the ordinal tests: the layout the two counts describe on
 //' their own). test_perm[s] = the ORIGINAL test held by trace slot s (the run's test_perm; NULL = identity).
-//' baseline_case_nd / baseline_case_d and every output (Se/Sp/Fp, AUC, AUC differences, threshold map) are in
-//' ORIGINAL test order, with the binary and ordinal tests in any positions.
-//'
+//// ' baseline_case_nd / baseline_case_d and every output (Se/Sp/Fp, AUC, AUC differences, threshold map) are in
+//// ' ORIGINAL test order, with the binary and ordinal tests in any positions.
+//// '
 // [[Rcpp::export]]
-List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
-                                          // Flattened 3D array [n_iter, n_chains, n_beta_params]
-                                           IntegerVector beta_dims,             // c(n_iter, n_chains, n_beta_params)
-                                           CharacterVector beta_names,          // e.g. "beta[1,1,1]", "beta[2,1,3]"
-                                           NumericVector trace_C_flat,          // Flattened 3D array [n_iter, n_chains, n_C_params]
-                                           IntegerVector C_dims,                // c(n_iter, n_chains, n_C_params)
-                                           CharacterVector C_names,             // e.g. "C_vec[1,1]", "C_vec[2,5]"
-                                           List baseline_case_nd,               // List of n_tests vectors
-                                           List baseline_case_d,                // List of n_tests vectors
-                                           IntegerVector n_covs_nd,             // Per-test covariate counts for nd class
-                                           IntegerVector n_covs_d,              // Per-test covariate counts for d class
+Rcpp::List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   Rcpp::NumericVector trace_beta_flat,
+                                           Rcpp::IntegerVector beta_dims,
+                                           Rcpp::CharacterVector beta_names,
+                                           Rcpp::NumericVector trace_C_flat,
+                                           Rcpp::IntegerVector C_dims,
+                                           Rcpp::CharacterVector C_names,
+                                           Rcpp::List baseline_case_nd,
+                                           Rcpp::List baseline_case_d,
+                                           Rcpp::IntegerVector n_covs_nd,
+                                           Rcpp::IntegerVector n_covs_d,
                                            int n_binary_tests,
                                            int n_ordinal_tests,
-                                           IntegerVector n_thr_per_ord_test,    // Length n_ordinal_tests
-                                           std::string C_param_name = "C_vec",
-                                           Nullable<IntegerVector> n_cat_per_test_in_trace_order = R_NilValue,
-                                           Nullable<IntegerVector> test_perm = R_NilValue
+                                           Rcpp::IntegerVector n_thr_per_ord_test,
+                                           std::string C_param_name,
+                                           Rcpp::Nullable<Rcpp::IntegerVector> n_cat_per_test_in_trace_order,
+                                           Rcpp::Nullable<Rcpp::IntegerVector> test_perm
 ) {
    
          const int n_iter     = beta_dims[0];
@@ -72,7 +70,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
          {
                int n_ordinal_slots_found = 0;
                if (n_cat_per_test_in_trace_order.isNotNull()) {
-                     IntegerVector n_cat_per_test_values(n_cat_per_test_in_trace_order.get());
+                     Rcpp::IntegerVector n_cat_per_test_values(n_cat_per_test_in_trace_order.get());
                      if (n_cat_per_test_values.size() != n_tests) {
                            Rcpp::stop("n_cat_per_test_in_trace_order must have length "
                                       "n_binary_tests + n_ordinal_tests.");
@@ -97,7 +95,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
          std::vector<int> trace_slot_of_original_test(n_tests);
          for (int t = 0; t < n_tests; t++) trace_slot_of_original_test[t] = t;
          if (test_perm.isNotNull()) {
-               IntegerVector test_perm_values(test_perm.get());
+               Rcpp::IntegerVector test_perm_values(test_perm.get());
                if (test_perm_values.size() != n_tests) {
                      Rcpp::stop("test_perm must have length n_binary_tests + n_ordinal_tests.");
                }
@@ -141,7 +139,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
              n_thr_max = n_thr_per_ord_test[t_ord];
          }
          
-         // Cumulative slot offsets for compact column storage
+         //// Cumulative slot offsets for compact column storage
          Eigen::Matrix<int, -1, 1> slot_offset(n_tests);
          int n_total_slots = 0;
          for (int t = 0; t < n_tests; t++) {
@@ -163,13 +161,13 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
          std::map<std::string, int> C_map;
          
          for (int i = 0; i < beta_names.size(); i++)
-           beta_map[as<std::string>(beta_names[i])] = i;
+           beta_map[Rcpp::as<std::string>(beta_names[i])] = i;
          for (int i = 0; i < C_names.size(); i++)
-           C_map[as<std::string>(C_names[i])] = i;
+           C_map[Rcpp::as<std::string>(C_names[i])] = i;
          
          // ---- Pre-resolve all parameter indices (avoid string lookups in hot loop) ----
          
-         // Beta: beta_idx_nd[t][j] = column in beta_mat for beta[1, j+1, s+1]
+         //// Beta: beta_idx_nd[t][j] = column in beta_mat for beta[1, j+1, s+1]
          //       beta_idx_d[t][j]  = column in beta_mat for beta[2, j+1, s+1]
          //       for ORIGINAL test t held by trace slot s = trace_slot_of_original_test[t]
          std::vector<Eigen::Matrix<int, -1, 1>> beta_idx_nd(n_tests);
@@ -207,7 +205,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
            }
          }
          
-         // Cutpoint indices for ordinal tests
+         //// Cutpoint indices for ordinal tests
          std::vector<Eigen::Matrix<int, -1, 1>> C_col_nd(n_ordinal_tests);
          std::vector<Eigen::Matrix<int, -1, 1>> C_col_d(n_ordinal_tests);
          
@@ -242,8 +240,8 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
          std::vector<Eigen::Matrix<double, -1, 1>> X_d(n_tests);
          
          for (int t = 0; t < n_tests; t++) {
-           NumericVector rvec_nd = baseline_case_nd[t];
-           NumericVector rvec_d  = baseline_case_d[t];
+           Rcpp::NumericVector rvec_nd = baseline_case_nd[t];
+           Rcpp::NumericVector rvec_d  = baseline_case_d[t];
            // X_nd[t] = Eigen::Map<const Eigen::Matrix<double, -1, 1>>(rvec_nd.begin(), n_covs_nd[t]);
            // X_d[t]  = Eigen::Map<const Eigen::Matrix<double, -1, 1>>(rvec_d.begin(),  n_covs_d[t]);
            const int trace_slot = trace_slot_of_original_test[t];
@@ -301,7 +299,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
                  
                  for (int k = 0; k < n_thr_t; k++) {
                    
-                       // Vectorised: extract cutpoint column, compute argument, apply Phi
+                       //// Vectorised: extract cutpoint column, compute argument, apply Phi
                        const Eigen::Matrix<double, -1, 1> C_nd_k = C_mat.col(C_col_nd[t_ord](k));
                        const Eigen::Matrix<double, -1, 1> C_d_k  = C_mat.col(C_col_d[t_ord](k));
                        
@@ -395,7 +393,7 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
                        std::sort(pts.begin(), pts.end());
                        
                        double auc = 0.0;
-                       for (size_t i = 0; i + 1 < pts.size(); i++) {
+                       for (std::size_t i = 0; i + 1 < pts.size(); i++) {
                          auc += 0.5 * (pts[i].second + pts[i + 1].second) *
                            (pts[i + 1].first - pts[i].first);
                        }
@@ -411,12 +409,12 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
          }
          
          // ---- Reshape Se/Sp/Fp: [n_samples, n_total_slots] -> R 4D [n_iter, n_chains, n_tests, n_thr_max] ----
-         auto reshape_to_4d = [&](const Eigen::Matrix<double, -1, -1>& mat_2d) -> NumericVector {
+         auto reshape_to_4d = [&](const Eigen::Matrix<double, -1, -1>& mat_2d) -> Rcpp::NumericVector {
                
-               NumericVector out(n_iter * n_chains * n_tests * n_thr_max);
+               Rcpp::NumericVector out(n_iter * n_chains * n_tests * n_thr_max);
                std::fill(out.begin(), out.end(), -1.0);
                int dims[] = {n_iter, n_chains, n_tests, n_thr_max};
-               out.attr("dim") = IntegerVector(dims, dims + 4);
+               out.attr("dim") = Rcpp::IntegerVector(dims, dims + 4);
                
                for (int t = 0; t < n_tests; t++) {
                  const int cb = slot_offset(t);
@@ -436,15 +434,16 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
            
          };
          
-         NumericVector Se_4d = reshape_to_4d(Se_out);
-         NumericVector Sp_4d = reshape_to_4d(Sp_out);
-         NumericVector Fp_4d = reshape_to_4d(Fp_out);
+         Rcpp::NumericVector Se_4d = reshape_to_4d(Se_out);
+         Rcpp::NumericVector Sp_4d = reshape_to_4d(Sp_out);
+         Rcpp::NumericVector Fp_4d = reshape_to_4d(Fp_out);
          
          // ---- Copy Eigen summaries -> R matrices ----
-         auto eigen_to_nummat = [](const Eigen::Matrix<double, -1, -1> &emat) -> NumericMatrix {
+         auto eigen_to_nummat = [](const Eigen::Matrix<double, -1, -1> &emat) -> Rcpp::NumericMatrix {
            
-               const int nr = emat.rows(), nc = emat.cols();
-               NumericMatrix rmat(nr, nc);
+               const int nr = emat.rows();
+               const int nc = emat.cols();
+               Rcpp::NumericMatrix rmat(nr, nc);
                for (int i = 0; i < nr; i++)
                  for (int j = 0; j < nc; j++)
                    rmat(i, j) = emat(i, j);
@@ -453,18 +452,18 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
            
          };
          
-         NumericMatrix Se_summary_R = eigen_to_nummat(Se_summary);
-         NumericMatrix Sp_summary_R = eigen_to_nummat(Sp_summary);
-         NumericMatrix Fp_summary_R = eigen_to_nummat(Fp_summary);
+         Rcpp::NumericMatrix Se_summary_R = eigen_to_nummat(Se_summary);
+         Rcpp::NumericMatrix Sp_summary_R = eigen_to_nummat(Sp_summary);
+         Rcpp::NumericMatrix Fp_summary_R = eigen_to_nummat(Fp_summary);
          
-         CharacterVector summary_colnames = CharacterVector::create("mean", "sd", "2.5%", "50%", "97.5%");
-         colnames(Se_summary_R) = summary_colnames;
-         colnames(Sp_summary_R) = summary_colnames;
-         colnames(Fp_summary_R) = summary_colnames;
+         Rcpp::CharacterVector summary_colnames = Rcpp::CharacterVector::create("mean", "sd", "2.5%", "50%", "97.5%");
+         Rcpp::colnames(Se_summary_R) = summary_colnames;
+         Rcpp::colnames(Sp_summary_R) = summary_colnames;
+         Rcpp::colnames(Fp_summary_R) = summary_colnames;
          
-         // Threshold mapping
-         IntegerMatrix thresh_map(n_total_slots, 2);
-         colnames(thresh_map) = CharacterVector::create("test", "threshold");
+         //// Threshold mapping
+         Rcpp::IntegerMatrix thresh_map(n_total_slots, 2);
+         Rcpp::colnames(thresh_map) = Rcpp::CharacterVector::create("test", "threshold");
          for (int t = 0; t < n_tests; t++)
            for (int k = 0; k < n_thr(t); k++) {
              const int row = slot_offset(t) + k;
@@ -472,31 +471,31 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
              thresh_map(row, 1) = k + 1;
            }
            
-           // n_thr as IntegerVector
-           IntegerVector n_thr_out(n_tests);
+           //// n_thr as IntegerVector
+           Rcpp::IntegerVector n_thr_out(n_tests);
          for (int t = 0; t < n_tests; t++) n_thr_out[t] = n_thr(t);
          
          // ---- Build result list ----
-         List result = List::create(
-           Named("Se_baseline")    = Se_4d,
-           Named("Sp_baseline")    = Sp_4d,
-           Named("Fp_baseline")    = Fp_4d,
-           Named("Se_summary")     = Se_summary_R,
-           Named("Sp_summary")     = Sp_summary_R,
-           Named("Fp_summary")     = Fp_summary_R,
-           Named("thresh_mapping") = thresh_map,
-           Named("n_thr")          = n_thr_out,
-           Named("n_thr_max")      = n_thr_max,
-           Named("n_tests")        = n_tests
+         Rcpp::List result = Rcpp::List::create(
+           Rcpp::Named("Se_baseline")    = Se_4d,
+           Rcpp::Named("Sp_baseline")    = Sp_4d,
+           Rcpp::Named("Fp_baseline")    = Fp_4d,
+           Rcpp::Named("Se_summary")     = Se_summary_R,
+           Rcpp::Named("Sp_summary")     = Sp_summary_R,
+           Rcpp::Named("Fp_summary")     = Fp_summary_R,
+           Rcpp::Named("thresh_mapping") = thresh_map,
+           Rcpp::Named("n_thr")          = n_thr_out,
+           Rcpp::Named("n_thr_max")      = n_thr_max,
+           Rcpp::Named("n_tests")        = n_tests
          );
          
          // ---- Attach AUC ----
          if (n_ordinal_tests > 0) {
            
-           auto reshape_to_3d = [&](const Eigen::Matrix<double, -1, -1>& mat_2d, int n_cols) -> NumericVector {
-             NumericVector out(n_iter * n_chains * n_cols);
+           auto reshape_to_3d = [&](const Eigen::Matrix<double, -1, -1>& mat_2d, int n_cols) -> Rcpp::NumericVector {
+             Rcpp::NumericVector out(n_iter * n_chains * n_cols);
              int dims[] = {n_iter, n_chains, n_cols};
-             out.attr("dim") = IntegerVector(dims, dims + 3);
+             out.attr("dim") = Rcpp::IntegerVector(dims, dims + 3);
              for (int c = 0; c < n_cols; c++)
                for (int chain = 0; chain < n_chains; chain++)
                  for (int iter = 0; iter < n_iter; iter++) {
@@ -509,11 +508,11 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
            
            result["AUC_baseline"] = reshape_to_3d(AUC_out, n_ordinal_tests);
            
-           NumericMatrix AUC_summary_R = eigen_to_nummat(AUC_summary_mat);
-           colnames(AUC_summary_R) = summary_colnames;
+           Rcpp::NumericMatrix AUC_summary_R = eigen_to_nummat(AUC_summary_mat);
+           Rcpp::colnames(AUC_summary_R) = summary_colnames;
            result["AUC_summary"] = AUC_summary_R;
            
-           // Pairwise AUC differences
+           //// Pairwise AUC differences
            if (n_ordinal_tests > 1) {
                  
                  const int n_pairs = n_ordinal_tests * (n_ordinal_tests - 1) / 2;
@@ -548,8 +547,8 @@ List Rcpp_compute_LC_MVOP_Se_Sp_baseline(   NumericVector trace_beta_flat,
                  
                  result["AUC_diff"] = reshape_to_3d(AUC_diff, n_pairs);
                  
-                 NumericMatrix AUC_diff_summary_R = eigen_to_nummat(AUC_diff_summ);
-                 colnames(AUC_diff_summary_R) = CharacterVector::create(
+                 Rcpp::NumericMatrix AUC_diff_summary_R = eigen_to_nummat(AUC_diff_summ);
+                 Rcpp::colnames(AUC_diff_summary_R) = Rcpp::CharacterVector::create(
                    "mean", "sd", "2.5%", "50%", "97.5%", "prob_gt_0", "prob_lt_0");
                  result["AUC_diff_summary"] = AUC_diff_summary_R;
              

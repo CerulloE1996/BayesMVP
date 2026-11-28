@@ -7,14 +7,14 @@
 #' For BayesMVP's models with manual gradients: M_bytes/chain of the model and data, Paper 1's equations 7a-7h
 #' for a manual gradient with the sampling layout and the CPUs of this process, then, when
 #' time_Paper_1_check_of_num_chunks = TRUE, Paper 1's check (fn_check_num_chunks_by_doubling_and_halving()).
-#' Every N_chunks is a multiple of the within-chain threads.
+#' Every N_chunks is 1 or a power of two (and so a multiple of the within-chain threads, a power of two).
 #'
-#' @param Model_type The model: "MVP", "MVOP", "LC_MVP" or "LC_MVOP".
+#' @param Model_type The model: "MVP", "MVOP", "LC_MVP", "LC_MVOP", "CLC_MVOP" or "CLC-MVOP".
 #' @param init_object The model's initialisation object.
 #' @param n_chains_sampling Number of sampling chains run in parallel.
 #' @param n_threads_WCP_sampling Within-chain threads of each sampling chain (default 1).
-#' @param time_Paper_1_check_of_num_chunks TRUE (default): Paper 1's check of the equations' N_chunks, and the
-#'   fastest value timed is used; FALSE: Paper 1's equations alone, nothing timed.
+#' @param time_Paper_1_check_of_num_chunks TRUE: Paper 1's check of the equations' N_chunks, and the
+#'   fastest value timed is used; FALSE (default): Paper 1's equations alone, nothing timed.
 #' @param n_rounds,n_timed_iterations,minimum_seconds_per_timing The timings of Paper 1's check (see
 #'   [fn_time_iteration_of_BayesMVP_model_for_each_layout()]; defaults 3, 3 and 0.2 s).
 #' @return A list: num_chunks_sampling (the chunk count to use), num_chunks_sampling_from_Paper_1_equations,
@@ -27,11 +27,11 @@
 fn_compute_sampling_num_chunks_for_BayesMVP_model <-  function( Model_type,
                                                                init_object,
                                                                n_chains_sampling,
-                                                               n_threads_WCP_sampling            = 1,
-                                                               time_Paper_1_check_of_num_chunks  = TRUE,
-                                                               n_rounds                          = 3,
-                                                               n_timed_iterations                = 3,
-                                                               minimum_seconds_per_timing        = 0.2
+                                                               n_threads_WCP_sampling,
+                                                               time_Paper_1_check_of_num_chunks,
+                                                               n_rounds,
+                                                               n_timed_iterations,
+                                                               minimum_seconds_per_timing
 ) {
         ##
         time_choice_start <-  proc.time()[["elapsed"]]
@@ -67,22 +67,24 @@ fn_compute_sampling_num_chunks_for_BayesMVP_model <-  function( Model_type,
                                          num_chunks_start        = num_chunks_sampling_from_Paper_1_equations,
                                          fn_median_seconds_per_iteration_of_each_num_chunks =
                                                function(num_chunks_candidates) {
-                                                     fn_time_iteration_of_BayesMVP_model_for_each_layout(
-                                                       Model_type                  = Model_type,
-                                                       init_object                 = init_object,
-                                                       n_chains                    = n_chains_sampling,
-                                                       layouts                     = data.frame(
+                                                     return(fn_time_iteration_of_BayesMVP_model_for_each_layout( Model_type                  = Model_type,
+                                                                                                          init_object                 = init_object,
+                                                                                                          n_chains                    = n_chains_sampling,
+                                                                                                          layouts                     = data.frame(
                                                              n_threads_WCP  = n_threads_WCP_sampling,
                                                              num_chunks     = num_chunks_candidates),
-                                                       n_rounds                    = n_rounds,
-                                                       n_timed_iterations          = n_timed_iterations,
-                                                       minimum_seconds_per_timing  = minimum_seconds_per_timing
-                                                     )$median_seconds_per_iteration
+                                                                                                          n_rounds                    = n_rounds,
+                                                                                                          n_timed_iterations          = n_timed_iterations,
+                                                                                                          minimum_seconds_per_timing  = minimum_seconds_per_timing,
+                                                                                                          L_main = 20,
+                                                                                                          eps_main = 1e-5,
+                                                                                                          n_untimed_iterations_before_timing = 0)$median_seconds_per_iteration)
                                                },
                                          fewest_num_chunks       = n_threads_WCP_sampling,
                                          most_num_chunks         = most_num_chunks,
                                          multiple_of_num_chunks  = n_threads_WCP_sampling,
-                                         powers_of_two           = FALSE)
+                                         powers_of_two           = TRUE,   ## N_chunks is always 1 or a power of two
+                                                                                         fraction_within_which_a_doubling_is_a_tie_and_the_doubling_after_it_is_timed = 0.03)
         }
         num_chunks_sampling <-  if (is.null(num_chunks_check)) num_chunks_sampling_from_Paper_1_equations else {
               num_chunks_check$num_chunks
@@ -112,11 +114,11 @@ fn_compute_sampling_num_chunks_for_BayesMVP_model <-  function( Model_type,
 #' searches the threads per chain and N_chunks together, the layouts compared by their seconds per draw over all
 #' chains. Every N_chunks is a power of two, at least one chunk per thread.
 #'
-#' @param Model_type The model: "MVP", "MVOP", "LC_MVP" or "LC_MVOP".
+#' @param Model_type The model: "MVP", "MVOP", "LC_MVP", "LC_MVOP", "CLC_MVOP" or "CLC-MVOP".
 #' @param init_object The model's initialisation object.
 #' @param n_chains_sampling The sampling chains, when they are given (default NULL: floor(CPUs / threads per
 #'   chain), every CPU used).
-#' @param time_Paper_1_check TRUE (default): Paper 1's check from the equations' layout; FALSE: the equations'
+#' @param time_Paper_1_check TRUE: Paper 1's check from the equations' layout; FALSE (default): the equations'
 #'   layout, nothing timed.
 #' @param n_timed_iterations Not used.
 #' @param minimum_seconds_per_timing The shortest time of the iterations of each layout's long timing call
@@ -135,20 +137,25 @@ fn_compute_sampling_num_chunks_for_BayesMVP_model <-  function( Model_type,
 fn_compute_sampling_n_chains_n_threads_WCP_and_num_chunks_for_BayesMVP_model <-  function(
         Model_type,
         init_object,
-        n_chains_sampling                   = NULL,
-        time_Paper_1_check                  = TRUE,
-        n_timed_iterations                  = 1,
-        minimum_seconds_per_timing          = 0.25,
-        leapfrog_steps_per_timed_iteration  = 10,
-        fraction_faster_needed_to_move      = 0.03
+        n_chains_sampling = NULL,
+        time_Paper_1_check = FALSE,
+        n_timed_iterations = 1,
+        minimum_seconds_per_timing = 0.25,
+        leapfrog_steps_per_timed_iteration = 10,
+        fraction_faster_needed_to_move = 0.03,
+        max_threads = NULL
 ) {
         ##
         time_choice_start <-  proc.time()[["elapsed"]]
         ##
-        ## ---- the CPUs of this process, and the chains (the chains given, or every CPU used):
+        ## ---- the CPUs of this process (at most max_threads of them), and the chains (the chains given, or every
+        ##      CPU used):
         ##
-        CPU_ids <-  NicoStan::fn_read_L3_cache_topology_of_available_CPUs()$CPU_ids_available
+        CPU_ids <-  NicoStan::fn_read_L3_cache_topology_of_available_CPUs(
+                                                                          CPU_ids_available = NULL,
+                                                                          sysfs_CPU_directory = "/sys/devices/system/cpu")$CPU_ids_available
         n_CPUs <-  length(CPU_ids)
+        if (!is.null(max_threads)) n_CPUs <-  min(n_CPUs, max_threads)
         n_chains_given <-  n_chains_sampling
         fn_n_chains_of_threads_per_chain <-  function(threads_per_chain) {
               if (!is.null(n_chains_given)) return(n_chains_given)
@@ -212,13 +219,14 @@ fn_compute_sampling_n_chains_n_threads_WCP_and_num_chunks_for_BayesMVP_model <- 
                           layout_timed <-  data.frame( n_chains       = n_chains,
                                                        n_threads_WCP  = layouts$threads_per_chain[index],
                                                        num_chunks     = layouts$num_chunks[index])
-                          seconds_per_iteration <-  fn_time_sampling_of_BayesMVP_model_for_each_layout(
-                                Model_type                  = Model_type,
-                                init_object                 = init_object,
-                                layouts                     = layout_timed,
-                                minimum_seconds_per_timing  = minimum_seconds_per_timing,
-                                L_main                      = leapfrog_steps_per_timed_iteration
-                          )$seconds_per_iteration[1]
+                          seconds_per_iteration <-  fn_time_sampling_of_BayesMVP_model_for_each_layout( Model_type                  = Model_type,
+                                                                                                        init_object                 = init_object,
+                                                                                                        layouts                     = layout_timed,
+                                                                                                        minimum_seconds_per_timing  = minimum_seconds_per_timing,
+                                                                                                        L_main                      = leapfrog_steps_per_timed_iteration,
+                                                                                                        n_iterations_of_short_call = 1,
+                                                                                                        eps_main = 1e-05,
+                                                                                                        fn_snapshot_hardware_counters = NULL)$seconds_per_iteration[1]
                           seconds_per_draw[index] <-  seconds_per_iteration / n_chains
                     }
                     return(seconds_per_draw)
@@ -232,19 +240,24 @@ fn_compute_sampling_n_chains_n_threads_WCP_and_num_chunks_for_BayesMVP_model <- 
                                   most_num_chunks                 = most_num_chunks,
                                   fraction_faster_needed_to_move  = fraction_faster_needed_to_move,
                                   also_time_2_threads_per_chain_at_2_chunks_when_the_equations_say_no_chunking =
-                                        FALSE),
+                                        FALSE,
+                                                                                                         most_moves = 30,
+                                                                                                         timings_already_made = NULL,
+                                                                                                         fn_another_timing_fits_in_the_budget = NULL,
+                                                                                                         fraction_slower_within_which_a_neighbour_is_timed_again_in_the_last_round = NULL,
+                                                                                                         time_the_doubling_after_a_doubling_of_num_chunks_within_the_move_threshold = TRUE,
+                                                                                                         time_the_doubling_of_num_chunks_first_and_the_others_only_if_it_is_not_faster = FALSE),
                     error = function(condition) {
                           message(paste0("Sampling layout not checked (", conditionMessage(condition),
                                          "); Paper 1's equations are used."))
-                          NULL
+                          return(NULL)
                     })
               if (!is.null(layout_search)) {
                     n_threads_WCP_sampling <-  layout_search$threads_per_chain
                     num_chunks_sampling <-  layout_search$num_chunks
                     n_timings <-  layout_search$n_timings
-                    n_chains_of_each_layout_timed <-  vapply(X = layout_search$timings$threads_per_chain,
-                                                             FUN = fn_n_chains_of_threads_per_chain,
-                                                             FUN.VALUE = 0)
+                    n_chains_of_each_layout_timed <-  unlist(sapply(X = layout_search$timings$threads_per_chain,
+                                                                    FUN = fn_n_chains_of_threads_per_chain))
                     timings <-  data.frame(
                           n_chains_sampling                       = n_chains_of_each_layout_timed,
                           n_threads_WCP_sampling                  = layout_search$timings$threads_per_chain,
@@ -290,11 +303,11 @@ fn_compute_sampling_n_chains_n_threads_WCP_and_num_chunks_for_BayesMVP_model <- 
 #' equations' N_chunks, are timed, and Paper 1's check then searches the threads per chain and N_chunks together
 #' from the fastest. Every N_chunks is a power of two, at least one chunk per thread.
 #'
-#' @param Model_type The model: "MVP", "MVOP", "LC_MVP" or "LC_MVOP".
+#' @param Model_type The model: "MVP", "MVOP", "LC_MVP", "LC_MVOP", "CLC_MVOP" or "CLC-MVOP".
 #' @param init_object The model's initialisation object.
 #' @param n_chains_burnin Number of burn-in chains run in parallel (default 4).
-#' @param time_Paper_1_check_of_num_chunks TRUE (default): the hardware candidates are timed and Paper 1's check
-#'   (of the threads per chain and N_chunks together) follows; FALSE: nothing timed, and the threads per chain of
+#' @param time_Paper_1_check_of_num_chunks TRUE: the hardware candidates are timed and Paper 1's check
+#'   (of the threads per chain and N_chunks together) follows; FALSE (default): nothing timed, and the threads per chain of
 #'   Paper 1's earlier burn-in rule (NicoStan::fn_compute_burnin_n_threads_WCP_and_num_chunks()) with the
 #'   equations' N_chunks are used.
 #' @param n_timed_iterations,minimum_seconds_per_timing Each timing: at least n_timed_iterations iterations and at
@@ -318,13 +331,14 @@ fn_compute_sampling_n_chains_n_threads_WCP_and_num_chunks_for_BayesMVP_model <- 
 fn_compute_burnin_n_threads_WCP_and_num_chunks_for_BayesMVP_model <-  function(
         Model_type,
         init_object,
-        n_chains_burnin                     = 4,
-        time_Paper_1_check_of_num_chunks    = TRUE,
-        n_timed_iterations                  = 1,
-        minimum_seconds_per_timing          = 0.25,
-        n_untimed_iterations_before_timing  = 1,
-        leapfrog_steps_per_timed_iteration  = 10,
-        fraction_faster_needed_to_move      = 0.03
+        n_chains_burnin,
+        time_Paper_1_check_of_num_chunks = FALSE,
+        n_timed_iterations = 1,
+        minimum_seconds_per_timing = 0.25,
+        n_untimed_iterations_before_timing = 1,
+        leapfrog_steps_per_timed_iteration = 10,
+        fraction_faster_needed_to_move = 0.03,
+        max_threads = NULL
 ) {
         ##
         time_choice_start <-  proc.time()[["elapsed"]]
@@ -348,7 +362,21 @@ fn_compute_burnin_n_threads_WCP_and_num_chunks_for_BayesMVP_model <-  function(
         burnin_rule <-  NicoStan::fn_compute_burnin_n_threads_WCP_and_num_chunks(
                               M_bytes_per_chain  = M_bytes$M_bytes_per_chain,
                               N_units            = N,
-                              n_chains_burnin    = n_chains_burnin)
+                              n_chains_burnin    = n_chains_burnin,
+                                                                                 pieces_per_thread = 2,
+                                                                                 n_threads_WCP_burnin = NULL,
+                                                                                 CPU_ids_available = NULL,
+                                                                                 N_hardware_threads_available = max_threads,
+                                                                                 N_L3_caches_available = NULL,
+                                                                                 N_hardware_threads_per_L3_available = NULL,
+                                                                                 L3_cache_size_bytes = NULL,
+                                                                                 sysfs_CPU_directory = "/sys/devices/system/cpu",
+                                                                                 seconds_per_lp_grad_call = NULL,
+                                                                                 fewest_seconds_of_gradient_per_WCP_thread = NULL,
+                                                                                 one_piece_per_thread_when_one_thread_per_chain = FALSE,
+                                                                                 S_target_of_the_L2_cache_per_core_when_every_burnin_thread_has_a_core = FALSE,
+                                                                                 L2_cache_size_bytes_per_core = NULL,
+                                                                                 N_threads_per_core = NULL)
         most_threads_per_chain <-  burnin_rule$n_threads_per_chain_from_hardware
         n_threads_WCP_from_Paper_1_burnin_rule <-  min(most_threads_per_chain, burnin_rule$n_threads_WCP_burnin)
         ##
@@ -368,17 +396,17 @@ fn_compute_burnin_n_threads_WCP_and_num_chunks_for_BayesMVP_model <-  function(
         ##
         ## ---- the hardware candidates of Paper 1's burn-in equation, each with the equations' N_chunks:
         ##
-        threads_per_core <-  NicoStan::fn_read_hardware_threads_per_core()
+        threads_per_core <-  NicoStan::fn_read_hardware_threads_per_core(
+                                                                         sysfs_CPU_directory = "/sys/devices/system/cpu")
         threads_per_chain_of_hardware <-  c(1,
                                             burnin_rule$n_threads_per_chain_from_L3_cache / threads_per_core,
                                             burnin_rule$n_threads_per_chain_from_L3_cache)
         threads_per_chain_of_hardware <-  2^floor(log2(pmin(most_threads_per_chain,
                                                              pmax(1, threads_per_chain_of_hardware))))
         burnin_hardware_candidates <-  data.frame(threads_per_chain = sort(unique(threads_per_chain_of_hardware)))
-        burnin_hardware_candidates$num_chunks <-  vapply(
-                                                        X          = burnin_hardware_candidates$threads_per_chain,
-                                                        FUN        = fn_num_chunks_of_equations,
-                                                        FUN.VALUE  = 0)
+        burnin_hardware_candidates$num_chunks <-  unlist(sapply(
+                                                               X          = burnin_hardware_candidates$threads_per_chain,
+                                                               FUN        = fn_num_chunks_of_equations))
         ##
         ## ---- the hardware candidates timed, then Paper 1's check from the fastest of them:
         ##
@@ -395,17 +423,16 @@ fn_compute_burnin_n_threads_WCP_and_num_chunks_for_BayesMVP_model <-  function(
                     for (index in seq_len(nrow(layouts))) {
                           layout_timed <-  data.frame( n_threads_WCP  = layouts$threads_per_chain[index],
                                                        num_chunks     = layouts$num_chunks[index])
-                          seconds_per_iteration[index] <-  fn_time_iteration_of_BayesMVP_model_for_each_layout(
-                                Model_type                          = Model_type,
-                                init_object                         = init_object,
-                                n_chains                            = n_chains_burnin,
-                                layouts                             = layout_timed,
-                                n_rounds                            = 1,
-                                n_timed_iterations                  = n_timed_iterations,
-                                minimum_seconds_per_timing          = minimum_seconds_per_timing,
-                                L_main                              = leapfrog_steps_per_timed_iteration,
-                                n_untimed_iterations_before_timing  = n_untimed_iterations_before_timing
-                          )$median_seconds_per_iteration[1]
+                          seconds_per_iteration[index] <-  fn_time_iteration_of_BayesMVP_model_for_each_layout( Model_type                          = Model_type,
+                                                                                                                init_object                         = init_object,
+                                                                                                                n_chains                            = n_chains_burnin,
+                                                                                                                layouts                             = layout_timed,
+                                                                                                                n_rounds                            = 1,
+                                                                                                                n_timed_iterations                  = n_timed_iterations,
+                                                                                                                minimum_seconds_per_timing          = minimum_seconds_per_timing,
+                                                                                                                L_main                              = leapfrog_steps_per_timed_iteration,
+                                                                                                                n_untimed_iterations_before_timing  = n_untimed_iterations_before_timing,
+                                                                                                                eps_main = 1e-5)$median_seconds_per_iteration[1]
                     }
                     return(seconds_per_iteration)
               }
@@ -424,12 +451,17 @@ fn_compute_burnin_n_threads_WCP_and_num_chunks_for_BayesMVP_model <-  function(
                                 fraction_faster_needed_to_move  = fraction_faster_needed_to_move,
                                 timings_already_made            = burnin_hardware_candidates,
                                 also_time_2_threads_per_chain_at_2_chunks_when_the_equations_say_no_chunking =
-                                      TRUE)
+                                      TRUE,
+                                                                                                       most_moves = 30,
+                                                                                                       fn_another_timing_fits_in_the_budget = NULL,
+                                                                                                       fraction_slower_within_which_a_neighbour_is_timed_again_in_the_last_round = NULL,
+                                                                                                       time_the_doubling_after_a_doubling_of_num_chunks_within_the_move_threshold = TRUE,
+                                                                                                       time_the_doubling_of_num_chunks_first_and_the_others_only_if_it_is_not_faster = FALSE)
                     },
                     error = function(condition) {
                           message(paste0("Burn-in layout not checked (", conditionMessage(condition),
                                          "); Paper 1's equations are used."))
-                          NULL
+                          return(NULL)
                     })
               if (!is.null(burnin_hardware_candidates$seconds)) {
                     fastest_hardware_candidate <-  burnin_hardware_candidates[

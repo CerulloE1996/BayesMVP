@@ -181,17 +181,6 @@ layouts. 1 = the number of chunks of the fit. Returned as
 \description{
 R_fn_sample_model
 }
-\details{
-Set \code{options(BayesMVP_autodiff_fallback = TRUE)} before a fit
-to enable an autodiff lp/gradient fallback for built-in models with multi_attempts = TRUE.
-If unset, it defaults to FALSE for MVP/LC-MVP/MVOP/LC-MVOP and preserves the existing
-TRUE default for latent_trait. Standard-scale and partial-log evaluations are tried first;
-autodiff is used only if both return nonfinite output, at the same parameter values.
-The latent_trait model skips its known-unfinished partial-log path and uses standard -> autodiff.
-This does not retry trajectories or rescue finite energy-error divergences. The option
-is frozen for the fit and returned as autodiff_fallback. For separate R worker
-processes, set the option in the process which calls this function.
-}
 
 \details{The development interface uses \code{burnin_algorithm} as its sole algorithm selector: \code{ChEES},
 \code{CHESSR}, \code{CHESSR_log}, or \code{SNAPER}. Historical \code{ChEESR}/\code{ChESSR} spellings select

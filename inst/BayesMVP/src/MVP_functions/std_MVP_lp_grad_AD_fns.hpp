@@ -54,8 +54,9 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   const bool corr_force_positive = Model_args_as_cpp_struct.Model_args_bools(2);
   const bool corr_prior_beta = Model_args_as_cpp_struct.Model_args_bools(3);
   const bool corr_prior_norm = Model_args_as_cpp_struct.Model_args_bools(4);
-  fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
-                                                           "std_MVP_lp_grad_AD_fns.hpp");
+  fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true( corr_prior_beta,
+                                                                corr_prior_norm,
+                                                                "std_MVP_lp_grad_AD_fns.hpp");
   const bool handle_numerical_issues = Model_args_as_cpp_struct.Model_args_bools(5);
   const bool skip_checks_exp =   Model_args_as_cpp_struct.Model_args_bools(6);
   const bool skip_checks_log =   Model_args_as_cpp_struct.Model_args_bools(7);
@@ -120,9 +121,9 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   //// ---- corr_force_positive: the lower bound of every correlation is 0, as in the manual-derivative
   ////      paths:
   if (corr_force_positive == true) {
-        for (int c = 0; c < static_cast<int>(lb_corr.size()); ++c)
-              for (int i = 1; i < lb_corr[c].rows(); ++i)
-                    for (int j = 0; j < i; ++j)
+        for (int c = 0; c < static_cast<int>(lb_corr.size()); c++)
+              for (int i = 1; i < lb_corr[c].rows(); i++)
+                    for (int j = 0; j < i; j++)
                           lb_corr[c](i, j) = 0.0;
   }
   const std::vector<Eigen::Matrix<double, -1, -1>>   ub_corr   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[5]; 
@@ -133,8 +134,12 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   //////////////
   const int n_corrs =  1 * n_tests * (n_tests - 1) * 0.5;
   
-  int n_covariates_total_nd, n_covariates_total_d, n_covariates_total;
-  int n_covariates_max_nd, n_covariates_max_d, n_covariates_max;
+  int n_covariates_total_nd;
+  int n_covariates_total_d;
+  int n_covariates_total;
+  int n_covariates_max_nd;
+  int n_covariates_max_d;
+  int n_covariates_max;
   
     
   n_covariates_total = n_covariates_per_outcome_vec.sum();
@@ -174,7 +179,6 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   int n_full_chunks = chunk_size_info.n_full_chunks;
   
   /////////////////  ------------------------------------------------------------ 
-  using namespace stan::math;
  
   stan::math::nested_rev_autodiff nested_autodiff_scope;
   
@@ -202,8 +206,8 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
 
   {
     int i = n_us + n_corrs;
-      for (int t = 0; t < n_tests; ++t) {
-        for (int k = 0; k < n_covariates_per_outcome_vec(0, t); ++k) {
+      for (int t = 0; t < n_tests; t++) {
+        for (int k = 0; k < n_covariates_per_outcome_vec(0, t); k++) {
           beta_all_tests_class_var[0](k, t) = theta_var(i);
           i += 1;
         }
@@ -217,32 +221,32 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   stan::math::var log_jac_u = 0.0;
 
   if (nuisance_transformation == "Phi") { // correct
-    u_vec.array() =   Phi(u_unconstrained_vec_var).array(); // correct
-    log_jac_u +=    - 0.5 * u_unconstrained_vec_var.size() * log(2 * M_PI) -  0.5 * sum(square(u_unconstrained_vec_var)) ;   // correct
+    u_vec.array() =   stan::math::Phi(u_unconstrained_vec_var).array(); // correct
+    log_jac_u +=    - 0.5 * u_unconstrained_vec_var.size() * stan::math::log(2 * M_PI) -  0.5 * stan::math::sum(stan::math::square(u_unconstrained_vec_var)) ;   // correct
   } else if (nuisance_transformation == "Phi_approx") {  // correct
-    u_vec.array() =   Phi_approx(u_unconstrained_vec_var).array();
+    u_vec.array() =   stan::math::Phi_approx(u_unconstrained_vec_var).array();
     log_jac_u   +=    (a_times_3 * u_unconstrained_vec_var.array().square() +  b).array().log().sum();  // correct
-    log_jac_u   +=    sum(log(u_vec));  // correct
-    log_jac_u   +=    sum(log1m(u_vec));    // correct
+    log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));  // correct
+    log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));    // correct
   } else if (nuisance_transformation == "Phi_approx_rough") {
-    u_vec.array() =   inv_logit(1.702 * u_unconstrained_vec_var).array();  // correct
-    log_jac_u   +=    u_unconstrained_vec_var.size() * log(1.702) ;  // correct
-    log_jac_u   +=    sum(log(u_vec));  // correct
-    log_jac_u   +=    sum(log1m(u_vec));  // correct
+    u_vec.array() =   stan::math::inv_logit(1.702 * u_unconstrained_vec_var).array();  // correct
+    log_jac_u   +=    u_unconstrained_vec_var.size() * stan::math::log(1.702) ;  // correct
+    log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));  // correct
+    log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));  // correct
   } else if (nuisance_transformation == "tanh") {
-    Eigen::Matrix<stan::math::var, -1, 1> tanh_u_unc = tanh(u_unconstrained_vec_var);   // correct
+    Eigen::Matrix<stan::math::var, -1, 1> tanh_u_unc = stan::math::tanh(u_unconstrained_vec_var);   // correct
     u_vec.array() =     0.5 * (  tanh_u_unc.array() + 1.0).array() ;   // correct
     //// du/dx = 2 u (1 - u), so +log(2) per coordinate:
-    log_jac_u  +=   u_unconstrained_vec_var.size() * log(2.0) ;   // correct
-    log_jac_u   +=    sum(log(u_vec));  // correct
-    log_jac_u   +=    sum(log1m(u_vec));  // correct
+    log_jac_u  +=   u_unconstrained_vec_var.size() * stan::math::log(2.0) ;   // correct
+    log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));  // correct
+    log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));  // correct
   } else if (nuisance_transformation == "inv_logit") {
     //// "inv_logit" branch (without it u_vec (var) would stay uninitialised and the process would segfault). Same
     //// transform and log-Jacobian as the manual path (fn_MVP_compute_nuisance_T / _log_jac_u_T):
     //// u = inv_logit(x), du/dx = u (1 - u).
-    u_vec.array() =   inv_logit(u_unconstrained_vec_var).array();
-    log_jac_u   +=    sum(log(u_vec));
-    log_jac_u   +=    sum(log1m(u_vec));
+    u_vec.array() =   stan::math::inv_logit(u_unconstrained_vec_var).array();
+    log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));
+    log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));
   } else {
     throw std::invalid_argument("fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace_process: unknown nuisance_transformation '" + nuisance_transformation +
                                 "' (allowed: Phi, Phi_approx, Phi_approx_rough, tanh, inv_logit).");
@@ -250,7 +254,9 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
 
   ///////////////// get cholesky factor's (lower-triangular) of corr matrices
   ////// first need to convert Omega_unconstrained to var   // then convert to 3d var array
-  std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_unconstrained_var = fn_convert_std_vec_of_corrs_to_3d_array_var(Omega_unconstrained_vec_var, n_tests, 1);
+  std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_unconstrained_var = fn_convert_std_vec_of_corrs_to_3d_array_var( Omega_unconstrained_vec_var,
+                                                                                                                               n_tests,
+                                                                                                                               1);
   std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > L_Omega_var = vec_of_mats_var(n_tests, n_tests, 1);
   std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_var  = vec_of_mats_var(n_tests, n_tests, 1);
     
@@ -285,16 +291,20 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
   ////      known correlations removed), or a Beta / normal prior on every off-diagonal correlation:
   if ((corr_prior_beta == false) && (corr_prior_norm == false)) {
         target +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[0], lkj_cholesky_eta(0)) ;
-        fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
-              target, L_Omega_var[0], known_values_indicator[0]);
+        fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density( target,
+                                                                                         L_Omega_var[0],
+                                                                                         known_values_indicator[0]);
   } else {
-        target += fn_log_density_of_beta_or_normal_prior_on_correlations_on_free_cholesky_entries(
-              L_Omega_var[0], Omega_var[0], corr_prior_beta, prior_for_corr_a[0],
-              prior_for_corr_b[0], known_values_indicator[0]);
+        target += fn_log_density_of_beta_or_normal_prior_on_correlations_on_free_cholesky_entries( L_Omega_var[0],
+                                                                                                   Omega_var[0],
+                                                                                                   corr_prior_beta,
+                                                                                                   prior_for_corr_a[0],
+                                                                                                   prior_for_corr_b[0],
+                                                                                                   known_values_indicator[0]);
   }
   //// ---- the normal(0, 10) term of known (fixed) correlations of the manual-derivative paths:
-  for (int i = 1; i < n_tests; ++i) {
-        for (int j = 0; j < i; ++j) {
+  for (int i = 1; i < n_tests; i++) {
+        for (int j = 0; j < i; j++) {
               if (known_values_indicator[0](i, j) == 1) {
                     target += stan::math::normal_lpdf(Omega_var[0](i, j), 0.0, 10.0);
               }
@@ -348,7 +358,8 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
           //// (MVP_and_MVOP_missing_results_GHK_fns.hpp):
           if (data_has_missing_results && (y_ref(n, t) < 0)) {
                 y1(t) = 0.0;
-                Z_std_norm(t) = fn_AD_inv_Phi_var(u_array(n, t), use_inv_Phi_approx);
+                Z_std_norm(t) = fn_AD_inv_Phi_var( u_array(n, t),
+                                                   use_inv_Phi_approx);
                 if (t < n_tests - 1) {
                   inc = (L_Omega_var[0].row(t+1).head(t+1) * Z_std_norm.head(t+1)).eval()(0, 0);
                 }
@@ -367,7 +378,6 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
           if ( (Bound_Z > overflow_threshold) &&  (y_ref(n, t) == 1) )   {
             
                   if (use_Phi_approx == false) {
-                        using namespace stan::math;
                         //// EXACT normal tail.
                         //// y1 = log(1 - Phi(B)) = log Phi(-B);  1 - Phi_Z = (1 - u)(1 - Phi(B));
                         //// Z = Phi^{-1}(Phi_Z) from (log Phi_Z, log(1 - Phi_Z)).
@@ -375,50 +385,51 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
                         //// (double_fns.hpp): d/dx log Phi(x) = phi(x)/Phi(x),
                         //// dZ/dlog(1 - Phi_Z) = -(1 - Phi_Z)/phi(Z).
                         stan::math::var  log_1m_Phi_Bound_Z = log_Phi_exact_var( - Bound_Z );
-                        stan::math::var  log_Phi_Bound_Z    = log1m_exp(log_1m_Phi_Bound_Z);
-                        stan::math::var  log_Phi_Z          = log_sum_exp(log_1m_Phi_Bound_Z + stan::math::log(u_array(n, t)), log_Phi_Bound_Z);
-                        stan::math::var  log_1m_Phi_Z       = log1m(u_array(n, t)) + log_1m_Phi_Bound_Z;
+                        stan::math::var  log_Phi_Bound_Z    = stan::math::log1m_exp(log_1m_Phi_Bound_Z);
+                        stan::math::var  log_Phi_Z          = stan::math::log_sum_exp(log_1m_Phi_Bound_Z + stan::math::log(u_array(n, t)), log_Phi_Bound_Z);
+                        stan::math::var  log_1m_Phi_Z       = stan::math::log1m(u_array(n, t)) + log_1m_Phi_Bound_Z;
                         Z_std_norm(t) =  fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z,
                                    log_1m_Phi_Z,
                                    use_inv_Phi_approx); //// exact inverse unless inv_Phi_type = "inv_Phi_approx"
                         y1(t) =  log_1m_Phi_Bound_Z ;
                   } else {
                         //// Phi_approx setting: the original Phi_approx tail
-                        using namespace stan::math;
-                        stan::math::var  log_Bound_U_Phi_Bound_Z_1m = log_inv_logit( - 0.07056 * square(Bound_Z) * Bound_Z  - 1.5976 * Bound_Z );
-                        stan::math::var  Bound_U_Phi_Bound_Z_1m = exp(log_Bound_U_Phi_Bound_Z_1m);
+                        stan::math::var  log_Bound_U_Phi_Bound_Z_1m = stan::math::log_inv_logit( - 0.07056 * stan::math::square(Bound_Z) * Bound_Z  - 1.5976 * Bound_Z );
+                        stan::math::var  Bound_U_Phi_Bound_Z_1m = stan::math::exp(log_Bound_U_Phi_Bound_Z_1m);
                         stan::math::var  Bound_U_Phi_Bound_Z = 1.0 - Bound_U_Phi_Bound_Z_1m;
                         stan::math::var  lse_term_1 =  log_Bound_U_Phi_Bound_Z_1m + stan::math::log(u_array(n, t));
-                        stan::math::var  log_Bound_U_Phi_Bound_Z =  log1m(Bound_U_Phi_Bound_Z_1m);
+                        stan::math::var  log_Bound_U_Phi_Bound_Z =  stan::math::log1m(Bound_U_Phi_Bound_Z_1m);
                         stan::math::var  lse_term_2 =  log_Bound_U_Phi_Bound_Z;
-                        stan::math::var  log_Phi_Z = log_sum_exp(lse_term_1, lse_term_2);
-                        stan::math::var  log_1m_Phi_Z  =   log1m(u_array(n, t))  + log_Bound_U_Phi_Bound_Z_1m;
-                        Z_std_norm(t) =  fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z, log_1m_Phi_Z, use_inv_Phi_approx);   //// inv_Phi_approx from logit(Phi_Z) unless inv_Phi_type = "inv_Phi"
+                        stan::math::var  log_Phi_Z = stan::math::log_sum_exp(lse_term_1, lse_term_2);
+                        stan::math::var  log_1m_Phi_Z  =   stan::math::log1m(u_array(n, t))  + log_Bound_U_Phi_Bound_Z_1m;
+                        Z_std_norm(t) =  fn_AD_inv_Phi_from_log_probs_var( log_Phi_Z,
+                                                                           log_1m_Phi_Z,
+                                                                           use_inv_Phi_approx);   //// inv_Phi_approx from logit(Phi_Z) unless inv_Phi_type = "inv_Phi"
                         y1(t) =  log_Bound_U_Phi_Bound_Z_1m ;
                   }
                 
           } else if  ( (Bound_Z < underflow_threshold) &&  (y_ref(n, t) == 0) ) { // y == 0
               
                   if (use_Phi_approx == false) {
-                        using namespace stan::math;
                         //// EXACT normal tail.
                         //// y1 = log Phi(B);  Phi_Z = u Phi(B);
                         //// Z = Phi^{-1}(Phi_Z) from (log Phi_Z, log(1 - Phi_Z)); dZ/dlog Phi_Z = Phi_Z/phi(Z).
                         stan::math::var  log_Phi_Bound_Z = log_Phi_exact_var( Bound_Z );
                         stan::math::var  log_Phi_Z       = stan::math::log(u_array(n, t)) + log_Phi_Bound_Z;
-                        stan::math::var  log_1m_Phi_Z    = log1m_exp(log_Phi_Z);
+                        stan::math::var  log_1m_Phi_Z    = stan::math::log1m_exp(log_Phi_Z);
                         Z_std_norm(t) = fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z,
                                    log_1m_Phi_Z,
                                    use_inv_Phi_approx); //// exact inverse unless inv_Phi_type = "inv_Phi_approx"
                         y1(t)  =  log_Phi_Bound_Z ;
                   } else {
                         //// Phi_approx setting: the original Phi_approx tail
-                        using namespace stan::math;
-                        stan::math::var  log_Bound_U_Phi_Bound_Z =  log_inv_logit( 0.07056 * square(Bound_Z) * Bound_Z  + 1.5976 * Bound_Z );
-                        stan::math::var  Bound_U_Phi_Bound_Z = exp(log_Bound_U_Phi_Bound_Z);
+                        stan::math::var  log_Bound_U_Phi_Bound_Z =  stan::math::log_inv_logit( 0.07056 * stan::math::square(Bound_Z) * Bound_Z  + 1.5976 * Bound_Z );
+                        stan::math::var  Bound_U_Phi_Bound_Z = stan::math::exp(log_Bound_U_Phi_Bound_Z);
                         stan::math::var  log_Phi_Z = stan::math::log(u_array(n, t)) + log_Bound_U_Phi_Bound_Z;
-                        stan::math::var  log_1m_Phi_Z =  log1m(u_array(n, t) * Bound_U_Phi_Bound_Z);
-                        Z_std_norm(t) = fn_AD_inv_Phi_from_log_probs_var(log_Phi_Z, log_1m_Phi_Z, use_inv_Phi_approx);   //// inv_Phi_approx from logit(Phi_Z) unless inv_Phi_type = "inv_Phi"
+                        stan::math::var  log_1m_Phi_Z =  stan::math::log1m(u_array(n, t) * Bound_U_Phi_Bound_Z);
+                        Z_std_norm(t) = fn_AD_inv_Phi_from_log_probs_var( log_Phi_Z,
+                                                                          log_1m_Phi_Z,
+                                                                          use_inv_Phi_approx);   //// inv_Phi_approx from logit(Phi_Z) unless inv_Phi_type = "inv_Phi"
                         y1(t)  =  log_Bound_U_Phi_Bound_Z ;
                   }
                 
@@ -455,10 +466,12 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
                                                              use_inv_Phi_approx );
                   }
                 } else {
-                  stan::math::var  Bound_U_Phi_Bound_Z = fn_AD_Phi_var( Bound_Z, use_Phi_approx );
+                  stan::math::var  Bound_U_Phi_Bound_Z = fn_AD_Phi_var( Bound_Z,
+                                                                        use_Phi_approx );
                   y1(t) = stan::math::log(Bound_U_Phi_Bound_Z);
                   Phi_Z  =  Bound_U_Phi_Bound_Z * u_array(n, t);
-                  Z_std_norm(t) =   fn_AD_inv_Phi_var(Phi_Z, use_inv_Phi_approx) ;
+                  Z_std_norm(t) =   fn_AD_inv_Phi_var( Phi_Z,
+                                                       use_inv_Phi_approx) ;
                 }
 
          }
@@ -562,7 +575,7 @@ inline  void                             fn_lp_and_grad_std_MVP_Pinkney_AD_log_s
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<double, -1, 1> &&out_mat_R_val, 
                                                                        const Eigen::Matrix<double, -1, 1> &&theta_main_vec_R_val,
                                                                        const Eigen::Matrix<double, -1, 1> &&theta_us_vec_R_val,
@@ -599,7 +612,7 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<do
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<double, -1, 1> &out_mat_ref, 
                                                                        const Eigen::Matrix<double, -1, 1> &theta_main_vec_ref,
                                                                        const Eigen::Matrix<double, -1, 1> &theta_us_vec_ref,
@@ -627,7 +640,7 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<do
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 template <typename MatrixType>
 void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Ref<Eigen::Block<MatrixType, -1, 1>>  &out_mat_ref, 
                                                                        const Eigen::Ref<const Eigen::Block<MatrixType, -1, 1>>  &theta_main_vec_ref,
@@ -665,7 +678,7 @@ void     fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale_InPlace(   Eigen::Ref<Eigen
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 Eigen::Matrix<double, -1, 1>    fn_lp_and_grad_std_MVP_Pinkney_AD_log_scale(  const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
                                                                                      const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                                                                      const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,

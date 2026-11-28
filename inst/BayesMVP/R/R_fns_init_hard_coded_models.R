@@ -54,7 +54,7 @@ fn_get_compiled_SIMD_level_of_BayesMVP <-  function() {
 fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled <-  function() {
 
         ##
-        BayesMVP_namespace <-  asNamespace("BayesMVP")
+        BayesMVP_namespace <-  getNamespace("BayesMVP")
         ##
         for (required_cpp_export_name in c("Rcpp_BayesMVP_compiled_SIMD_levels", "Rcpp_BayesMVP_SIMD_lane_width_for_vect_type")) {
               if (!exists(required_cpp_export_name, envir = BayesMVP_namespace, inherits = FALSE)) {
@@ -64,7 +64,7 @@ fn_stop_if_BayesMVP_SIMD_dispatch_info_not_compiled <-  function() {
               }
         }
         ##
-        return(invisible(TRUE))
+        return(value_not_printed <- TRUE)
 
 }
 
@@ -147,30 +147,29 @@ R_fn_BayesMVP_SIMD_lane_width_for_vect_type <-  function(vect_type) {
               stop("vect_type must be a non-empty character vector, e.g. 'AVX512', 'AVX2', 'Stan' or 'Loop'.")
         }
         ##
-        SIMD_lane_width_by_vect_type <-  vapply( X         = vect_type,
-                                                 FUN       = function(vect_type_value) {
+        SIMD_lane_width_by_vect_type <-  unlist(sapply( X         = vect_type,
+                                                        FUN       = function(vect_type_value) {
 
-                                                       ##
-                                                       ## ---- C++ resolver (stops with the C++ message for a level this build did not compile):
-                                                       ##
-                                                       lane_width_from_resolver <-  as.integer(BayesMVP:::Rcpp_BayesMVP_SIMD_lane_width_for_vect_type(vect_type_value))
-                                                       ##
-                                                       ## ---- measured on the real string dispatch (SIMD strings only; see fn_probe_BayesMVP_SIMD_lane_width_of_dispatch):
-                                                       ##
-                                                       if (!(vect_type_value %in% c("AVX512", "AVX2"))) return(lane_width_from_resolver)
-                                                       lane_width_measured <-  fn_probe_BayesMVP_SIMD_lane_width_of_dispatch(vect_type = vect_type_value)
-                                                       ##
-                                                       if (!identical(lane_width_measured, lane_width_from_resolver)) {
-                                                             stop(paste0("vect_type = '", vect_type_value, "': BayesMVP's string dispatch (fn_EIGEN_Ref_double) ",
-                                                                         "ran ", lane_width_measured, "-lane code, but the C++ resolver says ",
-                                                                         lane_width_from_resolver, " lanes. The build is inconsistent; reinstall NicoStan, ",
-                                                                         "then BayesMVP."))
-                                                       }
-                                                       ##
-                                                       return(lane_width_measured)
+                                                              ##
+                                                              ## ---- C++ resolver (stops with the C++ message for a level this build did not compile):
+                                                              ##
+                                                              lane_width_from_resolver <-  as.integer(BayesMVP:::Rcpp_BayesMVP_SIMD_lane_width_for_vect_type(vect_type_value))
+                                                              ##
+                                                              ## ---- measured on the real string dispatch (SIMD strings only; see fn_probe_BayesMVP_SIMD_lane_width_of_dispatch):
+                                                              ##
+                                                              if (!(vect_type_value %in% c("AVX512", "AVX2"))) return(lane_width_from_resolver)
+                                                              lane_width_measured <-  fn_probe_BayesMVP_SIMD_lane_width_of_dispatch(vect_type = vect_type_value)
+                                                              ##
+                                                              if (!identical(lane_width_measured, lane_width_from_resolver)) {
+                                                                    stop(paste0("vect_type = '", vect_type_value, "': BayesMVP's string dispatch (fn_EIGEN_Ref_double) ",
+                                                                                "ran ", lane_width_measured, "-lane code, but the C++ resolver says ",
+                                                                                lane_width_from_resolver, " lanes. The build is inconsistent; reinstall NicoStan, ",
+                                                                                "then BayesMVP."))
+                                                              }
+                                                              ##
+                                                              return(lane_width_measured)
 
-                                                 },
-                                                 FUN.VALUE = integer(1))
+                                                        }))
         ##
         return(SIMD_lane_width_by_vect_type)
 
@@ -345,7 +344,7 @@ fn_check_native_model_vect_types_and_Phi_types <-  function( Model_type,
 
         }
         ##
-        return(invisible(TRUE))
+        return(value_not_printed <- TRUE)
 
 }
 
@@ -480,26 +479,26 @@ init_hard_coded_model_args <- function( Model_type,
         ##
         n_covariates_total <- model_args_list$n_covariates_total
         ##
-        dims <- get_dims_for_internal_models(  y = y,
-                                               Model_type = Model_type,
-                                               n_tests = n_tests,
-                                               n_class = n_class,
-                                               n_pops = n_pops,
-                                               N = N,
-                                               n_covariates_total = n_covariates_total,
-                                               n_cat_per_ord_test = model_args_list$n_cat_per_ord_test)
-        n_nuisance    <- dims$n_nuisance
-        n_params_main <- dims$n_params_main
-        n_params      <- dims$n_params
-        n_corrs       <- dims$n_corrs
-        ##
-        # n_cat_per_ord_test   <- dims$n_cat_per_ord_test
-        # n_thr_per_ord_test   <- dims$n_thr_per_ord_test
-        ##
-        model_args_list$n_nuisance    <- n_nuisance
-        model_args_list$n_params_main <- n_params_main
-        model_args_list$n_params      <- n_params
-        model_args_list$n_corrs       <- n_corrs
+        if (!(Model_type %in% c("CLC_MVOP", "CLC-MVOP"))) {
+          dims <- get_dims_for_internal_models(  y = y,
+                                                 Model_type = Model_type,
+                                                 n_tests = n_tests,
+                                                 n_class = n_class,
+                                                 n_pops = n_pops,
+                                                 N = N,
+                                                 n_covariates_total = n_covariates_total,
+                                                 n_cat_per_ord_test = model_args_list$n_cat_per_ord_test,
+                                                 model_args_list = model_args_list)
+          n_nuisance    <- dims$n_nuisance
+          n_params_main <- dims$n_params_main
+          n_params      <- dims$n_params
+          n_corrs       <- dims$n_corrs
+          ##
+          model_args_list$n_nuisance    <- n_nuisance
+          model_args_list$n_params_main <- n_params_main
+          model_args_list$n_params      <- n_params
+          model_args_list$n_corrs       <- n_corrs
+        }
         ##
         # model_args_list$n_cat_per_ord_test       <- n_cat_per_ord_test
         # model_args_list$n_thr_per_ord_test       <- n_thr_per_ord_test
@@ -512,13 +511,29 @@ init_hard_coded_model_args <- function( Model_type,
         #   }
         # }
         ##
+        n_dirichlet_slices <- n_class
         if (n_ordinal_tests > 0) {
             expected_nrow <- max(n_cat_per_ord_test)
             if (is.null(model_args_list$prior_dirichlet_alpha)) {
                   model_args_list$prior_dirichlet_alpha <- rep(list(matrix(1.0, nrow = expected_nrow, 
-                                                                           ncol = n_ordinal_tests)), n_class)
+                                                                           ncol = n_ordinal_tests)), n_dirichlet_slices)
             } else {
-                  for (c in 1:n_class) {
+                  if (is.array(model_args_list$prior_dirichlet_alpha) &&
+                      length(dim(model_args_list$prior_dirichlet_alpha)) == 3L) {
+                        raw_alpha_arr <- model_args_list$prior_dirichlet_alpha
+                        model_args_list$prior_dirichlet_alpha <- lapply(
+                              seq_len(n_dirichlet_slices),
+                              function(slice_index) {
+                                    alpha_mat <- matrix(
+                                          as.numeric(raw_alpha_arr[slice_index, , ]),
+                                          nrow = dim(raw_alpha_arr)[2L],
+                                          ncol = dim(raw_alpha_arr)[3L]
+                                    )
+                                    return(alpha_mat)
+                              }
+                        )
+                  }
+                  for (c in 1:n_dirichlet_slices) {
                         m <- model_args_list$prior_dirichlet_alpha[[c]]
                         if (nrow(m) != expected_nrow || ncol(m) != n_ordinal_tests) {
                           stop(paste0("prior_dirichlet_alpha[[", c, "]] is ", nrow(m), "x", ncol(m),
@@ -530,44 +545,201 @@ init_hard_coded_model_args <- function( Model_type,
                   }
             }
         } else { 
-            model_args_list$prior_dirichlet_alpha <- rep(list(matrix(1.0, nrow = 1, ncol = 1)), n_class)  # dummy
+            model_args_list$prior_dirichlet_alpha <- rep(list(matrix(1.0, nrow = 1, ncol = 1)), n_dirichlet_slices)
         }
         ##
-        # if (Model_type %in% c("MVP", "LC_MVP")) {
-        #       
-        #       model_args_list$n_binary_tests <- n_tests
-        #       model_args_list$n_ordinal_tests <- 0
-        #       model_args_list$n_cutpoints_total <- 0
-        #   
-        # } else if (Model_type %in% c("MVOP", "LC_MVOP")) { 
-        #   
-        #       ## put ordinal stuff here (need to detect "n_bin_tests" from y!)
-        # }
-        ##
-        outs <- process_covariates_X( Model_type = Model_type,
-                                      X = model_args_list$X,
-                                      N = model_args_list$N,
-                                      n_tests = model_args_list$n_tests,
-                                      n_class = model_args_list$n_class,
-                                      n_covariates_per_outcome_mat_given =
-                                            model_args_list$n_covariates_per_outcome_mat)
-        X <- outs$X
-        model_args_list$X <- outs$X
-        ##
-        n_covariates_per_outcome_mat <- outs$n_covariates_per_outcome_mat
-        model_args_list$n_covariates_per_outcome_mat <- outs$n_covariates_per_outcome_mat
-        ##
-        n_covariates_max <- outs$n_covariates_max
-        model_args_list$n_covariates_max <- outs$n_covariates_max
-        ##
-        n_covariates_max_nd <- outs$n_covariates_max_nd
-        model_args_list$n_covariates_max_nd <- outs$n_covariates_max_nd
-        ##
-        n_covariates_max_d <- outs$n_covariates_max_d
-        model_args_list$n_covariates_max_d <- outs$n_covariates_max_d
-        ##
-        n_covariates_total <- outs$n_covariates_total
-        model_args_list$n_covariates_total <- outs$n_covariates_total
+        if (!(Model_type %in% c("CLC_MVOP", "CLC-MVOP"))) {
+            outs <- process_covariates_X( Model_type = Model_type,
+                                          X = model_args_list$X,
+                                          N = model_args_list$N,
+                                          n_tests = model_args_list$n_tests,
+                                          n_class = model_args_list$n_class,
+                                          n_covariates_per_outcome_mat_given =
+                                                model_args_list$n_covariates_per_outcome_mat)
+            X <- outs$X
+            model_args_list$X <- outs$X
+            ##
+            n_covariates_per_outcome_mat <- outs$n_covariates_per_outcome_mat
+            model_args_list$n_covariates_per_outcome_mat <- outs$n_covariates_per_outcome_mat
+            ##
+            n_covariates_max <- outs$n_covariates_max
+            model_args_list$n_covariates_max <- outs$n_covariates_max
+            ##
+            n_covariates_max_nd <- outs$n_covariates_max_nd
+            model_args_list$n_covariates_max_nd <- outs$n_covariates_max_nd
+            ##
+            n_covariates_max_d <- outs$n_covariates_max_d
+            model_args_list$n_covariates_max_d <- outs$n_covariates_max_d
+            ##
+            n_covariates_total <- outs$n_covariates_total
+            model_args_list$n_covariates_total <- outs$n_covariates_total
+        } else {
+            raw_covariate_X <- model_args_list$X
+            if (is.null(raw_covariate_X)) {
+                n_covariates_max <- if (is.null(model_args_list$n_covariates_max)) 1L else max(1L, as.integer(model_args_list$n_covariates_max))
+                X_class_test_list <- lapply(
+                    seq_len(n_class),
+                    function(class_index) {
+                        return(lapply(
+                            seq_len(n_tests),
+                            function(test_index) {
+                                mat_cur <- matrix(
+                                    0.0,
+                                    nrow = N,
+                                    ncol = n_covariates_max
+                                )
+                                mat_cur[, 1L] <- 1.0
+                                return(mat_cur)
+                            }
+                        ))
+                    }
+                )
+            } else if (is.array(raw_covariate_X) && length(dim(raw_covariate_X)) == 4L) {
+                dim_X <- dim(raw_covariate_X)
+                if (dim_X[1L] != n_class || dim_X[2L] != n_tests || dim_X[3L] != N) {
+                    stop("CLC_MVOP: 4D array X must have dimensions [4, n_tests, N, n_covariates_max].")
+                }
+                n_covariates_max <- max(1L, as.integer(dim_X[4L]))
+                X_class_test_list <- lapply(
+                    seq_len(n_class),
+                    function(class_index) {
+                        return(lapply(
+                            seq_len(n_tests),
+                            function(test_index) {
+                                mat_cur <- matrix(
+                                    as.numeric(raw_covariate_X[class_index, test_index, , ]),
+                                    nrow = N,
+                                    ncol = n_covariates_max
+                                )
+                                return(mat_cur)
+                            }
+                        ))
+                    }
+                )
+            } else if (is.list(raw_covariate_X) && length(raw_covariate_X) == n_class && is.list(raw_covariate_X[[1L]])) {
+                max_cols <- 1L
+                for (class_index in seq_len(n_class)) {
+                    for (test_index in seq_len(n_tests)) {
+                        mat_cur <- as.matrix(raw_covariate_X[[class_index]][[test_index]])
+                        if (ncol(mat_cur) > max_cols) {
+                            max_cols <- as.integer(ncol(mat_cur))
+                        }
+                    }
+                }
+                n_covariates_max <- if (is.null(model_args_list$n_covariates_max)) max_cols else max(max_cols, as.integer(model_args_list$n_covariates_max))
+                X_class_test_list <- lapply(
+                    seq_len(n_class),
+                    function(class_index) {
+                        return(lapply(
+                            seq_len(n_tests),
+                            function(test_index) {
+                                mat_src <- as.matrix(raw_covariate_X[[class_index]][[test_index]])
+                                storage.mode(mat_src) <- "double"
+                                if (ncol(mat_src) == n_covariates_max) {
+                                    return(mat_src)
+                                }
+                                mat_pad <- matrix(
+                                    0.0,
+                                    nrow = N,
+                                    ncol = n_covariates_max
+                                )
+                                if (ncol(mat_src) > 0L) {
+                                    mat_pad[, seq_len(ncol(mat_src))] <- mat_src
+                                }
+                                return(mat_pad)
+                            }
+                        ))
+                    }
+                )
+            } else if (is.list(raw_covariate_X) && length(raw_covariate_X) == n_tests && is.matrix(raw_covariate_X[[1L]])) {
+                max_cols <- max(
+                    1L,
+                    unlist(sapply(
+                               raw_covariate_X,
+                               function(mat_item) as.integer(ncol(as.matrix(mat_item)))
+                           ))
+                )
+                n_covariates_max <- if (is.null(model_args_list$n_covariates_max)) max_cols else max(max_cols, as.integer(model_args_list$n_covariates_max))
+                X_per_test <- lapply(
+                    seq_len(n_tests),
+                    function(test_index) {
+                        mat_src <- as.matrix(raw_covariate_X[[test_index]])
+                        storage.mode(mat_src) <- "double"
+                        if (ncol(mat_src) == n_covariates_max) {
+                            return(mat_src)
+                        }
+                        mat_pad <- matrix(
+                            0.0,
+                            nrow = N,
+                            ncol = n_covariates_max
+                        )
+                        if (ncol(mat_src) > 0L) {
+                            mat_pad[, seq_len(ncol(mat_src))] <- mat_src
+                        }
+                        return(mat_pad)
+                    }
+                )
+                X_class_test_list <- rep(
+                    list(X_per_test),
+                    n_class
+                )
+            } else if (is.matrix(raw_covariate_X)) {
+                covariate_matrix <- as.matrix(raw_covariate_X)
+                storage.mode(covariate_matrix) <- "double"
+                n_covariates_max <- max(1L, as.integer(ncol(covariate_matrix)))
+                X_class_test_list <- lapply(
+                    seq_len(n_class),
+                    function(class_index) {
+                        return(lapply(
+                            seq_len(n_tests),
+                            function(test_index) {
+                                return(covariate_matrix)
+                            }
+                        ))
+                    }
+                )
+            } else {
+                stop("CLC_MVOP: X must be a 4D array [4, n_tests, N, K], nested list [[4]][[n_tests]], list of n_tests matrices, or single [N x K] matrix.")
+            }
+            model_args_list$X <- X_class_test_list
+            model_args_list$n_covariates_max <- n_covariates_max
+            model_args_list$n_covariates_max_nd <- n_covariates_max
+            model_args_list$n_covariates_max_d <- n_covariates_max
+            raw_ncov <- if (!is.null(model_args_list$n_covs_per_outcome)) {
+                model_args_list$n_covs_per_outcome
+            } else {
+                model_args_list$n_covariates_per_outcome_mat
+            }
+            if (is.null(raw_ncov)) {
+                n_covs_mat <- matrix(
+                    as.integer(n_covariates_max),
+                    nrow = n_class,
+                    ncol = n_tests
+                )
+            } else if (is.matrix(raw_ncov) && nrow(raw_ncov) == n_class && ncol(raw_ncov) == n_tests) {
+                n_covs_mat <- matrix(
+                    as.integer(raw_ncov),
+                    nrow = n_class,
+                    ncol = n_tests
+                )
+            } else if (length(raw_ncov) == n_tests) {
+                n_covs_mat <- matrix(
+                    rep(
+                        as.integer(raw_ncov),
+                        each = n_class
+                    ),
+                    nrow = n_class,
+                    ncol = n_tests,
+                    byrow = FALSE
+                )
+            } else {
+                stop("CLC_MVOP: n_covs_per_outcome must be a [4 x n_tests] matrix or length-n_tests integer vector.")
+            }
+            model_args_list$n_covs_per_outcome <- n_covs_mat
+            model_args_list$n_covariates_per_outcome_mat <- n_covs_mat
+            n_covariates_total <- as.integer(sum(n_covs_mat))
+            model_args_list$n_covariates_total <- n_covariates_total
+        }
         
         ##
         ## ---- Native-model math settings: check the USER-SUPPLIED vect_type / vect_type_* / Phi_type /
@@ -596,7 +768,8 @@ init_hard_coded_model_args <- function( Model_type,
         ##
         model_args_list_as_requested_with_default_vect_type <-  model_args_list
         model_args_list_as_requested_with_default_vect_type[["vect_type"]] <-  if_null_then_set_to( model_args_list[["vect_type"]],
-                                                                                                    default_vect_type_for_native_models)
+                                                                                                    default_vect_type_for_native_models,
+                                                                                                    debugging = FALSE)
         ##
         fn_check_native_model_vect_types_and_Phi_types( Model_type                                          = Model_type,
                                                         model_args_list                                     = model_args_list_as_requested_with_default_vect_type,
@@ -618,7 +791,8 @@ init_hard_coded_model_args <- function( Model_type,
                           C_raw_lower = -15,    ## ---- ordinal-only
                           C_raw_upper = +2.5,   ## ---- ordinal-only
                           ##
-                          num_chunks = find_num_chunks_MVP(N, n_tests),
+                          num_chunks = find_num_chunks_MVP(N,
+                                                           n_tests),
                           ##
                           corr_force_positive = FALSE,
                           corr_param = "Sean",
@@ -667,7 +841,7 @@ init_hard_coded_model_args <- function( Model_type,
         ##
         ## ---- Handle covariates:
         ##
-        if (is.null(model_args_list$X)) {
+        if (!(Model_type %in% c("CLC_MVOP", "CLC-MVOP")) && is.null(model_args_list$X)) {
           model_args_list$X <- matrix(1, nrow = N, ncol = 1)
         }
         
@@ -706,16 +880,18 @@ init_hard_coded_model_args <- function( Model_type,
         # }
         
         # Initialize prior matrices
-        if (is.null(model_args_list$prior_coeffs_mean_mat)) {
-          model_args_list$prior_coeffs_mean_mat <- list()
-          for (c in 1:n_class) {
-            model_args_list$prior_coeffs_mean_mat[[c]] <- matrix(0.0, nrow = n_covariates_max, ncol = n_tests)
+        if (!(Model_type %in% c("CLC_MVOP", "CLC-MVOP"))) {
+          if (is.null(model_args_list$prior_coeffs_mean_mat)) {
+            model_args_list$prior_coeffs_mean_mat <- list()
+            for (c in 1:n_class) {
+              model_args_list$prior_coeffs_mean_mat[[c]] <- matrix(0.0, nrow = n_covariates_max, ncol = n_tests)
+            }
           }
-        }
-        if (is.null(model_args_list$prior_coeffs_sd_mat)) {
-          model_args_list$prior_coeffs_sd_mat <- list()
-          for (c in 1:n_class) {
-            model_args_list$prior_coeffs_sd_mat[[c]] <- matrix(1.0, nrow = n_covariates_max, ncol = n_tests)
+          if (is.null(model_args_list$prior_coeffs_sd_mat)) {
+            model_args_list$prior_coeffs_sd_mat <- list()
+            for (c in 1:n_class) {
+              model_args_list$prior_coeffs_sd_mat[[c]] <- matrix(1.0, nrow = n_covariates_max, ncol = n_tests)
+            }
           }
         }
         
@@ -723,7 +899,26 @@ init_hard_coded_model_args <- function( Model_type,
         # if (Model_type %in% c("MVP", "LC_MVP")) {
             # LKJ prior
             if (is.null(model_args_list$lkj_cholesky_eta)) {
-              model_args_list$lkj_cholesky_eta <- matrix(2.0, nrow = n_class, ncol = 1)
+              if (!is.null(model_args_list$prior_LKJ)) {
+                prior_LKJ_numeric <- as.numeric(model_args_list$prior_LKJ)
+                if (length(prior_LKJ_numeric) == 1L) {
+                  prior_LKJ_numeric <- rep(
+                    prior_LKJ_numeric,
+                    n_class
+                  )
+                }
+                model_args_list$lkj_cholesky_eta <- matrix(
+                  prior_LKJ_numeric,
+                  nrow = n_class,
+                  ncol = 1L
+                )
+              } else {
+                model_args_list$lkj_cholesky_eta <- matrix(
+                  2.0,
+                  nrow = n_class,
+                  ncol = 1L
+                )
+              }
             }
             model_args_list$prior_LKJ <- model_args_list$lkj_cholesky_eta
        
@@ -789,6 +984,436 @@ init_hard_coded_model_args <- function( Model_type,
                                                         compiled_SIMD_levels                                = compiled_SIMD_levels_of_BayesMVP,
                                                         per_kernel_vect_type_names_overwritten_by_vect_type = per_kernel_vect_type_names_overwritten_by_vect_type)
 
+        if (Model_type %in% c("CLC_MVOP", "CLC-MVOP")) {
+                y_integer_matrix <- as.matrix(model_args_list$y)
+                storage.mode(y_integer_matrix) <- "integer"
+                model_args_list$y <- y_integer_matrix
+                ##
+                ## ---- Convert any 3D array correlation bounds / known matrices into lists of 4 matrices:
+                ##
+                for (corr_field_name in c("lb_corr", "ub_corr", "known_values_list", "known_values_indicator_list")) {
+                        raw_corr_obj <- model_args_list[[corr_field_name]]
+                        if (is.array(raw_corr_obj) && length(dim(raw_corr_obj)) == 3L) {
+                                is_ind_field <- identical(corr_field_name, "known_values_indicator_list")
+                                model_args_list[[corr_field_name]] <- lapply(
+                                        seq_len(n_class),
+                                        function(class_index) {
+                                                mat_cur <- matrix(
+                                                        if (is_ind_field) as.integer(raw_corr_obj[class_index, , ]) else as.numeric(raw_corr_obj[class_index, , ]),
+                                                        nrow = n_tests,
+                                                        ncol = n_tests
+                                                )
+                                                return(mat_cur)
+                                        }
+                                )
+                        }
+                }
+                ##
+                ## ---- CLC_MVOP defaults:
+                ##
+                clc_defaults <- list(
+                        test_perm = seq_len(n_tests),
+                        is_perfect_ref = rep(0L, n_tests),
+                        perfect_ref_M = 8.0,
+                        pop_weight = rep(1.0 / as.integer(model_args_list$n_pops), as.integer(model_args_list$n_pops)),
+                        n_standardisation = as.integer(N),
+                        standardisation_index = seq_len(N),
+                        use_label_constraint = 0L,
+                        cutoff_category = rep(2L, n_tests),
+                        save_subject_probs = 0L,
+                        pool_correlations_across_classes = 0L,
+                        prior_LKJ_global = 2.0,
+                        prior_LKJ_departure = 2.0,
+                        prior_lambda_shape_a = 2.0,
+                        prior_lambda_shape_b = 2.0,
+                        use_pop_prev_prior = 0L,
+                        prior_mu_logit_A_mean = -3.0,
+                        prior_mu_logit_A_sd = 1.0,
+                        prior_mu_logit_B_mean = -4.0,
+                        prior_mu_logit_B_sd = 1.0,
+                        prior_sigma_logit_sd = 1.0,
+                        use_Se_Sp_prior = 0L,
+                        Se_Sp_prior_type = 4L,
+                        use_pop_Se_Sp_prior = 0L
+                )
+                for (default_name in names(clc_defaults)) {
+                        if (is.null(model_args_list[[default_name]])) {
+                                model_args_list[[default_name]] <- clc_defaults[[default_name]]
+                        }
+                }
+                ##
+                ## ---- Validate test_perm and interval-censored upper matrix:
+                ##
+                test_perm_int <- as.integer(model_args_list$test_perm)
+                if (length(test_perm_int) != n_tests || !identical(sort(test_perm_int), seq_len(n_tests))) {
+                        stop("init_hard_coded_model_args (CLC_MVOP): test_perm must be a permutation of 1:n_tests.")
+                }
+                model_args_list$test_perm <- test_perm_int
+                ##
+                if (is.null(model_args_list$y_upper_when_interval_censored)) {
+                        y_upper_matrix <- y_integer_matrix
+                        has_y_upper_flag <- FALSE
+                } else {
+                        y_upper_matrix <- as.matrix(model_args_list$y_upper_when_interval_censored)
+                        storage.mode(y_upper_matrix) <- "integer"
+                        has_y_upper_flag <- any(y_upper_matrix != y_integer_matrix & y_integer_matrix >= 0L)
+                }
+                model_args_list$y_upper_when_interval_censored <- y_upper_matrix
+                model_args_list$has_y_upper <- has_y_upper_flag
+                ##
+                ## ---- Factorial class_D, test_condition, reference tests, and cutoff_category:
+                ##
+                if (is.null(model_args_list$class_D)) {
+                        class_D_matrix <- matrix(
+                                c(0L, 1L, 0L, 1L,
+                                  0L, 0L, 1L, 1L),
+                                nrow = 4L,
+                                ncol = 2L
+                        )
+                } else {
+                        class_D_matrix <- as.matrix(model_args_list$class_D)
+                        storage.mode(class_D_matrix) <- "integer"
+                }
+                model_args_list$class_D <- class_D_matrix
+                ##
+                if (is.null(model_args_list$test_condition)) {
+                        default_condition <- rep(1L, n_tests)
+                        if (n_tests >= 2L) {
+                                default_condition[seq(2L, n_tests, by = 2L)] <- 2L
+                        }
+                        model_args_list$test_condition <- default_condition
+                } else {
+                        model_args_list$test_condition <- as.integer(model_args_list$test_condition)
+                }
+                model_args_list$is_perfect_ref <- as.integer(model_args_list$is_perfect_ref)
+                model_args_list$perfect_ref_M <- as.numeric(model_args_list$perfect_ref_M)
+                if (is.null(model_args_list$reference_test)) {
+                        cond_A_slots <- which(model_args_list$test_condition == 1L)
+                        cond_B_slots <- which(model_args_list$test_condition == 2L)
+                        ref_A_orig <- if (length(cond_A_slots) > 0L) test_perm_int[cond_A_slots[1L]] else 1L
+                        ref_B_orig <- if (length(cond_B_slots) > 0L) test_perm_int[cond_B_slots[1L]] else min(2L, n_tests)
+                        model_args_list$reference_test <- c(
+                                as.integer(ref_A_orig),
+                                as.integer(ref_B_orig)
+                        )
+                } else {
+                        model_args_list$reference_test <- as.integer(model_args_list$reference_test)
+                }
+                model_args_list$cutoff_category <- as.integer(model_args_list$cutoff_category)
+                model_args_list$use_label_constraint <- as.integer(model_args_list$use_label_constraint)
+                ##
+                ## ---- Populations and standardisation weights:
+                ##
+                n_pops_clc <- as.integer(model_args_list$n_pops)
+                model_args_list$n_pops <- n_pops_clc
+                model_args_list$pop <- as.integer(model_args_list$pop)
+                model_args_list$pop_weight <- as.numeric(model_args_list$pop_weight)
+                n_standardisation_clc <- as.integer(model_args_list$n_standardisation)
+                model_args_list$n_standardisation <- n_standardisation_clc
+                model_args_list$standardisation_index <- as.integer(model_args_list$standardisation_index)
+                if (is.null(model_args_list$standardisation_weight)) {
+                        model_args_list$standardisation_weight <- rep(1.0, n_standardisation_clc)
+                } else {
+                        model_args_list$standardisation_weight <- as.numeric(model_args_list$standardisation_weight)
+                }
+                model_args_list$save_subject_probs <- as.integer(model_args_list$save_subject_probs)
+                ##
+                ## ---- Per-class baseline_case (stored as list of 4 [K_max x n_tests] matrices):
+                ##
+                if (is.null(model_args_list$baseline_case)) {
+                        baseline_case_list <- lapply(
+                                seq_len(n_class),
+                                function(class_index) {
+                                        mat_cur <- matrix(
+                                                0.0,
+                                                nrow = n_covariates_max,
+                                                ncol = n_tests
+                                        )
+                                        mat_cur[1L, ] <- 1.0
+                                        return(mat_cur)
+                                }
+                        )
+                } else if (is.array(model_args_list$baseline_case) && length(dim(model_args_list$baseline_case)) == 3L) {
+                        raw_bc <- model_args_list$baseline_case
+                        baseline_case_list <- lapply(
+                                seq_len(n_class),
+                                function(class_index) {
+                                        mat_cur <- matrix(
+                                                0.0,
+                                                nrow = n_covariates_max,
+                                                ncol = n_tests
+                                        )
+                                        for (test_index in seq_len(n_tests)) {
+                                                mat_cur[, test_index] <- as.numeric(raw_bc[class_index, test_index, seq_len(n_covariates_max)])
+                                        }
+                                        return(mat_cur)
+                                }
+                        )
+                } else if (is.list(model_args_list$baseline_case) &&
+                           length(model_args_list$baseline_case) == n_class &&
+                           is.matrix(model_args_list$baseline_case[[1L]])) {
+                        baseline_case_list <- lapply(
+                                seq_len(n_class),
+                                function(class_index) {
+                                        mat_cur <- as.matrix(model_args_list$baseline_case[[class_index]])
+                                        storage.mode(mat_cur) <- "double"
+                                        return(mat_cur)
+                                }
+                        )
+                } else if (is.list(model_args_list$baseline_case) &&
+                           length(model_args_list$baseline_case) == n_class &&
+                           is.list(model_args_list$baseline_case[[1L]])) {
+                        baseline_case_list <- lapply(
+                                seq_len(n_class),
+                                function(class_index) {
+                                        mat_cur <- matrix(
+                                                0.0,
+                                                nrow = n_covariates_max,
+                                                ncol = n_tests
+                                        )
+                                        for (test_index in seq_len(n_tests)) {
+                                                vec_cur <- as.numeric(model_args_list$baseline_case[[class_index]][[test_index]])
+                                                len_copy <- min(
+                                                        length(vec_cur),
+                                                        n_covariates_max
+                                                )
+                                                if (len_copy > 0L) {
+                                                        mat_cur[seq_len(len_copy), test_index] <- vec_cur[seq_len(len_copy)]
+                                                }
+                                        }
+                                        return(mat_cur)
+                                }
+                        )
+                } else {
+                        stop("init_hard_coded_model_args (CLC_MVOP): baseline_case must be a [4, n_tests, K_max] array, list of 4 [K_max x n_tests] matrices, or nested list [[4]][[n_tests]].")
+                }
+                model_args_list$baseline_case <- baseline_case_list
+                ##
+                ## ---- Prevalence covariates:
+                ##
+                if (is.null(model_args_list$X_prevalence)) {
+                        n_prev_cov_clc <- if (is.null(model_args_list$n_prevalence_covariates)) {
+                                0L
+                        } else {
+                                as.integer(model_args_list$n_prevalence_covariates)
+                        }
+                        model_args_list$X_prevalence <- matrix(
+                                0.0,
+                                nrow = N,
+                                ncol = n_prev_cov_clc
+                        )
+                } else {
+                        X_prev_matrix <- as.matrix(model_args_list$X_prevalence)
+                        storage.mode(X_prev_matrix) <- "double"
+                        if (is.null(model_args_list$n_prevalence_covariates)) {
+                                n_prev_cov_clc <- as.integer(ncol(X_prev_matrix))
+                        } else {
+                                n_prev_cov_clc <- as.integer(model_args_list$n_prevalence_covariates)
+                                if (ncol(X_prev_matrix) != n_prev_cov_clc) {
+                                        stop("init_hard_coded_model_args (CLC_MVOP): ncol(X_prevalence) does not match n_prevalence_covariates.")
+                                }
+                        }
+                        model_args_list$X_prevalence <- X_prev_matrix
+                }
+                model_args_list$n_prevalence_covariates <- n_prev_cov_clc
+                if (is.null(model_args_list$prior_beta_prevalence_A_mean)) {
+                        model_args_list$prior_beta_prevalence_A_mean <- numeric(n_prev_cov_clc)
+                } else {
+                        model_args_list$prior_beta_prevalence_A_mean <- as.numeric(model_args_list$prior_beta_prevalence_A_mean)
+                }
+                if (is.null(model_args_list$prior_beta_prevalence_A_sd)) {
+                        model_args_list$prior_beta_prevalence_A_sd <- rep(0.5, n_prev_cov_clc)
+                } else {
+                        model_args_list$prior_beta_prevalence_A_sd <- as.numeric(model_args_list$prior_beta_prevalence_A_sd)
+                }
+                if (is.null(model_args_list$prior_beta_prevalence_B_mean)) {
+                        model_args_list$prior_beta_prevalence_B_mean <- numeric(n_prev_cov_clc)
+                } else {
+                        model_args_list$prior_beta_prevalence_B_mean <- as.numeric(model_args_list$prior_beta_prevalence_B_mean)
+                }
+                if (is.null(model_args_list$prior_beta_prevalence_B_sd)) {
+                        model_args_list$prior_beta_prevalence_B_sd <- rep(0.5, n_prev_cov_clc)
+                } else {
+                        model_args_list$prior_beta_prevalence_B_sd <- as.numeric(model_args_list$prior_beta_prevalence_B_sd)
+                }
+                ##
+                ## ---- Per-class beta prior mean/sd (list of 4 [K_max x n_tests] matrices):
+                ##
+                normalise_clc_beta_prior <- function(raw_prior, default_fill) {
+                        if (is.null(raw_prior)) {
+                                return(lapply(
+                                        seq_len(n_class),
+                                        function(class_index) {
+                                                return(matrix(
+                                                        default_fill,
+                                                        nrow = n_covariates_max,
+                                                        ncol = n_tests
+                                                ))
+                                        }
+                                ))
+                        }
+                        if (is.array(raw_prior) && length(dim(raw_prior)) == 3L) {
+                                return(lapply(
+                                        seq_len(n_class),
+                                        function(class_index) {
+                                                mat_cur <- matrix(
+                                                        as.numeric(raw_prior[class_index, , ]),
+                                                        nrow = dim(raw_prior)[2L],
+                                                        ncol = dim(raw_prior)[3L]
+                                                )
+                                                return(mat_cur)
+                                        }
+                                ))
+                        }
+                        if (is.list(raw_prior) && length(raw_prior) == n_class) {
+                                return(lapply(
+                                        seq_len(n_class),
+                                        function(class_index) {
+                                                mat_cur <- as.matrix(raw_prior[[class_index]])
+                                                storage.mode(mat_cur) <- "double"
+                                                return(mat_cur)
+                                        }
+                                ))
+                        }
+                        stop("init_hard_coded_model_args (CLC_MVOP): prior_beta_mean / prior_beta_sd must be a [4, K_max, n_tests] array or list of 4 [K_max x n_tests] matrices.")
+                }
+                raw_bm <- if (!is.null(model_args_list$prior_beta_mean)) model_args_list$prior_beta_mean else model_args_list$prior_coeffs_mean_mat
+                raw_bs <- if (!is.null(model_args_list$prior_beta_sd)) model_args_list$prior_beta_sd else model_args_list$prior_coeffs_sd_mat
+                model_args_list$prior_beta_mean <- normalise_clc_beta_prior(
+                        raw_bm,
+                        0.0
+                )
+                model_args_list$prior_beta_sd <- normalise_clc_beta_prior(
+                        raw_bs,
+                        1.0
+                )
+                model_args_list$prior_coeffs_mean_mat <- model_args_list$prior_beta_mean
+                model_args_list$prior_coeffs_sd_mat <- model_args_list$prior_beta_sd
+                ##
+                ## ---- Correlation pooling and prevalence switches:
+                ##
+                pool_corr_clc <- as.integer(model_args_list$pool_correlations_across_classes)
+                if (!(pool_corr_clc %in% 0:1)) {
+                        stop("init_hard_coded_model_args (CLC_MVOP): pool_correlations_across_classes must be 0 or 1.")
+                }
+                model_args_list$pool_correlations_across_classes <- pool_corr_clc
+                model_args_list$prior_LKJ_global <- as.numeric(model_args_list$prior_LKJ_global)
+                model_args_list$prior_LKJ_departure <- as.numeric(model_args_list$prior_LKJ_departure)
+                model_args_list$prior_lambda_shape_a <- as.numeric(model_args_list$prior_lambda_shape_a)
+                model_args_list$prior_lambda_shape_b <- as.numeric(model_args_list$prior_lambda_shape_b)
+                ##
+                model_args_list$use_pop_prev_prior <- as.integer(model_args_list$use_pop_prev_prior)
+                model_args_list$prior_mu_logit_A_mean <- as.numeric(model_args_list$prior_mu_logit_A_mean)
+                model_args_list$prior_mu_logit_A_sd <- as.numeric(model_args_list$prior_mu_logit_A_sd)
+                model_args_list$prior_mu_logit_B_mean <- as.numeric(model_args_list$prior_mu_logit_B_mean)
+                model_args_list$prior_mu_logit_B_sd <- as.numeric(model_args_list$prior_mu_logit_B_sd)
+                prior_sigma_logit_sd_clc <- as.numeric(model_args_list$prior_sigma_logit_sd)
+                model_args_list$prior_sigma_logit_sd <- prior_sigma_logit_sd_clc
+                if (is.null(model_args_list$prior_sigma_logit_A_sd)) {
+                        model_args_list$prior_sigma_logit_A_sd <- prior_sigma_logit_sd_clc
+                } else {
+                        model_args_list$prior_sigma_logit_A_sd <- as.numeric(model_args_list$prior_sigma_logit_A_sd)
+                }
+                if (is.null(model_args_list$prior_sigma_logit_B_sd)) {
+                        model_args_list$prior_sigma_logit_B_sd <- prior_sigma_logit_sd_clc
+                } else {
+                        model_args_list$prior_sigma_logit_B_sd <- as.numeric(model_args_list$prior_sigma_logit_B_sd)
+                }
+                if (is.null(model_args_list$prior_logit_prob_B_given_A_mean)) {
+                        if (!is.null(model_args_list$prior_logit_Q_mean)) {
+                                model_args_list$prior_logit_prob_B_given_A_mean <- as.numeric(model_args_list$prior_logit_Q_mean)
+                        } else {
+                                model_args_list$prior_logit_prob_B_given_A_mean <- -1.5
+                        }
+                } else {
+                        model_args_list$prior_logit_prob_B_given_A_mean <- as.numeric(model_args_list$prior_logit_prob_B_given_A_mean)
+                }
+                if (is.null(model_args_list$prior_logit_prob_B_given_A_sd)) {
+                        if (!is.null(model_args_list$prior_logit_Q_sd)) {
+                                model_args_list$prior_logit_prob_B_given_A_sd <- as.numeric(model_args_list$prior_logit_Q_sd)
+                        } else {
+                                model_args_list$prior_logit_prob_B_given_A_sd <- 1.0
+                        }
+                } else {
+                        model_args_list$prior_logit_prob_B_given_A_sd <- as.numeric(model_args_list$prior_logit_prob_B_given_A_sd)
+                }
+                model_args_list$use_Se_Sp_prior <- as.integer(model_args_list$use_Se_Sp_prior)
+                model_args_list$Se_Sp_prior_type <- as.integer(model_args_list$Se_Sp_prior_type)
+                model_args_list$use_pop_Se_Sp_prior <- as.integer(model_args_list$use_pop_Se_Sp_prior)
+                ##
+                ## ---- Normalise 4-class n_chosen_cutoffs (accepting n_chosen alias):
+                ##
+                n_ord_pad <- max(
+                        1L,
+                        n_ordinal_tests
+                )
+                raw_n_chosen <- if (!is.null(model_args_list$n_chosen_cutoffs)) {
+                        model_args_list$n_chosen_cutoffs
+                } else {
+                        model_args_list$n_chosen
+                }
+                if (is.null(raw_n_chosen)) {
+                        n_chosen_mat <- matrix(
+                                0L,
+                                nrow = n_class,
+                                ncol = n_ord_pad
+                        )
+                } else {
+                        n_chosen_mat <- matrix(
+                                as.integer(raw_n_chosen),
+                                nrow = n_class,
+                                ncol = n_ord_pad
+                        )
+                }
+                model_args_list$n_chosen_cutoffs <- n_chosen_mat
+                model_args_list$n_chosen <- n_chosen_mat
+                n_chosen_max_clc <- if (!is.null(model_args_list$n_chosen_cutoffs_max)) {
+                        max(
+                                1L,
+                                as.integer(model_args_list$n_chosen_cutoffs_max),
+                                as.integer(max(n_chosen_mat))
+                        )
+                } else {
+                        max(
+                                1L,
+                                as.integer(max(n_chosen_mat))
+                        )
+                }
+                model_args_list$n_chosen_cutoffs_max <- n_chosen_max_clc
+                ##
+                ## ---- Recompute exact CLC_MVOP parameter dimensions after all defaults are resolved:
+                ##
+                all_correlations_zero <- TRUE
+                for (class_index in seq_len(n_class)) {
+                        known_indicator_mat <- model_args_list$known_values_indicator_list[[class_index]]
+                        known_value_mat <- model_args_list$known_values_list[[class_index]]
+                        for (row_index in 2:n_tests) {
+                                for (col_index in 1:(row_index - 1L)) {
+                                        if (as.integer(known_indicator_mat[row_index, col_index]) == 0L) {
+                                                all_correlations_zero <- FALSE
+                                        } else if (as.numeric(known_value_mat[row_index, col_index]) != 0.0) {
+                                                all_correlations_zero <- FALSE
+                                        }
+                                }
+                        }
+                }
+                dims_clc <- get_dims_for_internal_models(
+                        y = model_args_list$y,
+                        Model_type = Model_type,
+                        n_tests = n_tests,
+                        n_class = n_class,
+                        n_pops = n_pops_clc,
+                        N = N,
+                        n_covariates_total = model_args_list$n_covariates_total,
+                        n_cat_per_ord_test = model_args_list$n_cat_per_ord_test,
+                        model_args_list = model_args_list
+                )
+                model_args_list$CI <- isTRUE(all_correlations_zero)
+                model_args_list$n_corrs <- dims_clc$n_corrs
+                model_args_list$n_params_main <- dims_clc$n_params_main
+                model_args_list$n_nuisance <- dims_clc$n_nuisance
+                model_args_list$n_params <- dims_clc$n_params
+        }
         return(model_args_list)
         
 }
@@ -796,11 +1421,6 @@ init_hard_coded_model_args <- function( Model_type,
 
 
 
-
-#' Helper for null defaults
-`%||%` <- function(x, y) {
-  if (is.null(x)) y else x
-}
 
 
 
@@ -822,24 +1442,18 @@ fn_Se_Sp_prior_Model_args <- function(model_args_list,
         ##      prior_Se_Sp_dirichlet_A [class, ordinal test, j],
         ##      prior_Se_Sp_beta [class, ordinal test, j, a / b],
         ##      prior_Se_Sp_link_mean_SD [class, ordinal test, j, mean / SD]
-        ##      (unset: every cutoff, mean 0 and SD 1). Binary tests (the prior replaces the intercept prior):
-        ##      Se_Sp_binary_n_chosen [class], Se_Sp_binary_chosen_tests [class, j] (test columns, 1-based),
-        ##      Se_Sp_binary_dirichlet_A, Se_Sp_binary_beta, Se_Sp_binary_link_mean_SD [class, j, 1 / 2]
-        ##      (unset: no binary test chosen).
+        ##      (unset: every cutoff, mean 0 and SD 1).
         ##
-        use_Se_Sp_prior <- model_args_list$use_Se_Sp_prior %||% 0L
+        use_Se_Sp_prior <- if (is.null(model_args_list$use_Se_Sp_prior)) 0L else model_args_list$use_Se_Sp_prior
         dummy_int <- rep(list(matrix(-1L, nrow = 1, ncol = 1)), n_class)
         dummy_double <- rep(list(matrix(0.0, nrow = 1, ncol = 1)), n_class)
         if (use_Se_Sp_prior == 0) {
               return(list(chosen_cutoffs = dummy_int,
-                          binary_chosen = dummy_int,
                           A = dummy_double,
                           beta_a = dummy_double,
                           beta_b = dummy_double,
                           link_mean = dummy_double,
-                          link_SD = dummy_double,
-                          baseline_case = dummy_double,
-                          binary_hyper = dummy_double))
+                          link_SD = dummy_double))
         }
         ##
         ## ---- ordinal tests:
@@ -847,8 +1461,7 @@ fn_Se_Sp_prior_Model_args <- function(model_args_list,
         ord_slots <- which(n_cat_per_test > 2)
         n_ordinal_tests <- length(ord_slots)
         n_thr_per_ord_test <- n_cat_per_test[ord_slots] - 1L
-        n_chosen <- model_args_list$n_chosen %||%
-                    matrix(n_thr_per_ord_test, nrow = n_class, ncol = n_ordinal_tests, byrow = TRUE)
+        n_chosen <- if (is.null(model_args_list$n_chosen)) matrix(n_thr_per_ord_test, nrow = n_class, ncol = n_ordinal_tests, byrow = TRUE) else model_args_list$n_chosen
         n_chosen_max <- max(1L, n_chosen)
         chosen_cutoffs_of_user <- model_args_list$chosen_cutoffs
         if (is.null(chosen_cutoffs_of_user)) {
@@ -891,80 +1504,12 @@ fn_Se_Sp_prior_Model_args <- function(model_args_list,
               }
 
         }
-        ##
-        ## ---- baseline covariate values of each class (columns = tests):
-        ##
-        baseline_case <- vector("list", n_class)
-        for (c in 1:n_class) {
-
-              baseline_list <- if (c == 1) model_args_list$baseline_case_nd else model_args_list$baseline_case_d
-              baseline_case[[c]] <- matrix(0.0, nrow = n_covariates_max, ncol = n_tests)
-              baseline_case[[c]][1, ] <- 1.0
-              for (t in seq_along(baseline_list)) {
-
-                    baseline_case[[c]][, t] <- 0.0
-                    baseline_case[[c]][seq_along(baseline_list[[t]]), t] <- baseline_list[[t]]
-
-              }
-
-        }
-        ##
-        ## ---- binary tests: chosen (1) or not per test column, and the rows of hyper (Dirichlet A 1-2, Beta
-        ##      a / b 3-4, link mean / SD 5-6) per test column:
-        ##
-        fn_row_of_chosen_test <- function(x,
-                                          c,
-                                          j) {
-
-              if (is.list(x)) return(x[[c]][j, ])
-              return(x[c, j, ])
-
-        }
-        binary_chosen <- binary_hyper <- vector("list", n_class)
-        for (c in 1:n_class) {
-
-              binary_chosen[[c]] <- matrix(0L, nrow = 1, ncol = n_tests)
-              binary_hyper[[c]] <- matrix(1.0, nrow = 6, ncol = n_tests)
-              binary_hyper[[c]][5, ] <- 0.0
-              n_chosen_binary <- if (is.null(model_args_list$Se_Sp_binary_n_chosen)) 0L else
-                                 model_args_list$Se_Sp_binary_n_chosen[c]
-              for (j in seq_len(n_chosen_binary)) {
-
-                    t <- model_args_list$Se_Sp_binary_chosen_tests[c, j]
-                    if (n_cat_per_test[t] > 2) stop("Se_Sp_binary_chosen_tests holds an ordinal test: ", t)
-                    if (baseline_case[[c]][1, t] == 0.0) stop("the baseline case of test ", t, " starts with 0")
-                    binary_chosen[[c]][1, t] <- 1L
-                    binary_A <- model_args_list$Se_Sp_binary_dirichlet_A
-                    binary_beta <- model_args_list$Se_Sp_binary_beta
-                    binary_link_mean_SD <- model_args_list$Se_Sp_binary_link_mean_SD
-                    if (!is.null(binary_A)) {
-                          binary_hyper[[c]][1:2, t] <- fn_row_of_chosen_test(binary_A,
-                                                                             c,
-                                                                             j)
-                    }
-                    if (!is.null(binary_beta)) {
-                          binary_hyper[[c]][3:4, t] <- fn_row_of_chosen_test(binary_beta,
-                                                                             c,
-                                                                             j)
-                    }
-                    if (!is.null(binary_link_mean_SD)) {
-                          binary_hyper[[c]][5:6, t] <- fn_row_of_chosen_test(binary_link_mean_SD,
-                                                                             c,
-                                                                             j)
-                    }
-
-              }
-
-        }
         return(list(chosen_cutoffs = chosen_cutoffs,
-                    binary_chosen = binary_chosen,
                     A = A,
                     beta_a = beta_a,
                     beta_b = beta_b,
                     link_mean = link_mean,
-                    link_SD = link_SD,
-                    baseline_case = baseline_case,
-                    binary_hyper = binary_hyper))
+                    link_SD = link_SD))
 
 }
 
@@ -977,6 +1522,8 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
                                           n_nuisance,
                                           n_params_main
 ) {
+
+        is_CLC_MVOP <- Model_type %in% c("CLC_MVOP", "CLC-MVOP")
   
         # Extract from model_args_list
         y <- model_args_list$y
@@ -994,14 +1541,13 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         n_cat_per_ord_test <- model_args_list$n_cat_per_ord_test
         n_thr_per_ord_test <- model_args_list$n_thr_per_ord_test
         ##
-        n_cat_per_ord_test   <- matrix(as.integer(n_cat_per_ord_test), ncol = 1)
-        n_thr_per_ord_test   <- matrix(as.integer(n_thr_per_ord_test), ncol = 1)
-        ##
-        # n_cat_per_test <- c( rep(2L, n_binary_tests), as.integer(n_cat_per_ord_test) )
-        # n_cat_per_test <- matrix(as.integer(
-        #   model_args_list$n_cat_per_test %||% c(rep(2L, n_binary_tests),
-        #                                         as.integer(model_args_list$n_cat_per_ord_test))
-        # ), ncol = 1)
+        if (is_CLC_MVOP && n_ordinal_tests == 0L) {
+          n_cat_per_ord_test <- matrix(2L, ncol = 1L)
+          n_thr_per_ord_test <- matrix(1L, ncol = 1L)
+        } else {
+          n_cat_per_ord_test <- matrix(as.integer(n_cat_per_ord_test), ncol = 1)
+          n_thr_per_ord_test <- matrix(as.integer(n_thr_per_ord_test), ncol = 1)
+        }
         ##
         ## ---- n_cat_per_test (length n_tests, column order of y, 2 for a binary test) is set from y by
         ##      init_hard_coded_model_args. The fallback above assumed that the binary tests come first in y;
@@ -1011,7 +1557,6 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         n_cat_per_test_in_column_order_of_y <-  model_args_list$n_cat_per_test
         ##
         if (is.null(n_cat_per_test_in_column_order_of_y)) {
-              # is_binary_column_of_y <-  apply(y, 2, function(column_of_y) all(column_of_y %in% c(0, 1)))
               ## (the observed results only: y = -1 is a missing result)
               is_binary_column_of_y <-  apply(y, 2, function(column_of_y) all(column_of_y[column_of_y != -1] %in%
                                                                                 c(0, 1)))
@@ -1021,56 +1566,100 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         ##
         n_cat_per_test <-  matrix(as.integer(n_cat_per_test_in_column_order_of_y), ncol = 1)
         ##
-        # print(paste("n_cat_per_ord_test = ", n_cat_per_ord_test))
-        # print(paste("n_thr_per_ord_test = ", n_thr_per_ord_test))
-        ##
-        # Model_args_bools - ORDER MATTERS! Must match C++ indexing
+        # Model_args_bools - ordered to match C++ indexing
         Model_args_bools <- c(
-          model_args_list$exclude_priors %||% FALSE,           # [0]
-          model_args_list$CI %||% FALSE,                       # [1]
+          if (is.null(model_args_list$exclude_priors)) FALSE else model_args_list$exclude_priors,           # [0]
+          if (is.null(model_args_list$CI)) FALSE else model_args_list$CI,                       # [1]
           model_args_list$corr_force_positive,                 # [2]
-          model_args_list$corr_prior_beta %||% FALSE,          # [3]
-          model_args_list$corr_prior_norm %||% FALSE,          # [4]
-          model_args_list$handle_numerical_issues %||% TRUE,   # [5]
-          model_args_list$skip_checks_exp %||% FALSE,          # [6]
-          model_args_list$skip_checks_log %||% FALSE,          # [7]
-          model_args_list$skip_checks_lse %||% FALSE,          # [8]
-          model_args_list$skip_checks_tanh %||% FALSE,         # [9]
-          model_args_list$skip_checks_Phi %||% FALSE,          # [10]
-          model_args_list$skip_checks_log_Phi %||% FALSE,      # [11]
-          model_args_list$skip_checks_inv_Phi %||% FALSE,      # [12]
-          model_args_list$skip_checks_inv_Phi_approx_from_logit_prob %||% FALSE, # [13]
-          model_args_list$debug %||% FALSE                     # [14]
+          if (is.null(model_args_list$corr_prior_beta)) FALSE else model_args_list$corr_prior_beta,          # [3]
+          if (is.null(model_args_list$corr_prior_norm)) FALSE else model_args_list$corr_prior_norm,          # [4]
+          if (is.null(model_args_list$handle_numerical_issues)) TRUE else model_args_list$handle_numerical_issues,   # [5]
+          if (is.null(model_args_list$skip_checks_exp)) FALSE else model_args_list$skip_checks_exp,          # [6]
+          if (is.null(model_args_list$skip_checks_log)) FALSE else model_args_list$skip_checks_log,          # [7]
+          if (is.null(model_args_list$skip_checks_lse)) FALSE else model_args_list$skip_checks_lse,          # [8]
+          if (is.null(model_args_list$skip_checks_tanh)) FALSE else model_args_list$skip_checks_tanh,         # [9]
+          if (is.null(model_args_list$skip_checks_Phi)) FALSE else model_args_list$skip_checks_Phi,          # [10]
+          if (is.null(model_args_list$skip_checks_log_Phi)) FALSE else model_args_list$skip_checks_log_Phi,      # [11]
+          if (is.null(model_args_list$skip_checks_inv_Phi)) FALSE else model_args_list$skip_checks_inv_Phi,      # [12]
+          if (is.null(model_args_list$skip_checks_inv_Phi_approx_from_logit_prob)) FALSE else model_args_list$skip_checks_inv_Phi_approx_from_logit_prob, # [13]
+          if (is.null(model_args_list$debug)) FALSE else model_args_list$debug                     # [14]
         )
+        if (is_CLC_MVOP) {
+          ## TRUE only if the covariate matrix of every class and test is the same matrix as that of class 1, test 1
+          X_is_the_same_matrix_for_every_class_and_test <- !is.null(model_args_list$X)
+          for (class_index in seq_along(model_args_list$X)) {
+            for (test_index in seq_along(model_args_list$X[[class_index]])) {
+              if (!identical(model_args_list$X[[class_index]][[test_index]], model_args_list$X[[1]][[1]])) {
+                X_is_the_same_matrix_for_every_class_and_test <- FALSE
+              }
+            }
+          }
+          Model_args_bools <- c(
+            Model_args_bools,
+            isTRUE(as.logical(model_args_list$prior_only)),
+            (as.integer(model_args_list$use_pop_Se_Sp_prior) == 1L),
+            isTRUE(as.logical(model_args_list$has_y_upper)),
+            X_is_the_same_matrix_for_every_class_and_test
+          )
+        }
         Model_args_bools <- matrix(Model_args_bools, ncol = 1, nrow = length(Model_args_bools))
-        # Model_args_ints - ORDER MATTERS!
+        # Model_args_ints - ordered to match C++ indexing
         Model_args_ints <- c(
-          model_args_list$n_cores %||% 1L,                     # [0]
+          if (is.null(model_args_list$n_cores)) 1L else model_args_list$n_cores,                     # [0]
           n_class,                                             # [1]
-          model_args_list$ub_threshold_phi_approx %||% 10L,    # [2]
-          model_args_list$num_chunks %||% 1L,                  # [3]
+          if (is.null(model_args_list$ub_threshold_phi_approx)) 10L else model_args_list$ub_threshold_phi_approx,    # [2]
+          if (is.null(model_args_list$num_chunks)) 1L else model_args_list$num_chunks,                  # [3]
           model_args_list$n_binary_tests,                      # [4] ## ---- ordinal-only
           model_args_list$n_ordinal_tests,                      # [5] ## ---- ordinal-only
           model_args_list$n_pops, ## ---- multiple-pops
-          model_args_list$use_Se_Sp_prior %||% 0L,             # [7] priors directly on Se / Sp
-          model_args_list$Se_Sp_prior_type %||% 4L             # [8] 1 = Dirichlet, 2 / 3 = Betas, 4 = link Normal
+          if (is.null(model_args_list$use_Se_Sp_prior)) 0L else model_args_list$use_Se_Sp_prior,             # [7] priors directly on Se / Sp
+          if (is.null(model_args_list$Se_Sp_prior_type)) 4L else model_args_list$Se_Sp_prior_type             # [8] 1 = Dirichlet, 2 / 3 = Betas, 4 = link Normal
         )
+        if (is_CLC_MVOP) {
+          Model_args_ints <- c(
+            Model_args_ints,
+            as.integer(model_args_list$n_covariates_max),
+            as.integer(model_args_list$n_prevalence_covariates),
+            as.integer(model_args_list$pool_correlations_across_classes),
+            as.integer(model_args_list$use_pop_prev_prior),
+            as.integer(model_args_list$n_standardisation),
+            as.integer(model_args_list$use_label_constraint),
+            as.integer(model_args_list$n_chosen_cutoffs_max)
+          )
+        }
         Model_args_ints <- matrix(Model_args_ints, ncol = 1, nrow = length(Model_args_ints))
-        Se_Sp_args <- fn_Se_Sp_prior_Model_args(model_args_list = model_args_list,
-                                                n_class = n_class,
-                                                n_tests = n_tests,
-                                                n_cat_per_test = model_args_list$n_cat_per_test %||%
-                                                                 rep(2L, n_tests),
-                                                n_covariates_max = max(1L, model_args_list$n_covariates_max))
-        # Model_args_doubles - ORDER MATTERS!
+        if (!is_CLC_MVOP) {
+          Se_Sp_args <- fn_Se_Sp_prior_Model_args(model_args_list = model_args_list,
+                                                  n_class = n_class,
+                                                  n_tests = n_tests,
+                                                  n_cat_per_test = if (is.null(model_args_list$n_cat_per_test)) rep(2L, n_tests) else model_args_list$n_cat_per_test,
+                                                  n_covariates_max = max(1L, model_args_list$n_covariates_max))
+        }
+        # Model_args_doubles - ordered to match C++ indexing
         Model_args_doubles <- c(
-          # model_args_list$prior_prev_a,                        # [0]
-          # model_args_list$prior_prev_b,                        # [1]
           model_args_list$overflow_threshold,                  # [0]
           model_args_list$underflow_threshold,                 # [1]
-          model_args_list$C_raw_lower %||% -7.5,               # [2]  NEW ## ---- ordinal-only
-          model_args_list$C_raw_upper %||% +2.5                # [3]  NEW ## ---- ordinal-only
+          if (is.null(model_args_list$C_raw_lower)) -7.5 else model_args_list$C_raw_lower,               # [2]  NEW ## ---- ordinal-only
+          if (is.null(model_args_list$C_raw_upper)) +2.5 else model_args_list$C_raw_upper                # [3]  NEW ## ---- ordinal-only
         )
+        if (is_CLC_MVOP) {
+          Model_args_doubles <- c(
+            Model_args_doubles,
+            as.numeric(model_args_list$perfect_ref_M),
+            as.numeric(model_args_list$prior_LKJ_global),
+            as.numeric(model_args_list$prior_LKJ_departure),
+            as.numeric(model_args_list$prior_lambda_shape_a),
+            as.numeric(model_args_list$prior_lambda_shape_b),
+            as.numeric(model_args_list$prior_mu_logit_A_mean),
+            as.numeric(model_args_list$prior_mu_logit_A_sd),
+            as.numeric(model_args_list$prior_mu_logit_B_mean),
+            as.numeric(model_args_list$prior_mu_logit_B_sd),
+            as.numeric(model_args_list$prior_sigma_logit_A_sd),
+            as.numeric(model_args_list$prior_sigma_logit_B_sd),
+            as.numeric(model_args_list$prior_logit_prob_B_given_A_mean),
+            as.numeric(model_args_list$prior_logit_prob_B_given_A_sd)
+          )
+        }
         Model_args_doubles <- matrix(Model_args_doubles, ncol = 1, nrow = length(Model_args_doubles))
         
         ##
@@ -1088,112 +1677,368 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
               stop("build_Model_args_as_Rcpp_List: model_args_list$vect_type is NULL; run init_hard_coded_model_args() first.")
         }
         ##
-        # Model_args_strings - ORDER MATTERS!
+        # Model_args_strings - ordered to match C++ indexing
         # [1] Phi_type and [2] inv_Phi_type as set in model_args_list ("Phi" / "inv_Phi" by default; the C++ stops on unknown values).
         Model_args_strings <- c(
           as.character(model_args_list$vect_type),              # [0]
-          as.character(model_args_list$Phi_type %||% "Phi"),         # [1] Phi_type
-          as.character(model_args_list$inv_Phi_type %||% "inv_Phi"), # [2] inv_Phi_type
+          as.character(if (is.null(model_args_list$Phi_type)) "Phi" else model_args_list$Phi_type),         # [1] Phi_type
+          as.character(if (is.null(model_args_list$inv_Phi_type)) "inv_Phi" else model_args_list$inv_Phi_type), # [2] inv_Phi_type
           ##
-          as.character(model_args_list$vect_type_exp %||% model_args_list$vect_type),      # [3]
-          as.character(model_args_list$vect_type_log %||% model_args_list$vect_type),      # [4]
-          as.character(model_args_list$vect_type_lse %||% model_args_list$vect_type),      # [5]
-          as.character(model_args_list$vect_type_tanh %||% model_args_list$vect_type),     # [6]
+          as.character(if (is.null(model_args_list$vect_type_exp)) model_args_list$vect_type else model_args_list$vect_type_exp),      # [3]
+          as.character(if (is.null(model_args_list$vect_type_log)) model_args_list$vect_type else model_args_list$vect_type_log),      # [4]
+          as.character(if (is.null(model_args_list$vect_type_lse)) model_args_list$vect_type else model_args_list$vect_type_lse),      # [5]
+          as.character(if (is.null(model_args_list$vect_type_tanh)) model_args_list$vect_type else model_args_list$vect_type_tanh),     # [6]
           ##
-          as.character(model_args_list$vect_type_Phi %||% model_args_list$vect_type),      # [7]
-          as.character(model_args_list$vect_type_log_Phi %||% model_args_list$vect_type),  # [8]
-          as.character(model_args_list$vect_type_inv_Phi %||% model_args_list$vect_type),  # [9]
-          as.character(model_args_list$vect_type_inv_Phi_approx_from_logit_prob %||% model_args_list$vect_type), # [10]
+          as.character(if (is.null(model_args_list$vect_type_Phi)) model_args_list$vect_type else model_args_list$vect_type_Phi),      # [7]
+          as.character(if (is.null(model_args_list$vect_type_log_Phi)) model_args_list$vect_type else model_args_list$vect_type_log_Phi),  # [8]
+          as.character(if (is.null(model_args_list$vect_type_inv_Phi)) model_args_list$vect_type else model_args_list$vect_type_inv_Phi),  # [9]
+          as.character(if (is.null(model_args_list$vect_type_inv_Phi_approx_from_logit_prob)) model_args_list$vect_type else model_args_list$vect_type_inv_Phi_approx_from_logit_prob), # [10]
           ##
-          model_args_list$J_grad_option %||% "num_diff" ,                                          # [11] J_grad_option
-          model_args_list$nuisance_transformation %||% "Phi",              # [12]
-          model_args_list$LT_prior_corr_bs %||% "gamma" # [13]
+          if (is.null(model_args_list$J_grad_option)) "num_diff" else model_args_list$J_grad_option ,                                          # [11] J_grad_option
+          if (is.null(model_args_list$nuisance_transformation)) "Phi" else model_args_list$nuisance_transformation,              # [12]
+          if (is.null(model_args_list$LT_prior_corr_bs)) "gamma" else model_args_list$LT_prior_corr_bs # [13]
         )
         
         Model_args_strings <- matrix(Model_args_strings, ncol = 1, nrow = length(Model_args_strings))
-        # Model_args_col_vecs_double - ORDERED LIST
-        Model_args_col_vecs_double <- list(
-          matrix(model_args_list$lkj_cholesky_eta, ncol = 1),  # [0]
-          model_args_list$prior_prev_a,                                      # [1] 
-          model_args_list$prior_prev_b                                       # [2] 
-        )
+        pop_ind_0indexed <- matrix(as.integer(model_args_list$pop - 1L), ncol = 1)  # convert 1-indexed -> 0-indexed
         ##
-        ## Model_args_col_vecs_int:
-        ##
-        pop_ind_0indexed <- matrix(as.integer(model_args_list$pop - 1L), ncol = 1)  # convert 1-indexed → 0-indexed
-        ##
-        Model_args_col_vecs_int <- list( n_cat_per_ord_test,  ## [0] ## ---- ordinal-only
-                                         n_thr_per_ord_test,   ## [1] ## ---- ordinal-only
-                                         pop_ind_0indexed,      ## [2] ## ----
-                                         n_cat_per_test   ## [3] length n_tests, SLOT order, 2 for binary tests
-                                         )
-        
-        # Model_args_mats_double - ORDERED LIST (y goes elsewhere)
-        Model_args_mats_double <- list(
-          model_args_list$LT_b_priors_1,         ## [0]
-          model_args_list$LT_b_priors_2,         ## [1]
-          model_args_list$LT_known_bs_indicator, ## [2]
-          model_args_list$LT_known_bs_values    ## [3]
-          # model_args_list$prior_dirichlet_alpha  ## [4] ## ---- ordinal-only
-        )
-        
-        # Model_args_mats_int - ORDERED LIST
-        Model_args_mats_int <- list(
-          model_args_list$n_covariates_per_outcome_mat        # [0]
-        )
-        
-        # Model_args_vecs_of_col_vecs_double - empty
-        Model_args_vecs_of_col_vecs_double <- list()
-        
-        # Model_args_vecs_of_col_vecs_int - empty
-        Model_args_vecs_of_col_vecs_int <- list()
-        
-        # Model_args_vecs_of_mats_double - ORDERED LIST - CRITICAL!
-        Model_args_vecs_of_mats_double <- list(
-          model_args_list$prior_coeffs_mean_mat,              # [0]
-          model_args_list$prior_coeffs_sd_mat,                # [1]
-          model_args_list$prior_for_corr_a,                   # [2]
-          model_args_list$prior_for_corr_b,                   # [3]
-          model_args_list$lb_corr,                            # [4]
-          model_args_list$ub_corr,                            # [5]
-          model_args_list$known_values_list,                   # [6]
-          model_args_list$prior_dirichlet_alpha,              # [7] ## ---- ordinal-only
-          Se_Sp_args$A,                                       # [8]  Se / Sp prior: Dirichlet A
-          Se_Sp_args$beta_a,                                  # [9]  Se / Sp prior: Beta a
-          Se_Sp_args$beta_b,                                  # [10] Se / Sp prior: Beta b
-          Se_Sp_args$baseline_case,                           # [11] baseline covariate values
-          Se_Sp_args$binary_hyper,                            # [12] Se / Sp prior of binary tests: A, a / b, link
-          Se_Sp_args$link_mean,                               # [13] Se / Sp prior: link mean (Sp; Se)
-          Se_Sp_args$link_SD                                  # [14] Se / Sp prior: link SD
-        )
-        
-        # Model_args_vecs_of_mats_int - ORDERED LIST
-        Model_args_vecs_of_mats_int <- list(
-          model_args_list$known_values_indicator_list,        # [0]
-          Se_Sp_args$chosen_cutoffs,                          # [1] Se / Sp prior: chosen cutoffs (0-based)
-          Se_Sp_args$binary_chosen                            # [2] Se / Sp prior of binary tests: used (1) or not
-        )
-        
-        # Model_args_2_layer_vecs_of_col_vecs_double - empty
-        Model_args_2_layer_vecs_of_col_vecs_double <- list()
-        
-        # Model_args_2_layer_vecs_of_col_vecs_int - empty
-        Model_args_2_layer_vecs_of_col_vecs_int <- list()
-        
-        # Model_args_2_layer_vecs_of_mats_double - X GOES HERE!
-        # Process X to correct format
-        if (!is.null(model_args_list$X)) {
-          # X should already be a list of lists of matrices
-          # For MVP: X[[1]][[t]] is the matrix for outcome t
-          # For LC_MVP: X[[c]][[t]] is the matrix for class c, outcome t
-          Model_args_2_layer_vecs_of_mats_double <- list(
-            model_args_list$X                                  
+        if (!is_CLC_MVOP) {
+          # Model_args_col_vecs_double - ordered list
+          Model_args_col_vecs_double <- list(
+            matrix(model_args_list$lkj_cholesky_eta, ncol = 1),  # [0]
+            model_args_list$prior_prev_a,                                      # [1] 
+            model_args_list$prior_prev_b                                       # [2] 
           )
+          ##
+          ## Model_args_col_vecs_int:
+          ##
+          Model_args_col_vecs_int <- list( n_cat_per_ord_test,  ## [0] ## ---- ordinal-only
+                                           n_thr_per_ord_test,   ## [1] ## ---- ordinal-only
+                                           pop_ind_0indexed,      ## [2] ## ----
+                                           n_cat_per_test   ## [3] length n_tests, SLOT order, 2 for binary tests
+                                           )
+          
+          # Model_args_mats_double - ordered list (y goes elsewhere)
+          Model_args_mats_double <- list(
+            model_args_list$LT_b_priors_1,         ## [0]
+            model_args_list$LT_b_priors_2,         ## [1]
+            model_args_list$LT_known_bs_indicator, ## [2]
+            model_args_list$LT_known_bs_values    ## [3]
+          )
+          
+          # Model_args_mats_int - ordered list
+          Model_args_mats_int <- list(
+            model_args_list$n_covariates_per_outcome_mat        # [0]
+          )
+          
+          # Model_args_vecs_of_col_vecs_double - empty
+          Model_args_vecs_of_col_vecs_double <- list()
+          
+          # Model_args_vecs_of_col_vecs_int - empty
+          Model_args_vecs_of_col_vecs_int <- list()
+          
+          # Model_args_vecs_of_mats_double - ordered list
+          Model_args_vecs_of_mats_double <- list(
+            model_args_list$prior_coeffs_mean_mat,              # [0]
+            model_args_list$prior_coeffs_sd_mat,                # [1]
+            model_args_list$prior_for_corr_a,                   # [2]
+            model_args_list$prior_for_corr_b,                   # [3]
+            model_args_list$lb_corr,                            # [4]
+            model_args_list$ub_corr,                            # [5]
+            model_args_list$known_values_list,                   # [6]
+            model_args_list$prior_dirichlet_alpha,              # [7] ## ---- ordinal-only
+            Se_Sp_args$A,                                       # [8]  Se / Sp prior: Dirichlet A
+            Se_Sp_args$beta_a,                                  # [9]  Se / Sp prior: Beta a
+            Se_Sp_args$beta_b,                                  # [10] Se / Sp prior: Beta b
+            Se_Sp_args$link_mean,                               # [11] Se / Sp prior: link mean (Sp; Se)
+            Se_Sp_args$link_SD                                  # [12] Se / Sp prior: link SD
+          )
+          
+          # Model_args_vecs_of_mats_int - ordered list
+          Model_args_vecs_of_mats_int <- list(
+            model_args_list$known_values_indicator_list,        # [0]
+            Se_Sp_args$chosen_cutoffs                           # [1] Se / Sp prior: chosen cutoffs (0-based)
+          )
+          
+          # Model_args_2_layer_vecs_of_col_vecs_double - empty
+          Model_args_2_layer_vecs_of_col_vecs_double <- list()
+          
+          # Model_args_2_layer_vecs_of_col_vecs_int - empty
+          Model_args_2_layer_vecs_of_col_vecs_int <- list()
+          
+          # Model_args_2_layer_vecs_of_mats_double - X matrices
+          if (!is.null(model_args_list$X)) {
+            Model_args_2_layer_vecs_of_mats_double <- list(
+              model_args_list$X                                  
+            )
+          } else {
+            Model_args_2_layer_vecs_of_mats_double <- list()
+          }
+          # Model_args_2_layer_vecs_of_mats_int - empty
+          Model_args_2_layer_vecs_of_mats_int <- list()
         } else {
-          Model_args_2_layer_vecs_of_mats_double <- list()
+          n_prev_cov_clc <- as.integer(model_args_list$n_prevalence_covariates)
+          std_index_1based <- as.integer(model_args_list$standardisation_index)
+          std_weight_raw <- as.numeric(model_args_list$standardisation_weight)
+          std_weight_normalised <- std_weight_raw / sum(std_weight_raw)
+          pop_std_0based <- as.integer(pop_ind_0indexed[std_index_1based, 1L])
+          test_perm_clc <- as.integer(model_args_list$test_perm)
+          inv_perm_clc <- integer(n_tests)
+          for (slot_index in seq_len(n_tests)) {
+            inv_perm_clc[test_perm_clc[slot_index]] <- slot_index
+          }
+          ref_test_orig <- as.integer(model_args_list$reference_test)
+          ref_test_fitted_0based <- as.integer(inv_perm_clc[ref_test_orig] - 1L)
+          ##
+          if (n_prev_cov_clc > 0L) {
+            X_prev_matrix <- as.matrix(model_args_list$X_prevalence)
+            storage.mode(X_prev_matrix) <- "double"
+          } else {
+            X_prev_matrix <- matrix(
+              0.0,
+              nrow = N,
+              ncol = 1L
+            )
+          }
+          X_prev_std_matrix <- X_prev_matrix[std_index_1based, , drop = FALSE]
+          ##
+          prior_dir_alpha_list <- lapply(
+            seq_len(n_class),
+            function(class_index) {
+              if (n_ordinal_tests > 0L) {
+                alpha_matrix <- as.matrix(model_args_list$prior_dirichlet_alpha[[class_index]])
+                storage.mode(alpha_matrix) <- "double"
+                return(alpha_matrix)
+              }
+              return(matrix(
+                1.0,
+                nrow = 1L,
+                ncol = 1L
+              ))
+            }
+          )
+          ##
+          ## ---- 4-class Se/Sp prior arrays:
+          ##
+          use_Se_Sp_prior_clc <- as.integer(model_args_list$use_Se_Sp_prior)
+          n_chosen_mat_clc <- model_args_list$n_chosen_cutoffs
+          n_chosen_max_clc <- as.integer(model_args_list$n_chosen_cutoffs_max)
+          n_ord_pad <- max(
+            1L,
+            n_ordinal_tests
+          )
+          Se_Sp_chosen_list <- lapply(
+            seq_len(n_class),
+            function(class_index) {
+              return(matrix(
+                -1L,
+                nrow = n_chosen_max_clc,
+                ncol = n_ord_pad
+              ))
+            }
+          )
+          Se_Sp_A_list <- lapply(
+            seq_len(n_class),
+            function(class_index) {
+              return(matrix(
+                0.0,
+                nrow = n_chosen_max_clc + 1L,
+                ncol = n_ord_pad
+              ))
+            }
+          )
+          Se_Sp_beta_a_list <- lapply(
+            seq_len(n_class),
+            function(class_index) {
+              return(matrix(
+                0.0,
+                nrow = n_chosen_max_clc,
+                ncol = n_ord_pad
+              ))
+            }
+          )
+          Se_Sp_beta_b_list <- lapply(
+            seq_len(n_class),
+            function(class_index) {
+              return(matrix(
+                0.0,
+                nrow = n_chosen_max_clc,
+                ncol = n_ord_pad
+              ))
+            }
+          )
+          Se_Sp_link_mean_list <- lapply(
+            seq_len(n_class),
+            function(class_index) {
+              return(matrix(
+                0.0,
+                nrow = n_chosen_max_clc,
+                ncol = n_ord_pad
+              ))
+            }
+          )
+          Se_Sp_link_SD_list <- lapply(
+            seq_len(n_class),
+            function(class_index) {
+              return(matrix(
+                1.0,
+                nrow = n_chosen_max_clc,
+                ncol = n_ord_pad
+              ))
+            }
+          )
+          if ((use_Se_Sp_prior_clc == 1L) && is.null(model_args_list$prior_Se_Sp_link_mean_SD)) {
+            stop("CLC-MVOP: use_Se_Sp_prior = 1 (the prior on the marginal Se / Sp) needs prior_Se_Sp_link_mean_SD [class, ordinal test, j, mean / SD]; no prior is filled in for the user.")
+          }
+          if (use_Se_Sp_prior_clc == 1L && n_ordinal_tests > 0L) {
+            for (class_index in seq_len(n_class)) {
+              for (ord_index in seq_len(n_ordinal_tests)) {
+                n_chosen_value <- as.integer(n_chosen_mat_clc[class_index, ord_index])
+                if (n_chosen_value == 0L) {
+                  next
+                }
+                Se_Sp_chosen_list[[class_index]][1:n_chosen_value, ord_index] <-
+                  as.integer(model_args_list$chosen_cutoffs[class_index, ord_index, 1:n_chosen_value] - 1L)
+                if (!is.null(model_args_list$prior_Se_Sp_dirichlet_A)) {
+                  raw_dirichlet_A <- model_args_list$prior_Se_Sp_dirichlet_A
+                  dirichlet_A_vec <- if (is.list(raw_dirichlet_A)) {
+                    raw_dirichlet_A[[class_index]][[ord_index]]
+                  } else {
+                    raw_dirichlet_A[class_index, ord_index, ]
+                  }
+                  Se_Sp_A_list[[class_index]][1:(n_chosen_value + 1L), ord_index] <-
+                    as.numeric(dirichlet_A_vec[1:(n_chosen_value + 1L)])
+                }
+                if (!is.null(model_args_list$prior_Se_Sp_beta)) {
+                  raw_beta_array <- model_args_list$prior_Se_Sp_beta
+                  beta_slice <- if (is.list(raw_beta_array)) {
+                    raw_beta_array[[class_index]][[ord_index]]
+                  } else {
+                    raw_beta_array[class_index, ord_index, , ]
+                  }
+                  beta_matrix <- matrix(
+                    as.numeric(beta_slice),
+                    ncol = 2L
+                  )
+                  Se_Sp_beta_a_list[[class_index]][1:n_chosen_value, ord_index] <- beta_matrix[1:n_chosen_value, 1L]
+                  Se_Sp_beta_b_list[[class_index]][1:n_chosen_value, ord_index] <- beta_matrix[1:n_chosen_value, 2L]
+                }
+                if (!is.null(model_args_list$prior_Se_Sp_link_mean_SD)) {
+                  raw_link_array <- model_args_list$prior_Se_Sp_link_mean_SD
+                  link_slice <- if (is.list(raw_link_array)) {
+                    raw_link_array[[class_index]][[ord_index]]
+                  } else {
+                    raw_link_array[class_index, ord_index, , ]
+                  }
+                  link_matrix <- matrix(
+                    as.numeric(link_slice),
+                    ncol = 2L
+                  )
+                  Se_Sp_link_mean_list[[class_index]][1:n_chosen_value, ord_index] <- link_matrix[1:n_chosen_value, 1L]
+                  Se_Sp_link_SD_list[[class_index]][1:n_chosen_value, ord_index] <- link_matrix[1:n_chosen_value, 2L]
+                }
+              }
+            }
+          }
+          ##
+          ## ---- the prior on the GAP (Se_Sp_prior_type 5, priors on the marginal Se / Sp): for each ordinal test and chosen cutoff j,
+          ##      probit of Pr(positive) in the class WITH the other condition minus that in the class WITHOUT it ~ normal(mean, SD);
+          ##      positive = the other condition pushes scores up (for Se: higher Se; for Sp: lower Sp, as Pr(positive) = 1 - Sp).
+          ##      User data: prior_Se_Sp_gap_link_mean_SD [ordinal test, j, Se / Sp, mean / SD]. Lists [[1]] = Se, [[2]] = Sp, each
+          ##      [j, ordinal test]. It is data the user always gives with type 5 (an error otherwise); unused (NA) for every other type.
+          ##
+          Se_Sp_gap_mean_list <- list(matrix(NA_real_, nrow = n_chosen_max_clc, ncol = n_ord_pad),
+                                      matrix(NA_real_, nrow = n_chosen_max_clc, ncol = n_ord_pad))
+          Se_Sp_gap_SD_list <- list(matrix(NA_real_, nrow = n_chosen_max_clc, ncol = n_ord_pad),
+                                    matrix(NA_real_, nrow = n_chosen_max_clc, ncol = n_ord_pad))
+          if (use_Se_Sp_prior_clc == 1L) {
+            if (is.null(model_args_list$prior_Se_Sp_gap_link_mean_SD)) {
+              stop("CLC-MVOP: use_Se_Sp_prior = 1 (the prior on the marginal Se / Sp) needs prior_Se_Sp_gap_link_mean_SD [ordinal test, j, Se / Sp, mean / SD] (the prior on the probit gap with / without the other condition).")
+            }
+            raw_gap_array <- model_args_list$prior_Se_Sp_gap_link_mean_SD
+            for (ord_index in seq_len(n_ordinal_tests)) {
+              for (acc_index in 1:2) {
+                Se_Sp_gap_mean_list[[acc_index]][1:n_chosen_max_clc, ord_index] <- as.numeric(raw_gap_array[ord_index, 1:n_chosen_max_clc, acc_index, 1L])
+                Se_Sp_gap_SD_list[[acc_index]][1:n_chosen_max_clc, ord_index] <- as.numeric(raw_gap_array[ord_index, 1:n_chosen_max_clc, acc_index, 2L])
+              }
+            }
+          }
+          ##
+          prior_LKJ_vec <- as.numeric(model_args_list$prior_LKJ)
+          if (length(prior_LKJ_vec) == 1L) {
+            prior_LKJ_vec <- rep(
+              prior_LKJ_vec,
+              n_class
+            )
+          }
+          Model_args_col_vecs_double <- list(
+            matrix(prior_LKJ_vec, ncol = 1L),
+            matrix(if (n_prev_cov_clc > 0L) as.numeric(model_args_list$prior_beta_prevalence_A_mean) else 0.0, ncol = 1L),
+            matrix(if (n_prev_cov_clc > 0L) as.numeric(model_args_list$prior_beta_prevalence_A_sd) else 1.0, ncol = 1L),
+            matrix(if (n_prev_cov_clc > 0L) as.numeric(model_args_list$prior_beta_prevalence_B_mean) else 0.0, ncol = 1L),
+            matrix(if (n_prev_cov_clc > 0L) as.numeric(model_args_list$prior_beta_prevalence_B_sd) else 1.0, ncol = 1L),
+            matrix(as.numeric(std_weight_normalised), ncol = 1L)
+          )
+          Model_args_col_vecs_int <- list(
+            n_cat_per_ord_test,
+            n_thr_per_ord_test,
+            pop_ind_0indexed,
+            n_cat_per_test,
+            matrix(as.integer(model_args_list$test_condition - 1L), ncol = 1L),
+            matrix(as.integer(model_args_list$is_perfect_ref), ncol = 1L),
+            matrix(as.integer(std_index_1based - 1L), ncol = 1L),
+            matrix(pop_std_0based, ncol = 1L),
+            matrix(ref_test_fitted_0based, ncol = 1L),
+            matrix(as.integer(model_args_list$cutoff_category), ncol = 1L)
+          )
+          Model_args_mats_double <- list(
+            X_prev_matrix,
+            X_prev_std_matrix
+          )
+          Model_args_mats_int <- list(
+            model_args_list$n_covariates_per_outcome_mat,
+            model_args_list$class_D,
+            model_args_list$y_upper_when_interval_censored
+          )
+          Model_args_vecs_of_col_vecs_double <- list()
+          Model_args_vecs_of_col_vecs_int <- list()
+          Model_args_vecs_of_mats_double <- list(
+            model_args_list$prior_beta_mean,
+            model_args_list$prior_beta_sd,
+            model_args_list$lb_corr,
+            model_args_list$ub_corr,
+            model_args_list$known_values_list,
+            prior_dir_alpha_list,
+            Se_Sp_A_list,
+            Se_Sp_beta_a_list,
+            Se_Sp_beta_b_list,
+            Se_Sp_link_mean_list,
+            Se_Sp_link_SD_list,
+            model_args_list$baseline_case,
+            Se_Sp_gap_mean_list,
+            Se_Sp_gap_SD_list
+          )
+          Model_args_vecs_of_mats_int <- list(
+            model_args_list$known_values_indicator_list,
+            Se_Sp_chosen_list
+          )
+          Model_args_2_layer_vecs_of_col_vecs_double <- list()
+          Model_args_2_layer_vecs_of_col_vecs_int <- list()
+          Model_args_2_layer_vecs_of_mats_double <- list(
+            model_args_list$X
+          )
+          ## one matrix is handed over if the covariate matrix of every class and test is the same matrix
+          if (is_CLC_MVOP && X_is_the_same_matrix_for_every_class_and_test) {
+            Model_args_2_layer_vecs_of_mats_double <- list(
+              list(
+                list(
+                  model_args_list$X[[1]][[1]]
+                )
+              )
+            )
+          }
+          Model_args_2_layer_vecs_of_mats_int <- list()
         }
-        # Model_args_2_layer_vecs_of_mats_int - empty
-        Model_args_2_layer_vecs_of_mats_int <- list()
         ## typos in c++:
         Model_args_2_later_vecs_of_col_vecs_double <- Model_args_2_layer_vecs_of_col_vecs_double
         Model_args_2_later_vecs_of_col_vecs_int <- Model_args_2_layer_vecs_of_col_vecs_int
@@ -1201,29 +2046,61 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
         Model_args_2_later_vecs_of_mats_int <- Model_args_2_layer_vecs_of_mats_int
         ##
         colnames(Model_args_bools) <- c("Model arguments - boolean")
-        rownames(Model_args_bools) <- c("exclude_priors", "Cond. indep.", "Force +'ve corr's",
-                                        "corr_prior_beta", "corr_prior_norm",
-                                        "handle num. issues",
-                                        "skip_checks_exp", "skip_checks_log", "skip_checks_lse", "skip_checks_tanh",
-                                        "skip_checks_Phi", "skip_checks_log_Phi", "skip_checks_inv_Phi",
-                                        "skip_checks_inv_Phi_approx_from_logit_prob",
-                                        "debug")
+        bool_row_names <- c("exclude_priors", "Cond. indep.", "Force +'ve corr's",
+                            "corr_prior_beta", "corr_prior_norm",
+                            "handle num. issues",
+                            "skip_checks_exp", "skip_checks_log", "skip_checks_lse", "skip_checks_tanh",
+                            "skip_checks_Phi", "skip_checks_log_Phi", "skip_checks_inv_Phi",
+                            "skip_checks_inv_Phi_approx_from_logit_prob",
+                            "debug")
+        if (is_CLC_MVOP) {
+          bool_row_names <- c(bool_row_names, "prior_only", "use_pop_Se_Sp_prior", "has_y_upper",
+                              "X_is_the_same_matrix_for_every_class_and_test")
+        }
+        rownames(Model_args_bools) <- bool_row_names
         ##
         colnames(Model_args_ints) <- c("Model arguments - integers")
-        rownames(Model_args_ints) <- c("n_cores",
-                                       "n_class",
-                                       "ub_threshold_phi_approx",
-                                       "number of chunks",
-                                       "n_binary_tests", 
-                                       "n_ordinal_tests", 
-                                       "n_pops", ## ----
-                                       "use_Se_Sp_prior",
-                                       "Se_Sp_prior_type"
-                                       )
+        int_row_names <- c("n_cores",
+                           "n_class",
+                           "ub_threshold_phi_approx",
+                           "number of chunks",
+                           "n_binary_tests", 
+                           "n_ordinal_tests", 
+                           "n_pops", ## ----
+                           "use_Se_Sp_prior",
+                           "Se_Sp_prior_type"
+                           )
+        if (is_CLC_MVOP) {
+          int_row_names <- c(int_row_names,
+                             "n_covariates_max",
+                             "n_prevalence_covariates",
+                             "pool_correlations_across_classes",
+                             "use_pop_prev_prior",
+                             "n_standardisation",
+                             "use_label_constraint",
+                             "n_chosen_cutoffs_max")
+        }
+        rownames(Model_args_ints) <- int_row_names
         ##
         colnames(Model_args_doubles) <- c("Model arguments - doubles")
-        # rownames(Model_args_doubles) <- c("prior_prev_a", "prior_prev_b", "overflow_threshold", "underflow_threshold")
-        rownames(Model_args_doubles) <- c("overflow_threshold", "underflow_threshold", "C_raw_lower", "C_raw_upper")
+        double_row_names <- c("overflow_threshold", "underflow_threshold", "C_raw_lower", "C_raw_upper")
+        if (is_CLC_MVOP) {
+          double_row_names <- c(double_row_names,
+                                "perfect_ref_M",
+                                "prior_LKJ_global",
+                                "prior_LKJ_departure",
+                                "prior_lambda_shape_a",
+                                "prior_lambda_shape_b",
+                                "prior_mu_logit_A_mean",
+                                "prior_mu_logit_A_sd",
+                                "prior_mu_logit_B_mean",
+                                "prior_mu_logit_B_sd",
+                                "prior_sigma_logit_A_sd",
+                                "prior_sigma_logit_B_sd",
+                                "prior_logit_prob_B_given_A_mean",
+                                "prior_logit_prob_B_given_A_sd")
+        }
+        rownames(Model_args_doubles) <- double_row_names
         ##
         colnames(Model_args_strings) <- c("Model arguments - character strings")
         rownames(Model_args_strings) <- c("vect_type",
@@ -1251,8 +2128,8 @@ build_Model_args_as_Rcpp_List <- function(Model_type,
           n_binary_tests = as.integer(n_binary_tests),
           n_ordinal_tests = as.integer(n_ordinal_tests),
           ##
-          model_so_file = as.character(model_args_list$model_so_file %||% "none"),
-          json_file_path = as.character(model_args_list$json_file_path %||% "none"),
+          model_so_file = as.character(if (is.null(model_args_list$model_so_file)) "none" else model_args_list$model_so_file),
+          json_file_path = as.character(if (is.null(model_args_list$json_file_path)) "none" else model_args_list$json_file_path),
           ##
           Model_args_bools = Model_args_bools,
           Model_args_ints = Model_args_ints,
@@ -1301,7 +2178,9 @@ init_hard_coded_model <- function(  Model_type,
                                    "MVP",
                                    "latent_trait", 
                                    "LC_MVOP", 
-                                   "MVOP")
+                                   "MVOP",
+                                   "CLC-MVOP",
+                                   "CLC_MVOP")
         ##
         if (!(Model_type %in% hard_coded_models_vec)) {
           stop("Model_type must be one of: ", paste(hard_coded_models_vec, collapse = ", "))
@@ -1337,13 +2216,14 @@ init_hard_coded_model <- function(  Model_type,
         ## ---- Calculate basic dims:
         ##
         dims <- get_dims_for_internal_models(  y = y,
-                                               Model_type = Model_type, 
-                                               n_tests = n_tests, 
+                                               Model_type = Model_type,
+                                               n_tests = n_tests,
                                                n_class = n_class,
                                                n_pops = n_pops,
                                                N = N,
                                                n_covariates_total = n_covariates_total,
-                                               n_cat_per_ord_test = model_args_list$n_cat_per_ord_test)
+                                               n_cat_per_ord_test = model_args_list$n_cat_per_ord_test,
+                                               model_args_list = model_args_list)
         n_nuisance    <- dims$n_nuisance
         n_params_main <- dims$n_params_main
         n_params      <- dims$n_params
@@ -1524,24 +2404,22 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
         n_covariates_max_d <- model_args_list$n_covariates_max_d
         n_covariates_total <- model_args_list$n_covariates_total
         ##
-        outs <- convert_X_to_padded_for_Stan(X = X,
-                                             N = N,
-                                             n_tests = n_tests,
-                                             n_class = n_class,
-                                             n_covariates_max = n_covariates_max,
-                                             n_covariates_max_nd = n_covariates_max_nd,
-                                             n_covariates_max_d = n_covariates_max_d,
-                                             n_covariates_per_outcome_mat = n_covariates_per_outcome_mat,
-                                             padding_value = -999)
-        X_nd <- outs$X_nd
-        X_d  <- outs$X_d
-        if (n_class == 1L) X <-  outs$X
+        if (!(Model_type %in% c("CLC_MVOP", "CLC-MVOP"))) {
+                outs <- convert_X_to_padded_for_Stan(X = X,
+                                                     N = N,
+                                                     n_tests = n_tests,
+                                                     n_class = n_class,
+                                                     n_covariates_max = n_covariates_max,
+                                                     n_covariates_max_nd = n_covariates_max_nd,
+                                                     n_covariates_max_d = n_covariates_max_d,
+                                                     n_covariates_per_outcome_mat = n_covariates_per_outcome_mat,
+                                                     padding_value = -999)
+                X_nd <- outs$X_nd
+                X_d  <- outs$X_d
+                if (n_class == 1L) X <-  outs$X
+        }
         
-        # str(X)
-        # str(X_nd)
-        # str(X_d)
-        
-        if (Model_type %in% c("MVP", "LC_MVP", "MVOP", "LC_MVOP")) {
+        if (Model_type %in% c("MVP", "LC_MVP", "MVOP", "LC_MVOP", "CLC_MVOP", "CLC-MVOP")) {
           
               known_num <- 0
               if (!is.null(model_args_list$known_values_indicator_list)) {
@@ -1549,14 +2427,12 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                   known_num <- known_num + sum(model_args_list$known_values_indicator_list[[c]])
                 }
               }
-              known_values_indicator_list <- if_null_then_set_to(
-                model_args_list$known_values_indicator_list,
-                lapply(1:n_class, function(c) matrix(0L, n_tests, n_tests))
-              )
-              known_values_list <- if_null_then_set_to(
-                model_args_list$known_values_list,
-                lapply(1:n_class, function(c) matrix(0.0, n_tests, n_tests))
-              )
+              known_values_indicator_list <- if_null_then_set_to( model_args_list$known_values_indicator_list,
+                                                                  lapply(1:n_class, function(c) matrix(0L, n_tests, n_tests)),
+                                                                  debugging = FALSE)
+              known_values_list <- if_null_then_set_to( model_args_list$known_values_list,
+                                                        lapply(1:n_class, function(c) matrix(0.0, n_tests, n_tests)),
+                                                        debugging = FALSE)
               
         }
         
@@ -1580,14 +2456,22 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                 
                 overflow_threshold <-  model_args_list$overflow_threshold
                 underflow_threshold <- model_args_list$underflow_threshold
-                handle_numerical_issues <- if_null_then_set_to(model_args_list$handle_numerical_issues, 1)
-                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised, 1)
+                handle_numerical_issues <- if_null_then_set_to( model_args_list$handle_numerical_issues,
+                                                                1,
+                                                                debugging = FALSE)
+                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised,
+                                                        1,
+                                                        debugging = FALSE)
                 
                 Phi_type <- model_args_list$Phi_type
                 Phi_type_int <- ifelse(Phi_type == "Phi", 1, 2)
                 
-                n_pops <- if_null_then_set_to(model_args_list$n_pops, 1)
-                pop <- if_null_then_set_to(model_args_list$pop,  c(rep(1, N)))
+                n_pops <- if_null_then_set_to(model_args_list$n_pops,
+                                              1,
+                                              debugging = FALSE)
+                pop <- if_null_then_set_to(model_args_list$pop,
+                                           c(rep(1, N)),
+                                           debugging = FALSE)
                 prior_prev_a <- model_args_list$prior_prev_a
                 prior_prev_b <- model_args_list$prior_prev_b
                 ##
@@ -1625,7 +2509,7 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                                        n_pops =  n_pops,  ## multi-pop not supported yet (currently only in Stan version)
                                        pop =  pop,
                                        ##
-                                       test_perm = as.integer(model_args_list$test_perm %||% 1:n_tests),
+                                       test_perm = as.integer(if (is.null(model_args_list$test_perm)) 1:n_tests else model_args_list$test_perm),
                                        ##
                                        n_covariates_max_nd = n_covariates_max_nd,
                                        n_covariates_max_d = n_covariates_max_d,
@@ -1687,8 +2571,12 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                 ##
                 overflow_threshold <-  model_args_list$overflow_threshold
                 underflow_threshold <- model_args_list$underflow_threshold
-                handle_numerical_issues <- if_null_then_set_to(model_args_list$handle_numerical_issues, 1)
-                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised, 1)
+                handle_numerical_issues <- if_null_then_set_to( model_args_list$handle_numerical_issues,
+                                                                1,
+                                                                debugging = FALSE)
+                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised,
+                                                        1,
+                                                        debugging = FALSE)
                 ##
                 Phi_type <- model_args_list$Phi_type
                 Phi_type_int <- ifelse(Phi_type == "Phi", 1, 2)
@@ -1718,7 +2606,7 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                                        n_tests = n_tests,
                                        y = y,
                                        ##
-                                       test_perm = as.integer(model_args_list$test_perm %||% 1:n_tests),
+                                       test_perm = as.integer(if (is.null(model_args_list$test_perm)) 1:n_tests else model_args_list$test_perm),
                                        ##
                                        n_covariates_max = n_covariates_max,
                                        X = X,
@@ -1770,14 +2658,22 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                 
                 overflow_threshold <-  model_args_list$overflow_threshold
                 underflow_threshold <- model_args_list$underflow_threshold
-                handle_numerical_issues <- if_null_then_set_to(model_args_list$handle_numerical_issues, 1)
-                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised, 1)
+                handle_numerical_issues <- if_null_then_set_to( model_args_list$handle_numerical_issues,
+                                                                1,
+                                                                debugging = FALSE)
+                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised,
+                                                        1,
+                                                        debugging = FALSE)
                 
                 Phi_type <- model_args_list$Phi_type
                 Phi_type_int <- ifelse(Phi_type == "Phi", 1, 2)
                 
-                n_pops <- if_null_then_set_to(model_args_list$n_pops, 1)
-                pop <- if_null_then_set_to(model_args_list$pop,  c(rep(1, N)))
+                n_pops <- if_null_then_set_to(model_args_list$n_pops,
+                                              1,
+                                              debugging = FALSE)
+                pop <- if_null_then_set_to(model_args_list$pop,
+                                           c(rep(1, N)),
+                                           debugging = FALSE)
                 prior_prev_a <- model_args_list$prior_prev_a
                 prior_prev_b <- model_args_list$prior_prev_b
                 ##
@@ -1824,7 +2720,9 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                                        LT_known_bs_indicator = LT_known_bs_indicator
                                        )
           
-        } else if (Model_type == "LC_MVOP") {
+        } else if (Model_type %in% c("LC_MVOP", "CLC_MVOP", "CLC-MVOP")) {
+          
+          if (Model_type == "LC_MVOP") {
           
                 prior_only <-  as.integer(model_args_list$prior_only)
                 ##
@@ -1842,14 +2740,22 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                 ##
                 overflow_threshold <-  model_args_list$overflow_threshold
                 underflow_threshold <- model_args_list$underflow_threshold
-                handle_numerical_issues <- if_null_then_set_to(model_args_list$handle_numerical_issues, 1)
-                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised, 1)
+                handle_numerical_issues <- if_null_then_set_to( model_args_list$handle_numerical_issues,
+                                                                1,
+                                                                debugging = FALSE)
+                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised,
+                                                        1,
+                                                        debugging = FALSE)
                 ##
                 Phi_type <- model_args_list$Phi_type
                 Phi_type_int <- ifelse(Phi_type == "Phi", 1, 2)
                 ##
-                n_pops <- if_null_then_set_to(model_args_list$n_pops, 1)
-                pop <- if_null_then_set_to(model_args_list$pop,  c(rep(1, N)))
+                n_pops <- if_null_then_set_to(model_args_list$n_pops,
+                                              1,
+                                              debugging = FALSE)
+                pop <- if_null_then_set_to(model_args_list$pop,
+                                           c(rep(1, N)),
+                                           debugging = FALSE)
                 ##
                 prior_prev_a <- model_args_list$prior_prev_a
                 prior_prev_b <- model_args_list$prior_prev_b
@@ -1903,7 +2809,6 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                 C_raw_upper = model_args_list$C_raw_upper
                 ##
                 print(paste0("model_args_list$C_raw_lower = ", model_args_list$C_raw_lower))
-                # print(-5.0 %||% NULL)   ## sanity check the operator exists
                 ##
                 ## ---- Make "Stan_data_list":
                 ##
@@ -1923,7 +2828,7 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                                        n_pops =  n_pops,  ## multi-pop not supported yet (currently only in Stan version)
                                        pop = pop,
                                        ##
-                                       test_perm = as.integer(model_args_list$test_perm %||% 1:n_tests),
+                                       test_perm = as.integer(if (is.null(model_args_list$test_perm)) 1:n_tests else model_args_list$test_perm),
                                        n_cat_per_test = as.integer(model_args_list$n_cat_per_test), ## ---- ordinal-only
                                        ##
                                        n_covariates_max_nd = n_covariates_max_nd,
@@ -1971,6 +2876,244 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                 # print(paste("Stan_data_list = "))
                 # print(str(Stan_data_list))
           
+          } else {
+          
+                prior_only <- as.integer(isTRUE(as.logical(model_args_list$prior_only)))
+                ##
+                corr_force_positive <- as.integer(isTRUE(as.logical(model_args_list$corr_force_positive)))
+                lb_corr <- model_args_list$lb_corr
+                ub_corr <- model_args_list$ub_corr
+                ##
+                prior_LKJ <- model_args_list$prior_LKJ
+                if (!(is.matrix(prior_LKJ))) {
+                  prior_LKJ <- matrix(
+                    as.numeric(prior_LKJ),
+                    ncol = 1L
+                  )
+                }
+                ##
+                overflow_threshold <- as.numeric(model_args_list$overflow_threshold)
+                underflow_threshold <- as.numeric(model_args_list$underflow_threshold)
+                handle_numerical_issues <- as.integer(isTRUE(as.logical(if_null_then_set_to( model_args_list$handle_numerical_issues,
+                                                                                             TRUE,
+                                                                                             debugging = FALSE))))
+                fully_vectorised <- as.integer(if_null_then_set_to( model_args_list$fully_vectorised,
+                                                                    1L,
+                                                                    debugging = FALSE))
+                ##
+                Phi_type <- model_args_list$Phi_type
+                Phi_type_int <- if (identical(Phi_type, "Phi")) 1L else 2L
+                ##
+                n_pops_clc <- as.integer(model_args_list$n_pops)
+                pop_clc <- array(
+                  as.integer(model_args_list$pop),
+                  dim = N
+                )
+                ##
+                ## ---- Ordinal-only stuff:
+                ##
+                n_binary_tests <- as.integer(model_args_list$n_binary_tests)
+                n_ordinal_tests <- as.integer(model_args_list$n_ordinal_tests)
+                n_ord_pad <- max(
+                  1L,
+                  n_ordinal_tests
+                )
+                ##
+                n_cat_per_ord_test <- if (n_ordinal_tests > 0L) {
+                  array(
+                    as.integer(model_args_list$n_cat_per_ord_test),
+                    dim = n_ordinal_tests
+                  )
+                } else {
+                  array(
+                    integer(0L),
+                    dim = 0L
+                  )
+                }
+                n_thr_per_ord_test <- if (n_ordinal_tests > 0L) {
+                  array(
+                    as.integer(model_args_list$n_thr_per_ord_test),
+                    dim = n_ordinal_tests
+                  )
+                } else {
+                  array(
+                    integer(0L),
+                    dim = 0L
+                  )
+                }
+                ##
+                prior_dirichlet_alpha <- lapply(
+                  seq_len(n_class),
+                  function(class_index) {
+                    if (n_ordinal_tests > 0L) {
+                      alpha_matrix <- as.matrix(model_args_list$prior_dirichlet_alpha[[class_index]])
+                      storage.mode(alpha_matrix) <- "double"
+                      return(alpha_matrix)
+                    }
+                    return(matrix(
+                      1.0,
+                      nrow = 1L,
+                      ncol = 1L
+                    ))
+                  }
+                )
+                ##
+                ## ---- Build 4D X, 3D baseline_case, and 4-class Se/Sp arrays for Stan JSON:
+                ##
+                X_stan_arr <- array(
+                  0.0,
+                  dim = c(n_class, n_tests, N, n_covariates_max)
+                )
+                for (class_index in seq_len(n_class)) {
+                  for (test_index in seq_len(n_tests)) {
+                    X_stan_arr[class_index, test_index, , ] <- model_args_list$X[[class_index]][[test_index]]
+                  }
+                }
+                baseline_case_stan_arr <- array(
+                  0.0,
+                  dim = c(n_class, n_tests, n_covariates_max)
+                )
+                for (class_index in seq_len(n_class)) {
+                  for (test_index in seq_len(n_tests)) {
+                    baseline_case_stan_arr[class_index, test_index, ] <-
+                      as.numeric(model_args_list$baseline_case[[class_index]][, test_index])
+                  }
+                }
+                n_chosen_mat_clc <- model_args_list$n_chosen_cutoffs
+                n_chosen_max_clc <- as.integer(model_args_list$n_chosen_cutoffs_max)
+                chosen_cutoffs_stan_arr <- array(
+                  1L,
+                  dim = c(n_class, n_ord_pad, n_chosen_max_clc)
+                )
+                link_ms_stan_arr <- array(
+                  0.0,
+                  dim = c(n_class, n_ord_pad, n_chosen_max_clc, 2L)
+                )
+                link_ms_stan_arr[, , , 2L] <- 1.0
+                if (n_ordinal_tests > 0L) {
+                  for (class_index in seq_len(n_class)) {
+                    for (ord_index in seq_len(n_ordinal_tests)) {
+                      m_val <- as.integer(n_chosen_mat_clc[class_index, ord_index])
+                      if (m_val > 0L) {
+                        if (!is.null(model_args_list$chosen_cutoffs)) {
+                          chosen_cutoffs_stan_arr[class_index, ord_index, 1:m_val] <-
+                            as.integer(model_args_list$chosen_cutoffs[class_index, ord_index, 1:m_val])
+                        }
+                        if (!is.null(model_args_list$prior_Se_Sp_link_mean_SD)) {
+                          raw_link <- model_args_list$prior_Se_Sp_link_mean_SD
+                          link_slice <- if (is.list(raw_link)) {
+                            raw_link[[class_index]][[ord_index]]
+                          } else {
+                            raw_link[class_index, ord_index, , ]
+                          }
+                          link_mat <- matrix(
+                            as.numeric(link_slice),
+                            ncol = 2L
+                          )
+                          link_ms_stan_arr[class_index, ord_index, 1:m_val, 1L] <- link_mat[1:m_val, 1L]
+                          link_ms_stan_arr[class_index, ord_index, 1:m_val, 2L] <- link_mat[1:m_val, 2L]
+                        }
+                      }
+                    }
+                  }
+                }
+                ##
+                C_raw_lower <- as.numeric(model_args_list$C_raw_lower)
+                C_raw_upper <- as.numeric(model_args_list$C_raw_upper)
+                n_prev_cov_clc <- as.integer(model_args_list$n_prevalence_covariates)
+                n_standardisation_clc <- as.integer(model_args_list$n_standardisation)
+                ##
+                ## ---- Make "Stan_data_list" matching CLC_MVOP_cpp_skeleton.stan:
+                ##
+                Stan_data_list <- list(
+                  N = as.integer(N),
+                  n_tests = as.integer(n_tests),
+                  n_binary_tests = n_binary_tests,
+                  n_ordinal_tests = n_ordinal_tests,
+                  n_cat_per_ord_test = n_cat_per_ord_test,
+                  n_thr_per_ord_test = n_thr_per_ord_test,
+                  prior_dirichlet_alpha = prior_dirichlet_alpha,
+                  y = model_args_list$y,
+                  y_upper_when_interval_censored = model_args_list$y_upper_when_interval_censored,
+                  n_class = as.integer(n_class),
+                  test_perm = array(
+                    as.integer(model_args_list$test_perm),
+                    dim = n_tests
+                  ),
+                  n_cat_per_test = array(
+                    as.integer(model_args_list$n_cat_per_test),
+                    dim = n_tests
+                  ),
+                  n_pops = n_pops_clc,
+                  pop = pop_clc,
+                  pop_weight = array(
+                    as.numeric(model_args_list$pop_weight),
+                    dim = n_pops_clc
+                  ),
+                  class_D = model_args_list$class_D,
+                  test_condition = array(
+                    as.integer(model_args_list$test_condition),
+                    dim = n_tests
+                  ),
+                  is_perfect_ref = array(
+                    as.integer(model_args_list$is_perfect_ref),
+                    dim = n_tests
+                  ),
+                  perfect_ref_M = as.numeric(model_args_list$perfect_ref_M),
+                  n_covariates_max = as.integer(n_covariates_max),
+                  X = X_stan_arr,
+                  n_covs_per_outcome = model_args_list$n_covariates_per_outcome_mat,
+                  n_prevalence_covariates = n_prev_cov_clc,
+                  X_prevalence = model_args_list$X_prevalence,
+                  corr_force_positive = corr_force_positive,
+                  known_num = as.integer(known_num),
+                  pool_correlations_across_classes = as.integer(model_args_list$pool_correlations_across_classes),
+                  known_values_list = known_values_list,
+                  known_values_indicator_list = known_values_indicator_list,
+                  lb_corr = lb_corr,
+                  ub_corr = ub_corr,
+                  prior_LKJ = prior_LKJ,
+                  overflow_threshold = overflow_threshold,
+                  underflow_threshold = underflow_threshold,
+                  C_raw_lower = C_raw_lower,
+                  C_raw_upper = C_raw_upper,
+                  prior_only = prior_only,
+                  prior_beta_mean = model_args_list$prior_beta_mean,
+                  prior_beta_sd = model_args_list$prior_beta_sd,
+                  Phi_type = Phi_type_int,
+                  handle_numerical_issues = handle_numerical_issues,
+                  fully_vectorised = fully_vectorised,
+                  use_pop_prev_prior = as.integer(model_args_list$use_pop_prev_prior),
+                  baseline_case = baseline_case_stan_arr,
+                  use_Se_Sp_prior = as.integer(model_args_list$use_Se_Sp_prior),
+                  n_chosen_cutoffs_max = n_chosen_max_clc,
+                  n_chosen_cutoffs = n_chosen_mat_clc,
+                  chosen_cutoffs = chosen_cutoffs_stan_arr,
+                  prior_Se_Sp_link_mean_SD = link_ms_stan_arr,
+                  use_pop_Se_Sp_prior = as.integer(model_args_list$use_pop_Se_Sp_prior),
+                  n_standardisation = n_standardisation_clc,
+                  standardisation_index = array(
+                    as.integer(model_args_list$standardisation_index),
+                    dim = n_standardisation_clc
+                  ),
+                  standardisation_weight = array(
+                    as.numeric(model_args_list$standardisation_weight),
+                    dim = n_standardisation_clc
+                  ),
+                  use_label_constraint = as.integer(model_args_list$use_label_constraint),
+                  reference_test = array(
+                    as.integer(model_args_list$reference_test),
+                    dim = 2L
+                  ),
+                  cutoff_category = array(
+                    as.integer(model_args_list$cutoff_category),
+                    dim = n_tests
+                  ),
+                  save_subject_probs = as.integer(model_args_list$save_subject_probs)
+                )
+          
+          }
+          
         } else if (Model_type == "MVOP") {
           
                 prior_only <-  as.integer(model_args_list$prior_only)
@@ -1989,8 +3132,12 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                 ##
                 overflow_threshold <-  model_args_list$overflow_threshold
                 underflow_threshold <- model_args_list$underflow_threshold
-                handle_numerical_issues <- if_null_then_set_to(model_args_list$handle_numerical_issues, 1)
-                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised, 1)
+                handle_numerical_issues <- if_null_then_set_to( model_args_list$handle_numerical_issues,
+                                                                1,
+                                                                debugging = FALSE)
+                fully_vectorised <- if_null_then_set_to(model_args_list$fully_vectorised,
+                                                        1,
+                                                        debugging = FALSE)
                 ##
                 Phi_type <- model_args_list$Phi_type
                 Phi_type_int <- ifelse(Phi_type == "Phi", 1, 2)
@@ -2046,7 +3193,7 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
                                        ##
                                        y = y,
                                        ##
-                                       test_perm = as.integer(model_args_list$test_perm %||% 1:n_tests),
+                                       test_perm = as.integer(if (is.null(model_args_list$test_perm)) 1:n_tests else model_args_list$test_perm),
                                        n_cat_per_test = as.integer(model_args_list$n_cat_per_test), ## ---- ordinal-only
                                        ##
                                        n_covariates_max = n_covariates_max,
@@ -2081,7 +3228,7 @@ make_Stan_data_list_for_internal_models <- function( Model_type,
           
         }
 
-        if (Model_type %in% c("LC_MVOP", "MVOP")) {
+        if (Model_type %in% c("LC_MVOP", "MVOP", "CLC_MVOP", "CLC-MVOP")) {
           ## These remain Stan arrays when there is exactly one ordinal test.
           Stan_data_list$n_cat_per_ord_test <-  array(Stan_data_list$n_cat_per_ord_test, dim = n_ordinal_tests)
           Stan_data_list$n_thr_per_ord_test <-  array(Stan_data_list$n_thr_per_ord_test, dim = n_ordinal_tests)

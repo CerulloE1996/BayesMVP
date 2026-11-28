@@ -1,7 +1,8 @@
 functions {
   
   
-   matrix corr_to_chol(real x, int J) {
+   matrix corr_to_chol ( real x,
+                         int J) {
         matrix[J, J] cor = add_diag(rep_matrix(x, J, J), 1 - x);
         return cholesky_decompose(cor); 
   }

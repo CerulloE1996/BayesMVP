@@ -79,7 +79,7 @@
      
      if (n_problem_array[t1] > 0) {
        
-       // Resize containers for this problem size
+       //// Resize containers for this problem size
        log_abs_deriv_Bound_Z_x_L_comp.resize(n_problem_array[t1], n_tests);
        sign_deriv_Bound_Z_x_L_comp.resize(n_problem_array[t1], n_tests);
        log_sum_result.resize(n_problem_array[t1]);
@@ -92,7 +92,7 @@
        double log_abs_deriv_L_T_T_inv = -2.0 * log_abs_L_Omega_double(t1, t1) + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t1);
        double sign_deriv_L_T_T_inv = -1.0 * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t1);
        
-       // Compute deriv_Bound_Z_x_L for problem indices
+       //// Compute deriv_Bound_Z_x_L for problem indices
        // for (int t = 0; t < t1; t++) {
        //   log_abs_deriv_Bound_Z_x_L_comp.col(t) = B_log_Z_std_norm.col(t)(problem_index_array[t1]) + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t);
        //   sign_deriv_Bound_Z_x_L_comp.col(t).array() = B_sign_Z_std_norm.col(t)(problem_index_array[t1]).array() * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t);
@@ -103,11 +103,11 @@
          sign_deriv_Bound_Z_x_L_comp.col(t).array() = B_sign_Z_std_norm.col(t)(problem_index_array[t1]).array() * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t);
        }
        
-       // Create temporaries EXACTLY like MVP function
+       //// Create temporaries EXACTLY like MVP function
        Eigen::Matrix<double, -1, 1> temp_log_abs_deriv = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_deriv = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
-       // Sum using log_sum_exp
+       //// Sum using log_sum_exp
        log_abs_sum_exp_general_v2(log_abs_deriv_Bound_Z_x_L_comp.leftCols(t1),
                                   sign_deriv_Bound_Z_x_L_comp.leftCols(t1),
                                   vect_type, vect_type,
@@ -120,14 +120,14 @@
        sign_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]) = temp_sign_deriv;
        sign_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]).array() *= -1.0;
        
-       // Compute grad_bound_z
+       //// Compute grad_bound_z
        log_terms.col(0).array() = log_abs_deriv_L_T_T_inv + B_log_Bound_Z.col(t1)(problem_index_array[t1]).array() + log_abs_L_Omega_double(t1, t1);
        log_terms.col(1).array() = -log_abs_L_Omega_double(t1,
                      t1) + log_abs_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]).array();
        sign_terms.col(0).array() = sign_deriv_L_T_T_inv * B_sign_Bound_Z.col(t1)(problem_index_array[t1]).array() * stan::math::sign(L_Omega_double(t1, t1));
        sign_terms.col(1) = stan::math::sign(1.0 / L_Omega_double(t1, t1)) * sign_deriv_Bound_Z_x_L.col(0)(problem_index_array[t1]);
        
-       // Create temporaries for grad_bound_z
+       //// Create temporaries for grad_bound_z
        Eigen::Matrix<double, -1, 1> temp_log_abs_grad_bound = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_grad_bound = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
@@ -142,14 +142,14 @@
        B_log_abs_grad_bound_z.col(0)(problem_index_array[t1]) = temp_log_abs_grad_bound;
        B_sign_grad_bound_z.col(0)(problem_index_array[t1]) = temp_sign_grad_bound;
        
-       // Compute grad_Phi_bound_z and grad_prob
+       //// Compute grad_Phi_bound_z and grad_prob
        B_log_abs_grad_Phi_bound_z.col(0)(problem_index_array[t1]).array() = B_log_phi_Bound_Z.col(t1)(problem_index_array[t1]).array() + B_log_abs_grad_bound_z.col(0)(problem_index_array[t1]).array();
        B_sign_grad_Phi_bound_z.col(0)(problem_index_array[t1]) = B_sign_grad_bound_z.col(0)(problem_index_array[t1]);
        
        B_log_abs_grad_prob.col(0)(problem_index_array[t1]).array() = B_log_abs_y_sign_chunk.col(t1)(problem_index_array[t1]).array() + B_log_abs_grad_Phi_bound_z.col(0)(problem_index_array[t1]).array();
        B_sign_grad_prob.col(0)(problem_index_array[t1]).array() = -1.0 * B_sign_y_sign_chunk.col(t1)(problem_index_array[t1]).array() * B_sign_grad_Phi_bound_z.col(0)(problem_index_array[t1]).array();
        
-       // Final gradient computation
+       //// Final gradient computation
        log_abs_bs_grad_array_col_for_each_n(problem_index_array[t1]).array() = B_log_common_grad_term_1.col(t1)(problem_index_array[t1]).array() + B_log_abs_grad_prob.col(0)(problem_index_array[t1]).array();
        sign_bs_grad_array_col_for_each_n(problem_index_array[t1]) = B_sign_grad_prob.col(0)(problem_index_array[t1]);
        
@@ -190,7 +190,7 @@
          sign_deriv_Bound_Z_x_L_comp.col(t).array() = B_sign_Z_std_norm.col(t)(problem_index_array[t1]).array() * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1, t);
        }
        
-       // Create temporaries
+       //// Create temporaries
        Eigen::Matrix<double, -1, 1> temp_log_abs_deriv_0 = Eigen::Matrix<double, -1, 1>::Constant(n_problem_array[t1], -INFINITY);
        Eigen::Matrix<double, -1, 1> temp_sign_deriv_0 = Eigen::Matrix<double, -1, 1>::Ones(n_problem_array[t1]);
        
@@ -228,7 +228,7 @@
        B_log_abs_grad_prob.col(0)(problem_index_array[t1]).array() = B_log_abs_y_sign_chunk.col(t1)(problem_index_array[t1]).array() + B_log_abs_grad_Phi_bound_z.col(0)(problem_index_array[t1]).array();
        B_sign_grad_prob.col(0)(problem_index_array[t1]).array() = -1.0 * B_sign_y_sign_chunk.col(t1)(problem_index_array[t1]).array() * B_sign_grad_Phi_bound_z.col(0)(problem_index_array[t1]).array();
        
-       // z_grad_term
+       //// z_grad_term
        B_log_abs_z_grad_term.col(0)(problem_index_array[t1]).array() = B_log_abs_y_m_y_sign_x_u.col(t1)(problem_index_array[t1]).array() + B_log_phi_Z_recip.col(t1)(problem_index_array[t1]).array() + 
          B_log_phi_Bound_Z.col(t1)(problem_index_array[t1]).array() + B_log_abs_grad_bound_z.col(0)(problem_index_array[t1]).array();
        B_sign_z_grad_term.col(0)(problem_index_array[t1]).array() = B_sign_y_m_y_sign_x_u.col(t1)(problem_index_array[t1]).array() * B_sign_grad_bound_z.col(0)(problem_index_array[t1]).array();
@@ -277,7 +277,7 @@
        B_log_abs_grad_prob.col(1)(problem_index_array[t1]).array() = B_log_abs_y_sign_chunk.col(t1 + 1)(problem_index_array[t1]).array() + B_log_abs_grad_Phi_bound_z.col(1)(problem_index_array[t1]).array();
        B_sign_grad_prob.col(1)(problem_index_array[t1]).array() = -1.0 * B_sign_y_sign_chunk.col(t1 + 1)(problem_index_array[t1]).array() * B_sign_grad_Phi_bound_z.col(1)(problem_index_array[t1]).array();
        
-       // final computation
+       //// final computation
        log_terms.col(0) = B_y1_log_prob.col(t1 + 1)(problem_index_array[t1]) + B_log_abs_grad_prob.col(0)(problem_index_array[t1]);
        log_terms.col(1) = B_y1_log_prob.col(t1 + 0)(problem_index_array[t1]) + B_log_abs_grad_prob.col(1)(problem_index_array[t1]);
        sign_terms.col(0) = B_sign_grad_prob.col(0)(problem_index_array[t1]);
@@ -384,7 +384,7 @@
        
        log_terms.col(0).array() = log_abs_L_Omega_double(t1+1, t1) + B_log_abs_z_grad_term.col(0).array();
        
-       // Create temporary for indexed view
+       //// Create temporary for indexed view
        Eigen::Matrix<double, -1, 1> temp_col = B_log_Z_std_norm.col(t1)(problem_index_array[t1]);
        log_terms.col(1).array() = temp_col.array() + log_abs_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1+1,
                      t1);
@@ -432,7 +432,7 @@
          sign_deriv_L_T_T_inv = stan::math::sign(-1.0 / (L_Omega_double(t1 + ii + 1, t1 + ii + 1) * L_Omega_double(t1 + ii + 1, t1 + ii + 1))) * sign_Jacobian_d_L_Sigma_wrt_b_3d_arrays_double[t1](t1 + ii + 1, t1 + ii + 1);
          
          for (int jj = 0; jj < ii + 1; jj++) {
-           // EXACTLY like MVP - create temporaries for indexed views
+           //// EXACTLY like MVP - create temporaries for indexed views
            Eigen::Matrix<double, -1, 1> temp_log_z_std = B_log_Z_std_norm.col(t1 + jj)(problem_index_array[t1]);
            
            log_abs_deriv_Bound_Z_x_L_comp.col(jj).array() = log_abs_L_Omega_double(t1 + ii + 1, t1 + jj) + 
@@ -503,7 +503,7 @@
      
    }
    
-   // Resize containers back to chunk_size
+   //// Resize containers back to chunk_size
    log_abs_deriv_Bound_Z_x_L_comp.resize(chunk_size, n_tests);
    sign_deriv_Bound_Z_x_L_comp.resize(chunk_size, n_tests);
    log_abs_deriv_Bound_Z_x_L.resize(chunk_size, n_tests);

@@ -23,23 +23,23 @@
  
  
 // ============================================================================
-// fn_MVOP_compute_lp_GHK_cols.hpp
+//// fn_MVOP_compute_lp_GHK_cols.hpp
 //
-// Mixed binary + ordinal GHK column computation.
-// Replaces fn_MVP_compute_lp_GHK_cols for the MVOP model.
+//// Mixed binary + ordinal GHK column computation.
+//// Replaces fn_MVP_compute_lp_GHK_cols for the MVOP model.
 //
-// Key difference from MVP version:
+//// Key difference from MVP version:
 //   - Binary tests (t < n_bin): identical to MVP (uses y_sign trick)
 //   - Ordinal tests (t >= n_bin): uses lower/upper bounds from cutpoints
 //
-// The function computes the same outputs as the binary version:
+//// The function computes the same outputs as the binary version:
 //   - Bound_U_Phi_Bound_Z (now stores Φ(lower_bz) for ordinal tests)  
 //   - Phi_Z, Z_std_norm, prob, y1_log_prob
-// Plus new outputs for ordinal tests:
+//// Plus new outputs for ordinal tests:
 //   - Upper_Bound_Z: upper bound in std normal space (ordinal only)
 //   - Phi_Upper_Bound_Z: Φ(upper_bz) (ordinal only)
 //
-// NOTE: For ordinal tests, Bound_Z stores the LOWER bound and 
+//// NOTE: For ordinal tests, Bound_Z stores the LOWER bound and 
 //       Upper_Bound_Z stores the UPPER bound.
 // ============================================================================
  
@@ -49,7 +49,7 @@
 // #include "MVP_lp_grad_MD_AD_fns.hpp.hpp"
  
 // ============================================================================
-// Unified GHK column computation for mixed binary + ordinal
+//// Unified GHK column computation for mixed binary + ordinal
 // ============================================================================
 ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols(    const int t,
                                                    Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,    // Φ(lower_bz) for ordinal, Φ(BZ) for binary
@@ -68,8 +68,8 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols(    const int t,
                                                    ////
                                                    const bool is_binary,                                                // slot type (was: const int n_bin)
                                                    const Model_fn_args_struct &Model_args_as_cpp_struct
-                                                   // const int n_bin,                                                     // number of binary tests
-                                                   // const Model_fn_args_struct &Model_args_as_cpp_struct
+                                                   //// const int n_bin,                                                     // number of binary tests
+                                                   //// const Model_fn_args_struct &Model_args_as_cpp_struct
 ) {
 
        const std::string vect_type_log = Model_args_as_cpp_struct.Model_args_strings(4);
@@ -85,39 +85,59 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols(    const int t,
                // ================================================================
                Eigen::Matrix<double, -1, -1> y_sign_col = y_chunk.col(t).array() + (y_chunk.col(t).array() - 1.0);  // 2y - 1
 
-               fn_EIGEN_double_into( Bound_U_Phi_Bound_Z.col(t), Bound_Z.col(t), Phi_type, vect_type_Phi);
+               fn_EIGEN_double_into( Bound_U_Phi_Bound_Z.col(t),
+                                     Bound_Z.col(t),
+                                     Phi_type,
+                                     vect_type_Phi,
+                                     false);
 
                Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array()
                                     + (y_chunk.col(t).array() - Bound_U_Phi_Bound_Z.col(t).array())
                                     * (y_sign_col.array() * u_array.col(t).array());
 
-               fn_EIGEN_double_into( Z_std_norm.col(t), Phi_Z.col(t), inv_Phi_type, vect_type_inv_Phi);
+               fn_EIGEN_double_into( Z_std_norm.col(t),
+                                     Phi_Z.col(t),
+                                     inv_Phi_type,
+                                     vect_type_inv_Phi,
+                                     false);
 
                prob.col(t).array() = y_chunk.col(t).array() * (1.0 - Bound_U_Phi_Bound_Z.col(t).array())
                                    + (y_chunk.col(t).array() - 1.0) * Bound_U_Phi_Bound_Z.col(t).array()
                                    * (y_sign_col.array());
 
-               fn_EIGEN_double_into( y1_log_prob.col(t), prob.col(t), "log", vect_type_log);
+               fn_EIGEN_double_into( y1_log_prob.col(t),
+                                     prob.col(t),
+                                     "log",
+                                     vect_type_log,
+                                     false);
 
        } else {
 
                // ================================================================
-               // ORDINAL TEST: uses lower and upper bounds from cutpoints
+               //// ORDINAL TEST: uses lower and upper bounds from cutpoints
                // ================================================================
-               // At this point:
+               //// At this point:
                //   Bound_Z.col(t)       = lower_bz = (C_{k-1} - mu_t) / L(t,t)  [or -big if k=1]
                //   Upper_Bound_Z.col(t) = upper_bz = (C_k - mu_t) / L(t,t)      [or +big if k=K]
                //
-               // These must be pre-computed by the caller before calling this fn.
+               //// These must be pre-computed by the caller before calling this fn.
 
                // Φ(lower_bz) - store in Bound_U_Phi_Bound_Z for consistency
-               fn_EIGEN_double_into( Bound_U_Phi_Bound_Z.col(t), Bound_Z.col(t), Phi_type, vect_type_Phi);
+               fn_EIGEN_double_into( Bound_U_Phi_Bound_Z.col(t),
+                                     Bound_Z.col(t),
+                                     Phi_type,
+                                     vect_type_Phi,
+                                     false);
 
                // // Φ(upper_bz)
                // Phi_Upper_Bound_Z.col(t) = fn_EIGEN_double(Upper_Bound_Z.col(t), Phi_type, vect_type_Phi);
 
                // prob = Φ(upper_bz) - Φ(lower_bz)
-               fn_EIGEN_double_into(prob.col(t), Upper_Bound_Z.col(t), Phi_type, vect_type_Phi);
+               fn_EIGEN_double_into( prob.col(t),
+                                     Upper_Bound_Z.col(t),
+                                     Phi_type,
+                                     vect_type_Phi,
+                                     false);
                prob.col(t).array() -= Bound_U_Phi_Bound_Z.col(t).array();
                // prob.col(t).array() = prob.col(t).array().max(1e-30);
 
@@ -126,10 +146,18 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols(    const int t,
                Phi_Z.col(t).array() = Bound_U_Phi_Bound_Z.col(t).array() + u_array.col(t).array() * prob.col(t).array();
 
                // Z = Φ⁻¹(Φ(Z))no
-               fn_EIGEN_double_into( Z_std_norm.col(t), Phi_Z.col(t), inv_Phi_type, vect_type_inv_Phi);
+               fn_EIGEN_double_into( Z_std_norm.col(t),
+                                     Phi_Z.col(t),
+                                     inv_Phi_type,
+                                     vect_type_inv_Phi,
+                                     false);
 
                // log(prob)
-               fn_EIGEN_double_into( y1_log_prob.col(t), prob.col(t), "log", vect_type_log);
+               fn_EIGEN_double_into( y1_log_prob.col(t),
+                                     prob.col(t),
+                                     "log",
+                                     vect_type_log,
+                                     false);
 
        }
 
@@ -139,7 +167,7 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols(    const int t,
 // ////         no temporaries. Note the pattern: copy the input column INTO the output column,
 // ////         then transform the output column in place.
 // //// =====================================================================================
-// template <Vec vec>
+//// template <Vec vec>
 // inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
 //                                            Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
 //                                            Eigen::Ref<Eigen::Matrix<double, -1, -1>> Phi_Z,
@@ -211,8 +239,8 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols(    const int t,
 // fn_MVOP_compute_phi_Bound_Z_cols: Compute φ(lower_bz) and φ(upper_bz) 
 // for ordinal tests, or φ(BZ) for binary tests.
 //
-// For binary tests: identical to fn_MVP_compute_phi_Bound_Z_cols
-// For ordinal tests: computes both phi_Lower_Bound_Z and phi_Upper_Bound_Z
+//// For binary tests: identical to fn_MVP_compute_phi_Bound_Z_cols
+//// For ordinal tests: computes both phi_Lower_Bound_Z and phi_Upper_Bound_Z
 // ============================================================================
 ALWAYS_INLINE void fn_MVOP_compute_phi_Bound_Z_cols(   const int t,
                                                        Eigen::Matrix<double, -1, -1> &phi_Bound_Z,           // φ(lower_bz) for ordinal, φ(BZ) for binary
@@ -224,7 +252,7 @@ ALWAYS_INLINE void fn_MVOP_compute_phi_Bound_Z_cols(   const int t,
                                                        const bool is_binary,                                            // slot type (was: const int n_bin)
                                                        const Model_fn_args_struct &Model_args_as_cpp_struct
                                                        // const int n_bin,
-                                                       // const Model_fn_args_struct &Model_args_as_cpp_struct
+                                                       //// const Model_fn_args_struct &Model_args_as_cpp_struct
 ) {
 
        const double sqrt_2_pi_recip = 1.0 / std::sqrt(2.0 * M_PI);
@@ -248,7 +276,10 @@ ALWAYS_INLINE void fn_MVOP_compute_phi_Bound_Z_cols(   const int t,
 
        } else if (Phi_type == "Phi") {
 
-             phi_Bound_Z.col(t).array() += (sqrt_2_pi_recip * fn_EIGEN_double_in_a_per_thread_buffer( (-0.5) * stan::math::square(Bound_Z.col(t)), "exp", vect_type_exp)).array();
+             phi_Bound_Z.col(t).array() += (sqrt_2_pi_recip * fn_EIGEN_double_in_a_per_thread_buffer( (-0.5) * stan::math::square(Bound_Z.col(t)),
+                                                                                                      "exp",
+                                                                                                      vect_type_exp,
+                                                                                                      false)).array();
 
        }
 
@@ -267,14 +298,17 @@ ALWAYS_INLINE void fn_MVOP_compute_phi_Bound_Z_cols(   const int t,
 
              } else if (Phi_type == "Phi") {
 
-                   phi_Upper_Bound_Z_out.col(t).array() += (sqrt_2_pi_recip * fn_EIGEN_double_in_a_per_thread_buffer((-0.5) * stan::math::square(Upper_Bound_Z.col(t)), "exp", vect_type_exp)).array();
+                   phi_Upper_Bound_Z_out.col(t).array() += (sqrt_2_pi_recip * fn_EIGEN_double_in_a_per_thread_buffer( (-0.5) * stan::math::square(Upper_Bound_Z.col(t)),
+                                                                                                                      "exp",
+                                                                                                                      vect_type_exp,
+                                                                                                                      false)).array();
 
              }
 
        }
 
 }
-// template <Vec vec>
+//// template <Vec vec>
 // inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 //                                                Eigen::Matrix<double, -1, -1> &phi_Bound_Z,
 //                                                Eigen::Matrix<double, -1, -1> &phi_Upper_Bound_Z_out,
@@ -387,7 +421,7 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
            common_grad_term_1.setOnes();
          }
          
-         for (int t = 0; t < n_tests; ++t) {
+         for (int t = 0; t < n_tests; t++) {
            
                // if (t < n_binary_tests) {
                if (ord_idx_of_test(t) < 0) {   // binary
@@ -396,7 +430,7 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
                      
                       dZ_dmu_neg.col(t).array() = y_m_y_sign_x_u.col(t).array() * phi_Z_recip.col(t).array() * phi_Bound_Z.col(t).array() * L_Omega_recip_double(t, t);
                      
-                      // Binary: Bound_Z always finite
+                      //// Binary: Bound_Z always finite
                       dphi_times_bz.col(t).array() = dphi_over_L.col(t).array() * Bound_Z.col(t).array();
                       dZ_times_bz.col(t).array()   = dZ_dmu_neg.col(t).array()  * Bound_Z.col(t).array();
                    
@@ -476,18 +510,18 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
  
 
 // ============================================================================
-// fn_MVOP_compute_cutpoint_grad
+//// fn_MVOP_compute_cutpoint_grad
 //
-// Gradient w.r.t. cutpoints of a single ordinal test.
+//// Gradient w.r.t. cutpoints of a single ordinal test.
 //
-// For ordinal test at global index t (= n_bin + t_ord), with K_t categories
+//// For ordinal test at global index t (= n_bin + t_ord), with K_t categories
 // and K_t - 1 cutpoints C_0 < C_1 < ... < C_{K_t-2}:
 //
 // Cutpoint C_j (0-indexed) is:
 //   - UPPER bound for observations with y = j + 1
 //   - LOWER bound for observations with y = j + 2
 //
-// For each cutpoint j:
+//// For each cutpoint j:
 //   ∂prob_t/∂C_j:
 //     y = j+1 (upper):  +φ(ubz) / L(t,t)
 //     y = j+2 (lower):  -φ(lbz) / L(t,t)
@@ -495,8 +529,8 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
 //     y = j+1 (upper):  u * φ(ubz) / (φ(Z) * L(t,t))
 //     y = j+2 (lower):  (1-u) * φ(lbz) / (φ(Z) * L(t,t))
 //
-// Then the chain-rule propagation to future tests t' > t uses the SAME
-// recursive structure as fn_MVP_compute_coefficients_grad_v3:
+//// Then the chain-rule propagation to future tests t' > t uses the SAME
+//// recursive structure as fn_MVP_compute_coefficients_grad_v3:
 //   z_grad_term tracks ∂Z_{t'}/∂C_j through L_Omega
 //   grad_prob tracks ∂prob_{t'}/∂C_j
 //
@@ -507,16 +541,16 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
 
 
 // ============================================================================
-// fn_MVOP_compute_cutpoint_grad  -  FIXED VERSION
+//// fn_MVOP_compute_cutpoint_grad  -  FIXED VERSION
 //
 // BUG FIX: The n_future==0 and n_future==1 special-case accumulation formulas
 // for n_class > 1 used "prob.col(t)" and "prob.col(t+1)" directly instead of
-// "prop_rowwise_prod_temp.col(t) * prob_recip.col(t+ii)", which is what the
+//// "prop_rowwise_prod_temp.col(t) * prob_recip.col(t+ii)", which is what the
 // general case (and the hand-written coefficient gradient) correctly uses.
 //
 // The n_class==1 formulas were already correct.
 //
-// Additional fixes:
+//// Additional fixes:
 //   - dphi_direct_Cj / dZ_direct_Cj are real vectors (not aliases to workspace)
 //   - Inf guard on phi_Z_recip
 // ============================================================================
@@ -544,7 +578,7 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
                                                 // Eigen::Ref<Eigen::Matrix<double, -1, 1>> dphi_direct_Cj, //// ---- ordinal-only + NEW
                                                 // Eigen::Ref<Eigen::Matrix<double, -1, 1>> dZ_direct_Cj, //// ---- ordinal-only + NEW
                                                 // const bool compute_final_scalar_grad,
-                                                // const Model_fn_args_struct &Model_args_as_cpp_struct
+                                                //// const Model_fn_args_struct &Model_args_as_cpp_struct
 // ) {
   
      // const int n_class    = Model_args_as_cpp_struct.Model_args_ints(1);
@@ -679,16 +713,16 @@ ALWAYS_INLINE void fn_MVOP_grad_prep(    const Eigen::Ref<const Eigen::Matrix<do
 
 
 // ============================================================================
-// fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate
+//// fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate
 //
-// For the ordinal test t (with at least one later test): the propagation and the accumulation of the
-// commented-out fn_MVOP_compute_cutpoint_grad (above) for a dphi seed of 0 and the SAME dZ seed
-// (dZ_seed_value_in_every_row) in every row:
+//// For the ordinal test t (with at least one later test): the propagation and the accumulation of the
+//// commented-out fn_MVOP_compute_cutpoint_grad (above) for a dphi seed of 0 and the SAME dZ seed
+//// (dZ_seed_value_in_every_row) in every row:
 //   derivs_chain_container_vec = sum_{ii = first_term_accumulated .. n_future} grad_prob(ii) x
 //                                [prop_rowwise_prod_temp(t), n_class != 1 only] x prob_recip(t + ii).
 // dZ seed 1 with first_term_accumulated = 1: the weight of the dZ seed of each row (the term ii = 0 belongs to
 // the dphi seed). dZ seed 0 with first_term_accumulated = 0: exactly what a row that touches no cutpoint adds
-// to every cutpoint in the commented-out loop (0, or NaN when a factor of that row is not finite).
+//// to every cutpoint in the commented-out loop (0, or NaN when a factor of that row is not finite).
 // ============================================================================
 ALWAYS_INLINE void
 fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate(
@@ -713,12 +747,12 @@ fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_an
         grad_prob.col(0).setZero();
         z_grad_term.col(0).setConstant(dZ_seed_value_in_every_row);
         
-        // First future test effect
+        //// First future test effect
         grad_prob.col(1).array() = dphi_over_L.col(t + 1).array()
                                    * (L_Omega_double(t + 1, t) * z_grad_term.col(0).array());
         
         // Remaining future tests (only runs if n_future > 1)
-        for (int ii = 1; ii < n_future; ++ii) {
+        for (int ii = 1; ii < n_future; ii++) {
           
               if (ii == 1) {
                 prod_container = z_grad_term.leftCols(ii)
@@ -736,13 +770,13 @@ fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_an
         
         derivs_chain_container_vec.setZero();
         if (n_class != 1) {
-              for (int ii = first_term_accumulated; ii < n_future + 1; ++ii) {
+              for (int ii = first_term_accumulated; ii < n_future + 1; ii++) {
                 derivs_chain_container_vec.array() += grad_prob.col(ii).array()
                                                       * prop_rowwise_prod_temp.col(t).array()
                                                       * prob_recip.col(t + ii).array();
               }
         } else {
-              for (int ii = first_term_accumulated; ii < n_future + 1; ++ii) {
+              for (int ii = first_term_accumulated; ii < n_future + 1; ii++) {
                 derivs_chain_container_vec.array() += grad_prob.col(ii).array() * prob_recip.col(t + ii).array();
               }
         }
@@ -753,11 +787,11 @@ fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_an
 
 
 // ============================================================================
-// fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter
+//// fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter
 //
-// The gradient w.r.t. the ordered cutpoints C of ONE ordinal test, as the commented-out
+//// The gradient w.r.t. the ordered cutpoints C of ONE ordinal test, as the commented-out
 // fn_MVOP_compute_cutpoint_grad (above; same arguments), with one propagation through the later tests per test
-// instead of one per cutpoint (K_t - 1 passes over the chunk, each with a scalar loop over the rows):
+//// instead of one per cutpoint (K_t - 1 passes over the chunk, each with a scalar loop over the rows):
 //   - each row touches at most 2 cutpoints of its own test: C_{y-1} as its UPPER bound (y < K_t) and C_{y-2}
 //     as its LOWER bound (y >= 2), with the dphi / dZ seeds of the commented-out loop;
 //   - the propagation and the accumulation are row-wise and linear in the dZ seed, so the contribution of row i
@@ -765,13 +799,13 @@ fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_an
 //     two weights do not depend on the cutpoint: weight_on_dZ_seed comes from ONE propagation of a unit dZ seed;
 //   - the contributions are added into the (at most 2) cutpoints of each row, and the per-cutpoint sums of the
 //     chunk are added into cutpoint_grad_array once per cutpoint.
-// A row that touches no C_j adds 0 to C_j in the commented-out loop, or NaN when a factor of that row is not
-// finite: the zero-seed propagation reproduces it, and NaN is added to every C_j with such a row that does not
-// touch it, so that a failed evaluation still reaches the multi-attempt fallback (no failure is masked).
-// Equal to the commented-out loop up to rounding: the products are associated differently, and the per-cutpoint
-// sums are accumulated row by row instead of by Eigen's sum() over the whole chunk.
-// The workspace vectors dphi_direct_Cj / dZ_direct_Cj hold the two weights, derivs_chain_container_vec the
-// zero-seed contribution, and the columns z_grad_term.col(0) / grad_prob.col(0) the row contributions.
+//// A row that touches no C_j adds 0 to C_j in the commented-out loop, or NaN when a factor of that row is not
+//// finite: the zero-seed propagation reproduces it, and NaN is added to every C_j with such a row that does not
+//// touch it, so that a failed evaluation still reaches the multi-attempt fallback (no failure is masked).
+//// Equal to the commented-out loop up to rounding: the products are associated differently, and the per-cutpoint
+//// sums are accumulated row by row instead of by Eigen's sum() over the whole chunk.
+//// The workspace vectors dphi_direct_Cj / dZ_direct_Cj hold the two weights, derivs_chain_container_vec the
+//// zero-seed contribution, and the columns z_grad_term.col(0) / grad_prob.col(0) the row contributions.
 // ============================================================================
 ALWAYS_INLINE void
 fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_scatter(
@@ -826,19 +860,37 @@ fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_sca
         if (n_future >= 1) {
           
               //// one propagation of a unit dZ seed (the terms of the later tests):
-              fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate(
-          t, 1.0, 1, n_class, L_Omega_double, prob_recip, prop_rowwise_prod_temp,
-          dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container,
-          derivs_chain_container_vec);
+              fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate( t,
+                                                                                                            1.0,
+                                                                                                            1,
+                                                                                                            n_class,
+                                                                                                            L_Omega_double,
+                                                                                                            prob_recip,
+                                                                                                            prop_rowwise_prod_temp,
+                                                                                                            dphi_over_L,
+                                                                                                            dZ_dmu_neg,
+                                                                                                            z_grad_term,
+                                                                                                            grad_prob,
+                                                                                                            prod_container,
+                                                                                                            derivs_chain_container_vec);
               if (n_class != 1) weight_on_dZ_seed = common_grad_term_1.col(t).array()
                                                     * derivs_chain_container_vec.array();
               else              weight_on_dZ_seed = derivs_chain_container_vec.array();
               
               //// zero seeds, every term (the old loop for a row that touches no cutpoint):
-              fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate(
-          t, 0.0, 0, n_class, L_Omega_double, prob_recip, prop_rowwise_prod_temp,
-          dphi_over_L, dZ_dmu_neg, z_grad_term, grad_prob, prod_container,
-          derivs_chain_container_vec);
+              fn_MVOP_cutpoint_grad_propagate_same_dZ_seed_in_every_row_through_later_tests_and_accumulate( t,
+                                                                                                            0.0,
+                                                                                                            0,
+                                                                                                            n_class,
+                                                                                                            L_Omega_double,
+                                                                                                            prob_recip,
+                                                                                                            prop_rowwise_prod_temp,
+                                                                                                            dphi_over_L,
+                                                                                                            dZ_dmu_neg,
+                                                                                                            z_grad_term,
+                                                                                                            grad_prob,
+                                                                                                            prod_container,
+                                                                                                            derivs_chain_container_vec);
               if (n_class != 1) {
                     contribution_of_row_touching_no_cutpoint = common_grad_term_1.col(t).array()
                                                                * derivs_chain_container_vec.array();
@@ -888,7 +940,7 @@ fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_sca
         
         //// ---- category scatter: each row into the (at most 2) cutpoints it touches:
         Eigen::Matrix<double, -1, 1> cutpoint_grad_this_chunk = Eigen::Matrix<double, -1, 1>::Zero(n_thr_t);
-        for (int i = 0; i < chunk_size; ++i) {
+        for (int i = 0; i < chunk_size; i++) {
               const int y_i = static_cast<int>(y_chunk(i, t));
               if ((y_i >= 1) && (y_i < K_t))  cutpoint_grad_this_chunk(y_i - 1) += contribution_as_upper_bound(i);
               if ((y_i >= 2) && (y_i <= K_t)) cutpoint_grad_this_chunk(y_i - 2) += contribution_as_lower_bound(i);
@@ -899,21 +951,21 @@ fn_MVOP_compute_cutpoint_grad_from_one_unit_dZ_seed_propagation_and_category_sca
               int n_rows_with_NaN = 0;
               Eigen::Matrix<int, -1, 1> n_rows_with_NaN_touching_cutpoint =
                     Eigen::Matrix<int, -1, 1>::Zero(n_thr_t);
-              for (int i = 0; i < chunk_size; ++i) {
+              for (int i = 0; i < chunk_size; i++) {
                     if (!std::isnan(contribution_of_row_touching_no_cutpoint(i))) continue;
                     n_rows_with_NaN++;
                     const int y_i = static_cast<int>(y_chunk(i, t));
                     if ((y_i >= 1) && (y_i < K_t))  n_rows_with_NaN_touching_cutpoint(y_i - 1)++;
                     if ((y_i >= 2) && (y_i <= K_t)) n_rows_with_NaN_touching_cutpoint(y_i - 2)++;
               }
-              for (int j = 0; j < n_thr_t; ++j) {
+              for (int j = 0; j < n_thr_t; j++) {
                     if (n_rows_with_NaN > n_rows_with_NaN_touching_cutpoint(j)) {
                       cutpoint_grad_this_chunk(j) += std::numeric_limits<double>::quiet_NaN();
                     }
               }
         }
         
-        for (int j = 0; j < n_thr_t; ++j) cutpoint_grad_array(j, t_ord) += cutpoint_grad_this_chunk(j);
+        for (int j = 0; j < n_thr_t; j++) cutpoint_grad_array(j, t_ord) += cutpoint_grad_this_chunk(j);
   
 }
 
@@ -1117,24 +1169,24 @@ ALWAYS_INLINE void fn_MOVP_compute_L_Omega_grad_v3(   Eigen::Ref<Eigen::Matrix<d
 }
 
 // ============================================================================
-// chain_rule_C_to_C_raw: Chain rule from ∂f/∂C to ∂f/∂C_raw
+//// chain_rule_C_to_C_raw: Chain rule from ∂f/∂C to ∂f/∂C_raw
 //
 // Given: grad_wrt_C (length n_thr, gradient w.r.t. ordered cutpoints C)
 //        C_raw_vec (length n_thr, unconstrained parameters)
 //
-// The transformation is:
+//// The transformation is:
 //   C[0] = C_raw[0]
 //   C[k] = C[k-1] + exp(C_raw[k])  for k >= 1
 //
-// The Jacobian ∂C/∂C_raw is lower-triangular:
+//// The Jacobian ∂C/∂C_raw is lower-triangular:
 //   ∂C[j]/∂C_raw[0] = 1               for all j
 //   ∂C[j]/∂C_raw[k] = exp(C_raw[k])   for j >= k, k >= 1
 //   ∂C[j]/∂C_raw[k] = 0               for j < k
 //
-// So: ∂f/∂C_raw[0] = Σ_j ∂f/∂C[j]
+//// So: ∂f/∂C_raw[0] = Σ_j ∂f/∂C[j]
 //     ∂f/∂C_raw[k] = exp(C_raw[k]) * Σ_{j>=k} ∂f/∂C[j]   for k >= 1
 //
-// Computed efficiently using a suffix sum (right to left).
+//// Computed efficiently using a suffix sum (right to left).
 // ============================================================================
 // inline Eigen::Matrix<double, -1, 1> chain_rule_C_to_C_raw( const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> grad_wrt_C,
 //                                                            const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> C_raw_vec
@@ -1166,7 +1218,7 @@ inline Eigen::Matrix<double, -1, 1> chain_rule_C_to_C_raw( const Eigen::Ref<cons
           Eigen::Matrix<double, -1, 1> grad_wrt_C_raw(n_thr);
           
           double suffix_sum = 0.0;
-          for (int k = n_thr - 1; k >= 1; --k) {
+          for (int k = n_thr - 1; k >= 1; k--) {
             
               suffix_sum += grad_wrt_C(k);
               double exp_val = std::exp(C_raw_vec(k));
@@ -1206,10 +1258,10 @@ inline Eigen::Matrix<double, -1, 1> chain_rule_C_to_C_raw( const Eigen::Ref<cons
 
 
 // ============================================================================
-// For reference: how to call these in the lp_grad function
+//// For reference: how to call these in the lp_grad function
 // ============================================================================
 //
-// In the chunk loop, AFTER computing phi_Bound_Z and phi_Upper_Bound_Z:
+//// In the chunk loop, AFTER computing phi_Bound_Z and phi_Upper_Bound_Z:
 //
 // 1. Call fn_MVOP_grad_prep instead of fn_MVP_grad_prep:
 //    ────────────────────────────────────────────────────

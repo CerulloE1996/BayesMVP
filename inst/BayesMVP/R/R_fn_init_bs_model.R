@@ -11,7 +11,7 @@ init_bs_model_internal <- function(   stream,
                                       force_recompile,
                                       Stan_data_list, 
                                       Stan_model_name,
-                                      auto_chunking = TRUE
+                                      auto_chunking
 ) {
   
         # Get package directory paths
@@ -39,7 +39,9 @@ init_bs_model_internal <- function(   stream,
                                                 Stan_model_file_path = Stan_model_file_path,
                                                 ## (Enzo 21 Nov: "THE DEFAULT SHOULD BE TRUE"; the model's own setting
                                                 ##  is passed on by its caller)
-                                                auto_chunking = auto_chunking)
+                                                auto_chunking = auto_chunking,
+                                                stanc_args = NULL,
+                                                make_args = NULL)
         ##
         bs_model <- outs_bs_model$bs_model
         json_file_path <- outs_bs_model$json_file_path

@@ -60,7 +60,7 @@
 
 
 #if defined(__AVX2__) || defined(__AVX512F__)
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
  
  
@@ -79,24 +79,12 @@
 #define EIGEN_DONT_PARALLELIZE
  
 
-using std_vec_of_EigenVecs_dbl = std::vector<Eigen::Matrix<double, -1, 1>>;
-using std_vec_of_EigenVecs_int = std::vector<Eigen::Matrix<int, -1, 1>>;
-
-using std_vec_of_EigenMats_dbl = std::vector<Eigen::Matrix<double, -1, -1>>;
-using std_vec_of_EigenMats_int = std::vector<Eigen::Matrix<int, -1, -1>>;
-
-using two_layer_std_vec_of_EigenVecs_dbl =  std::vector<std::vector<Eigen::Matrix<double, -1, 1>>>;
-using two_layer_std_vec_of_EigenVecs_int = std::vector<std::vector<Eigen::Matrix<int, -1, 1>>>;
-
-using two_layer_std_vec_of_EigenMats_dbl = std::vector<std::vector<Eigen::Matrix<double, -1, -1>>>;
-using two_layer_std_vec_of_EigenMats_int = std::vector<std::vector<Eigen::Matrix<int, -1, -1>>>;
 
 
-using three_layer_std_vec_of_EigenVecs_dbl =  std::vector<std::vector<std::vector<Eigen::Matrix<double, -1, 1>>>>;
-using three_layer_std_vec_of_EigenVecs_int =  std::vector<std::vector<std::vector<Eigen::Matrix<int, -1, 1>>>>;
 
-using three_layer_std_vec_of_EigenMats_dbl = std::vector<std::vector<std::vector<Eigen::Matrix<double, -1, -1>>>>; 
-using three_layer_std_vec_of_EigenMats_int = std::vector<std::vector<std::vector<Eigen::Matrix<int, -1, -1>>>>;
+
+
+
  
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -110,8 +98,8 @@ inline Eigen::Matrix<int, 3, -1>  comb2M_double( Eigen::Ref<Eigen::Matrix<int, -
   int counter = 0;
   int outsize = xlen * (xlen - 1) / 2 ; // Rf_choose(xlen, 2);
   Eigen::Matrix<int, 3, -1>  out(3, outsize);
-  for (int a = 0; a < xlen; ++a) {
-    for (int b = a+1; b < xlen; ++b) {
+  for (int a = 0; a < xlen; a++) {
+    for (int b = a+1; b < xlen; b++) {
       out(0, counter) = x(a);
       out(1, counter) = x(b);
       if ( x(b) > x(a) )  {
@@ -157,14 +145,14 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
   const Eigen::Matrix<double, -1, 1> &Model_args_doubles            = Model_args_as_cpp_struct.Model_args_doubles;   
   const Eigen::Matrix<std::string, -1, 1>  &Model_args_strings            = Model_args_as_cpp_struct.Model_args_strings;  
   
-  const std_vec_of_EigenVecs_dbl  &Model_args_col_vecs_double     = Model_args_as_cpp_struct.Model_args_col_vecs_double;   
-  const std_vec_of_EigenMats_dbl  &Model_args_mats_double     = Model_args_as_cpp_struct.Model_args_mats_double;  
+  const std::vector<Eigen::Matrix<double, -1, 1>>  &Model_args_col_vecs_double     = Model_args_as_cpp_struct.Model_args_col_vecs_double;   
+  const std::vector<Eigen::Matrix<double, -1, -1>>  &Model_args_mats_double     = Model_args_as_cpp_struct.Model_args_mats_double;  
   
-  const two_layer_std_vec_of_EigenMats_dbl &Model_args_vecs_of_mats_double = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double;  
-  const two_layer_std_vec_of_EigenMats_int &Model_args_vecs_of_mats_int    = Model_args_as_cpp_struct.Model_args_vecs_of_mats_int;  
-  const two_layer_std_vec_of_EigenVecs_int &Model_args_vecs_of_col_vecs_int= Model_args_as_cpp_struct.Model_args_vecs_of_col_vecs_int;  
+  const std::vector<std::vector<Eigen::Matrix<double, -1, -1>>> &Model_args_vecs_of_mats_double = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double;  
+  const std::vector<std::vector<Eigen::Matrix<int, -1, -1>>> &Model_args_vecs_of_mats_int    = Model_args_as_cpp_struct.Model_args_vecs_of_mats_int;  
+  const std::vector<std::vector<Eigen::Matrix<int, -1, 1>>> &Model_args_vecs_of_col_vecs_int= Model_args_as_cpp_struct.Model_args_vecs_of_col_vecs_int;  
   
-  const three_layer_std_vec_of_EigenMats_dbl &Model_args_2_later_vecs_of_mats_double  = Model_args_as_cpp_struct.Model_args_2_layer_vecs_of_mats_double;  
+  const std::vector<std::vector<std::vector<Eigen::Matrix<double, -1, -1>>>> &Model_args_2_later_vecs_of_mats_double  = Model_args_as_cpp_struct.Model_args_2_layer_vecs_of_mats_double;  
   
   /////////// read items from std::vectors
   const std::vector<std::vector<Eigen::Matrix<double, -1, -1>>>  &X = Model_args_2_later_vecs_of_mats_double[0]; 
@@ -281,19 +269,19 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
                                                                                              du_wrt_duu);
 
   //////////////
-  // corrs
+  //// corrs
   Eigen::Matrix<double, -1, 1  >  Omega_raw_vec_double = theta_main_vec_ref.head(n_corrs); // .cast<double>();
 
-  // coeffs
+  //// coeffs
   std::vector<Eigen::Matrix<double, -1, -1 > > beta_double_array = vec_of_mats(n_covariates_max,
                                                                                n_tests,
                                                                                n_class);
 
   {
     int i = n_corrs;
-    for (int c = 0; c < n_class; ++c) {
-      for (int t = 0; t < n_tests; ++t) {
-        for (int k = 0; k < n_covariates_per_outcome_vec[c](t); ++k) {
+    for (int c = 0; c < n_class; c++) {
+      for (int t = 0; t < n_tests; t++) {
+        for (int k = 0; k < n_covariates_per_outcome_vec[c](t); k++) {
           beta_double_array[c](k, t) = theta_main_vec_ref(i);
           i += 1;
         }
@@ -301,7 +289,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
     }
   }
 
-  // prev
+  //// prev
   double u_prev_diseased = theta_main_vec_ref(n_params_main - 1);
 
   Eigen::Matrix<double, -1, 1 >  target_AD_grad(n_corrs);
@@ -328,7 +316,9 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
   {
     
     
-    std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_unconstrained_var = fn_convert_std_vec_of_corrs_to_3d_array_var(Eigen_vec_to_std_vec_var(Omega_constrained_raw_vec_var),  n_tests, n_class);
+    std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > Omega_unconstrained_var = fn_convert_std_vec_of_corrs_to_3d_array_var( Eigen_vec_to_std_vec_var(Omega_constrained_raw_vec_var),
+                                                                                                                                 n_tests,
+                                                                                                                                 n_class);
     std::vector<Eigen::Matrix<stan::math::var, -1, -1 > > L_Omega_var = vec_of_mats_var(n_tests,
                                                                                         n_tests,
                                                                                         n_class);
@@ -336,7 +326,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
                                                                                          n_tests,
                                                                                          n_class);
 
-    for (int c = 0; c < n_class; ++c) {
+    for (int c = 0; c < n_class; c++) {
       Eigen::Matrix<stan::math::var, -1, -1 >  ub = stan::math::to_var(ub_corr[c]);
       Eigen::Matrix<stan::math::var, -1, -1 >  lb = stan::math::to_var(lb_corr[c]);
       Eigen::Matrix<stan::math::var, -1, -1  >  Chol_Schur_outs =  Pinkney_LDL_bounds_opt(n_tests, lb, ub, Omega_unconstrained_var[c], known_values_indicator[c], known_values[c]) ;
@@ -345,7 +335,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
       target_AD +=   Chol_Schur_outs(0, 0); // now can set prior directly on Omega
     }
 
-    for (int c = 0; c < n_class; ++c) {
+    for (int c = 0; c < n_class; c++) {
       if ( (corr_prior_beta == false)   &&  (corr_prior_norm == false) ) {
         target_AD +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c)) ;
       } else if ( (corr_prior_beta == true)   &&  (corr_prior_norm == false) ) {
@@ -358,7 +348,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
         }
         //  Jacobian for  Omega -> L_Omega transformation for prior log-densities (since both LKJ and truncated normal prior densities are in terms of Omega, not L_Omega)
         Eigen::Matrix<stan::math::var, -1, 1 >  jacobian_diag_elements(n_tests);
-        for (int i = 0; i < n_tests; ++i)     jacobian_diag_elements(i) = ( n_tests + 1 - (i+1) ) * log(L_Omega_var[c](i, i));
+        for (int i = 0; i < n_tests; i++)     jacobian_diag_elements(i) = ( n_tests + 1 - (i+1) ) * log(L_Omega_var[c](i, i));
         target_AD  += + (n_tests * stan::math::log(2) + jacobian_diag_elements.sum());  //  L -> Omega
       } else if  ( (corr_prior_beta == false)   &&  (corr_prior_norm == true) ) {
         for (int i = 1; i < n_tests; i++) {
@@ -369,7 +359,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
           }
         }
         Eigen::Matrix<stan::math::var, -1, 1 >  jacobian_diag_elements(n_tests);
-        for (int i = 0; i < n_tests; ++i)     jacobian_diag_elements(i) = ( n_tests + 1 - (i+1) ) * log(L_Omega_var[c](i, i));
+        for (int i = 0; i < n_tests; i++)     jacobian_diag_elements(i) = ( n_tests + 1 - (i+1) ) * log(L_Omega_var[c](i, i));
         target_AD  += + (n_tests * stan::math::log(2) + jacobian_diag_elements.sum());  //  L -> Omega
       }
     }
@@ -411,7 +401,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
     stan::math::set_zero_all_adjoints();
     //////////////////////////////////////////////////////////// end of AD part
 
-    for (int c = 0; c < n_class; ++c) {
+    for (int c = 0; c < n_class; c++) {
       int cnt_1 = 0;
       for (int k = 0; k < n_tests; k++) {
         for (int l = 0; l < k + 1; l++) {
@@ -429,10 +419,10 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
       }
     }
     ///////////////// get cholesky factor's (lower-triangular) of corr matrices
-    // convert to 3d var array
-    for (int c = 0; c < n_class; ++c) {
-      for (int t1 = 0; t1 < n_tests; ++t1) {
-        for (int t2 = 0; t2 < n_tests; ++t2) {
+    //// convert to 3d var array
+    for (int c = 0; c < n_class; c++) {
+      for (int t1 = 0; t1 < n_tests; t1++) {
+        for (int t2 = 0; t2 < n_tests; t2++) {
           L_Omega_double[c](t1, t2) =   L_Omega_var[c](t1, t2).val()  ;
           log_abs_L_Omega_double[c](t1, t2) =   stan::math::log(stan::math::fabs( L_Omega_double[c](t1, t2) ))  ;
           sign_L_Omega_double[c](t1, t2) = stan::math::sign( L_Omega_double[c](t1, t2) );
@@ -672,14 +662,14 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
 
   Eigen::Matrix<double , -1, -1> derivs_chain_container_vec_array  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //  (N, n_tests);
 
-  // terms for first-order grad
+  //// terms for first-order grad
   Eigen::Matrix<double,  -1, -1> grad_prob  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //  (N, n_tests);
   Eigen::Matrix<double , -1, -1> grad_Phi_bound_z = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   =  grad_prob;
   Eigen::Matrix<double , -1, -1> grad_bound_z  = Eigen::Matrix<double, -1, -1>::Zero(N,
                                                                                      n_tests); //  = grad_prob;
   Eigen::Matrix<double , -1, -1> grad_z  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //  = grad_prob;
 
-  // terms for second-order grad
+  //// terms for second-order grad
   Eigen::Matrix<double , -1, -1> grad_grad_Phi_bound_z  = Eigen::Matrix<double, -1, -1>::Zero(N, n_tests);   //   = grad_prob;
   Eigen::Matrix<double , -1, -1> grad_grad_z = Eigen::Matrix<double, -1, -1>::Zero(N,
                                                                                    n_tests); //   = grad_prob;
@@ -902,7 +892,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
 
 
 
-            // create containers outside n loop
+            //// create containers outside n loop
             int   n_elements  =  i + 2;
             int   grad_term_A_n_components_total =  (n_elements * n_elements) -   (n_elements * (n_elements - 1) / 2);
             int   grad_term_A_n_components_with_grad_grad = n_elements;
@@ -1062,7 +1052,7 @@ Eigen::Matrix<double, -1, 1>     fn_diag_hessian_us_only_manual(      const Eige
         deriv_d_J_wrt_duu(i) =  - 8.0 * u_vec(i) * (1.0 - u_vec(i)) ; // checked
       }
 
-      // put it all together
+      //// put it all together
       u_hessian_diag(i) =      u_hessian_diag_array_wrt_constrained_wo_jac(n,
                      t)  * du_wrt_duu(i)    +  u_grad_wrt_constrained_wo_jac_array(n,
                      t)  * deriv_du_wrt_duu(i)   ;

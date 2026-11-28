@@ -15,7 +15,6 @@
 #include <unistd.h>
 #include <vector>
 
-using clock_of_profile = std::chrono::steady_clock;
 
 struct profile_barrier {
     std::mutex mutex;
@@ -24,18 +23,30 @@ struct profile_barrier {
     int finished = 0;
     bool start = false;
     bool release = false;
-    clock_of_profile::time_point deadline;
+    std::chrono::steady_clock::time_point deadline;
 };
 
 template <typename T_vector, typename T_scalar>
 stan::return_type_t<T_vector, T_scalar> fn_evaluate(
-        const std::string& function, bool use_AVX, const T_vector& z, const T_vector& beta,
-        const T_scalar& scale, const T_scalar& coefficient, const T_scalar& initial,
-        const T_scalar& intercept, const Eigen::MatrixXd& x, const Eigen::VectorXd& y,
-        const Eigen::VectorXd& linear_weights, const Eigen::VectorXd& prefix_weights) {
+        const std::string& function,
+        bool use_AVX,
+        const T_vector& z,
+        const T_vector& beta,
+        const T_scalar& scale,
+        const T_scalar& coefficient,
+        const T_scalar& initial,
+        const T_scalar& intercept,
+        const Eigen::Matrix<double, -1, -1>& x,
+        const Eigen::Matrix<double, -1, 1>& y,
+        const Eigen::Matrix<double, -1, 1>& linear_weights,
+        const Eigen::Matrix<double, -1, 1>& prefix_weights) {
 
     if (function == "affine_log_sum_exp") {
-        if (use_AVX) return nico_log_sum_exp_of_affine_predictor(x, beta, scale, z);
+        if (use_AVX) return nico_log_sum_exp_of_affine_predictor( x,
+                                                                  beta,
+                                                                  scale,
+                                                                  z,
+                                                                  nullptr);
         const auto eta = stan::math::add(stan::math::multiply(x, beta), stan::math::multiply(scale, z));
         return stan::math::log_sum_exp(eta);
     }
@@ -50,19 +61,35 @@ stan::return_type_t<T_vector, T_scalar> fn_evaluate(
                  + stan::math::dot_product(prefix_weights, stan::math::log(sums));
     }
     if (function == "normal_recurrence_joint" && use_AVX) {
-        return nico_normal_affine_recurrence_log_scale_joint_lpdf<false>(
-            y, 0.0, z, initial, coefficient, scale, intercept, 0.5, 0.0, 1.0);
+        return nico_normal_affine_recurrence_log_scale_joint_lpdf<false>( y,
+                                                                          0.0,
+                                                                          z,
+                                                                          initial,
+                                                                          coefficient,
+                                                                          scale,
+                                                                          intercept,
+                                                                          0.5,
+                                                                          0.0,
+                                                                          1.0,
+                                                                          nullptr);
     }
-    using scalar = stan::scalar_type_t<T_vector>;
-    Eigen::Matrix<scalar, Eigen::Dynamic, 1> states(z.size());
+    Eigen::Matrix<stan::scalar_type_t<T_vector>, -1, 1> states(z.size());
     if (use_AVX) {
         const auto shocks = stan::math::multiply(scale, z);
-        states = nico_AR1_recursion(shocks, initial, coefficient);
-        return nico_normal_affine_log_scale_lpdf<false>(y, 0.0, intercept, 0.5, states)
+        states = nico_AR1_recursion( shocks,
+                                     initial,
+                                     coefficient,
+                                     nullptr);
+        return nico_normal_affine_log_scale_lpdf<false>( y,
+                                                         0.0,
+                                                         intercept,
+                                                         0.5,
+                                                         states,
+                                                         nullptr)
                  + nico_normal_lpdf<false>(z, 0.0, 1.0, nullptr);
     }
-    scalar state = initial;
-    for (Eigen::Index i = 0; i < z.size(); ++i) {
+    stan::scalar_type_t<T_vector> state = initial;
+    for (Eigen::Index i = 0; i < z.size(); i++) {
         state = coefficient * state + scale * z[i];
         states[i] = state;
     }
@@ -81,11 +108,13 @@ void fn_profile_worker(int cpu, int n, int chunks, const std::string& function,
         CPU_SET(cpu, &mask);
         if (sched_setaffinity(0, sizeof(mask), &mask) != 0) throw std::runtime_error("CPU pin failed.");
         stan::math::ChainableStack stack;
-        using scalar = std::conditional_t<autodiff, stan::math::var, double>;
-        Eigen::Matrix<scalar, Eigen::Dynamic, 1> z(n), beta(2);
-        Eigen::MatrixXd x(n, 2);
-        Eigen::VectorXd y(n), linear_weights(n), prefix_weights(n);
-        for (int i = 0; i < n; ++i) {
+        Eigen::Matrix<std::conditional_t<autodiff, stan::math::var, double>, -1, 1> z(n);
+        Eigen::Matrix<std::conditional_t<autodiff, stan::math::var, double>, -1, 1> beta(2);
+        Eigen::Matrix<double, -1, -1> x(n, 2);
+        Eigen::Matrix<double, -1, 1> y(n);
+        Eigen::Matrix<double, -1, 1> linear_weights(n);
+        Eigen::Matrix<double, -1, 1> prefix_weights(n);
+        for (int i = 0; i < n; i++) {
             z[i] = 0.2 * std::sin(0.13 * i);
             x(i, 0) = 1.0;
             x(i, 1) = std::cos(0.17 * i);
@@ -94,22 +123,30 @@ void fn_profile_worker(int cpu, int n, int chunks, const std::string& function,
             prefix_weights[i] = -linear_weights[i];
         }
         beta << 0.2, -0.1;
-        scalar scale = 0.3;
-        scalar coefficient = 0.8;
-        scalar initial = 0.1;
-        scalar intercept = -0.5;
+        std::conditional_t<autodiff, stan::math::var, double> scale = 0.3;
+        std::conditional_t<autodiff, stan::math::var, double> coefficient = 0.8;
+        std::conditional_t<autodiff, stan::math::var, double> initial = 0.1;
+        std::conditional_t<autodiff, stan::math::var, double> intercept = -0.5;
         const auto one_call = [&]() {
             stan::math::nested_rev_autodiff nested;
-            scalar target = 0.0;
-            for (int chunk = 0; chunk < chunks; ++chunk) {
+            std::conditional_t<autodiff, stan::math::var, double> target = 0.0;
+            for (int chunk = 0; chunk < chunks; chunk++) {
                 const int first = n * chunk / chunks;
                 const int length = n * (chunk + 1) / chunks - first;
-                const Eigen::Matrix<scalar, Eigen::Dynamic, 1> z_of_chunk = z.segment(first, length);
-                const Eigen::MatrixXd x_of_chunk = x.middleRows(first, length);
-                target += fn_evaluate(function, use_AVX, z_of_chunk, beta, scale, coefficient,
-                                      initial, intercept, x_of_chunk, y.segment(first, length),
-                                      linear_weights.segment(first, length),
-                                      prefix_weights.segment(first, length));
+                const Eigen::Matrix<std::conditional_t<autodiff, stan::math::var, double>, -1, 1> z_of_chunk = z.segment(first, length);
+                const Eigen::Matrix<double, -1, -1> x_of_chunk = x.middleRows(first, length);
+                target += fn_evaluate( function,
+                                       use_AVX,
+                                       z_of_chunk,
+                                       beta,
+                                       scale,
+                                       coefficient,
+                                       initial,
+                                       intercept,
+                                       x_of_chunk,
+                                       y.segment(first, length),
+                                       linear_weights.segment(first, length),
+                                       prefix_weights.segment(first, length));
             }
             if constexpr (autodiff) {
                 stan::math::set_zero_all_adjoints();
@@ -127,12 +164,12 @@ void fn_profile_worker(int cpu, int n, int chunks, const std::string& function,
             barrier.condition.notify_all();
             barrier.condition.wait(lock, [&]() { return barrier.start; });
         }
-        const auto started = clock_of_profile::now();
+        const auto started = std::chrono::steady_clock::now();
         do {
             one_call();
             ++calls;
-        } while (clock_of_profile::now() < barrier.deadline);
-        elapsed = std::chrono::duration<double>(clock_of_profile::now() - started).count();
+        } while (std::chrono::steady_clock::now() < barrier.deadline);
+        elapsed = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
         {
             std::unique_lock<std::mutex> lock(barrier.mutex);
             ++barrier.finished;
@@ -158,7 +195,8 @@ void fn_snapshot() {
     usleep(100000);
 }
 
-int main(int argc, char** argv) {
+int main(int argc,
+         char** argv) {
     if (argc != 7) {
         std::cerr << "usage: profile <function> <Stan|AVX> <double|autodiff> <N> <chunks> <CPUs>\n";
         return 2;
@@ -177,7 +215,7 @@ int main(int argc, char** argv) {
     std::vector<double> seconds(cpus);
     std::vector<unsigned long> calls(cpus);
     std::vector<std::string> errors(cpus);
-    for (int cpu = 0; cpu < cpus; ++cpu) {
+    for (int cpu = 0; cpu < cpus; cpu++) {
         if (autodiff) workers.emplace_back(fn_profile_worker<true>, cpu, n, chunks,
             std::cref(function), use_AVX, std::ref(barrier), std::ref(seconds[cpu]),
             std::ref(calls[cpu]), std::ref(errors[cpu]));
@@ -192,7 +230,7 @@ int main(int argc, char** argv) {
     fn_snapshot();
     {
         std::lock_guard<std::mutex> lock(barrier.mutex);
-        barrier.deadline = clock_of_profile::now() + std::chrono::milliseconds(750);
+        barrier.deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(750);
         barrier.start = true;
         barrier.condition.notify_all();
     }

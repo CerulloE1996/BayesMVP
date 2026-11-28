@@ -167,27 +167,35 @@ inline  Eigen::Matrix<double, -1, 1>  fn_lp_grad_Return(    const std::string  M
                    if (n_nuisance > 10) {
                      if (grad_option == "main_only") { 
                        
-                       lp_and_grad_outs.segment(1 + n_nuisance, n_params_main)  =    fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct,
-                                                params, n_params_main, n_nuisance, 
-                                                lp_and_grad_outs.head(1 + n_params)).segment(1 + n_nuisance, n_params_main);
+                       lp_and_grad_outs.segment(1 + n_nuisance, n_params_main)  =    fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                                                    params,
+                                                                                                                    n_params_main,
+                                                                                                                    n_nuisance,
+                                                                                                                    lp_and_grad_outs.head(1 + n_params)).segment(1 + n_nuisance, n_params_main);
                        
                      } else if (grad_option == "us_only") {  // only nuisance 
                        
-                       lp_and_grad_outs.head(1 + n_nuisance)  =  fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct,
-                                             params, n_params_main, n_nuisance,
-                                             lp_and_grad_outs.head(1 + n_params)).head(1 + n_nuisance);
+                       lp_and_grad_outs.head(1 + n_nuisance)  =  fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                                params,
+                                                                                                n_params_main,
+                                                                                                n_nuisance,
+                                                                                                lp_and_grad_outs.head(1 + n_params)).head(1 + n_nuisance);
                        
                      } else {  /// otherwise compute entire gradient
                        
-                       lp_and_grad_outs.head(1 + n_params)  =  fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct, 
-                                             params, n_params_main, n_nuisance, 
-                                             lp_and_grad_outs.head(1 + n_params)).head(1 + n_params);
+                       lp_and_grad_outs.head(1 + n_params)  =  fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                              params,
+                                                                                              n_params_main,
+                                                                                              n_nuisance,
+                                                                                              lp_and_grad_outs.head(1 + n_params)).head(1 + n_params);
                        
                      }
                    } else { 
-                     lp_and_grad_outs.head(1 + n_params_main)  =    fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct,  
-                                           params, n_params_main, n_nuisance, 
-                                           lp_and_grad_outs.head(1 + n_params_main)); 
+                     lp_and_grad_outs.head(1 + n_params_main)  =    fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                                   params,
+                                                                                                   n_params_main,
+                                                                                                   n_nuisance,
+                                                                                                   lp_and_grad_outs.head(1 + n_params_main)); 
                    }
                    
                    ////  #endif
@@ -264,9 +272,19 @@ inline void  fn_lp_grad_InPlace(         Eigen::Ref<Eigen::Matrix<double, -1, 1>
                              if ((Model_type == "LC_MVP") || (Model_type == "MVP")) {
                                
                                    if (force_PartialLog == true) {
-                                          fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process(lp_and_grad_outs, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+                                          fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD_InPlace_process( lp_and_grad_outs,
+                                                                                                          theta_main_vec_ref,
+                                                                                                          theta_us_vec_ref,
+                                                                                                          y_ref,
+                                                                                                          grad_option,
+                                                                                                          Model_args_as_cpp_struct);
                                    } else {
-                                          fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process(lp_and_grad_outs, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+                                          fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process( lp_and_grad_outs,
+                                                                                                     theta_main_vec_ref,
+                                                                                                     theta_us_vec_ref,
+                                                                                                     y_ref,
+                                                                                                     grad_option,
+                                                                                                     Model_args_as_cpp_struct);
                                    }
                                    
                              } else if (Model_type == "latent_trait") {
@@ -278,7 +296,12 @@ inline void  fn_lp_grad_InPlace(         Eigen::Ref<Eigen::Matrix<double, -1, 1>
                                            std::cout << "ERROR: For the latent_trait model, the MANUAL-LOG-SCALE lp_grad function isn't yet working fully, so please set force_PartialLog = FALSE" << std::endl; 
                                            throw std::invalid_argument("force_PartialLog = TRUE is unsupported for Model_type = latent_trait; use force_PartialLog = FALSE.");
                                    } else { 
-                                           fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process(lp_and_grad_outs, theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct);
+                                           fn_lp_grad_LT_LC_NoLog_MD_and_AD_InPlace_process( lp_and_grad_outs,
+                                                                                             theta_main_vec_ref,
+                                                                                             theta_us_vec_ref,
+                                                                                             y_ref,
+                                                                                             grad_option,
+                                                                                             Model_args_as_cpp_struct);
                                    } 
                                    //// #endif
                              }
@@ -287,11 +310,21 @@ inline void  fn_lp_grad_InPlace(         Eigen::Ref<Eigen::Matrix<double, -1, 1>
                        
                              if ((Model_type == "LC_MVP") || (Model_type == "MVP")) {
                                
-                                       fn_lp_and_grad_MVP_Pinkney_AD_log_scale_InPlace_process(lp_and_grad_outs, theta_main_vec_ref, theta_us_vec_ref, y_ref,  grad_option, Model_args_as_cpp_struct); 
+                                       fn_lp_and_grad_MVP_Pinkney_AD_log_scale_InPlace_process( lp_and_grad_outs,
+                                                                                                theta_main_vec_ref,
+                                                                                                theta_us_vec_ref,
+                                                                                                y_ref,
+                                                                                                grad_option,
+                                                                                                Model_args_as_cpp_struct); 
                                
                              } else if (Model_type == "latent_trait") {
                                //// #if COMPILE_LATENT_TRAIT
-                                       fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_process(lp_and_grad_outs, theta_main_vec_ref, theta_us_vec_ref, y_ref,  grad_option, Model_args_as_cpp_struct); 
+                                       fn_lp_and_grad_LC_LT_AD_log_scale_InPlace_process( lp_and_grad_outs,
+                                                                                          theta_main_vec_ref,
+                                                                                          theta_us_vec_ref,
+                                                                                          y_ref,
+                                                                                          grad_option,
+                                                                                          Model_args_as_cpp_struct); 
                                //// #endif
                                
                              }
@@ -318,28 +351,35 @@ inline void  fn_lp_grad_InPlace(         Eigen::Ref<Eigen::Matrix<double, -1, 1>
             if (n_nuisance > 10) {
                  if (grad_option == "main_only") { 
                      
-                  lp_and_grad_outs.segment(1 + n_nuisance, n_params_main)  =    fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct,
-                                                                                                              params, n_params_main, n_nuisance, 
-                                                                                                              lp_and_grad_outs.head(1 + n_params)).segment(1 + n_nuisance, n_params_main);
+                  lp_and_grad_outs.segment(1 + n_nuisance, n_params_main)  =    fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                                               params,
+                                                                                                               n_params_main,
+                                                                                                               n_nuisance,
+                                                                                                               lp_and_grad_outs.head(1 + n_params)).segment(1 + n_nuisance, n_params_main);
                    
                  } else if (grad_option == "us_only") {  // only nuisance 
                     
-                   lp_and_grad_outs.head(1 + n_nuisance)  =  fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct,
-                                                                                           params, n_params_main, n_nuisance,
-                                                                                           lp_and_grad_outs.head(1 + n_params)).head(1 + n_nuisance);
+                   lp_and_grad_outs.head(1 + n_nuisance)  =  fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                            params,
+                                                                                            n_params_main,
+                                                                                            n_nuisance,
+                                                                                            lp_and_grad_outs.head(1 + n_params)).head(1 + n_nuisance);
                    
                  } else {  /// otherwise compute entire gradient
                    
-                   lp_and_grad_outs.head(1 + n_params)  =  fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct,
-                                         
-                                                                                         params, n_params_main, n_nuisance, 
-                                                                                         lp_and_grad_outs.head(1 + n_params)).head(1 + n_params);
+                   lp_and_grad_outs.head(1 + n_params)  =  fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                          params,
+                                                                                          n_params_main,
+                                                                                          n_nuisance,
+                                                                                          lp_and_grad_outs.head(1 + n_params)).head(1 + n_params);
                    
                  }
             } else { 
-                lp_and_grad_outs.head(1 + n_params_main)  =    fn_Stan_compute_log_prob_grad(Stan_model_as_cpp_struct,  
-                                                                                             params, n_params_main, n_nuisance, 
-                                                                                             lp_and_grad_outs.head(1 + n_params_main)); 
+                lp_and_grad_outs.head(1 + n_params_main)  =    fn_Stan_compute_log_prob_grad( Stan_model_as_cpp_struct,
+                                                                                              params,
+                                                                                              n_params_main,
+                                                                                              n_nuisance,
+                                                                                              lp_and_grad_outs.head(1 + n_params_main)); 
             }
             
             //// #endif
@@ -422,15 +462,23 @@ inline  void  fn_lp_only_InPlace(      double &lp,
   
   if  ((Model_type == "latent_trait") || (Model_type == "MVP") || (Model_type == "LC_MVP")) { //// use a built-in, fast manual-gradient model
         
-          // Handle cases where autodiff is not forced
+          //// Handle cases where autodiff is not forced
           if (force_autodiff == false) {
             
                   if ((Model_type == "LC_MVP") || (Model_type == "MVP")) {
                     
                         if (force_PartialLog == true) {
-                          lp = (   fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD(theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct)  ).head(1).eval()(0);
+                          lp = (   fn_lp_grad_MVP_LC_Pinkney_PartialLog_MD_and_AD( theta_main_vec_ref,
+                                                                                   theta_us_vec_ref,
+                                                                                   y_ref,
+                                                                                   grad_option,
+                                                                                   Model_args_as_cpp_struct)  ).head(1).eval()(0);
                         } else {
-                          lp =  (  fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD(theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct) ).head(1).eval()(0);
+                          lp =  (  fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD( theta_main_vec_ref,
+                                                                              theta_us_vec_ref,
+                                                                              y_ref,
+                                                                              grad_option,
+                                                                              Model_args_as_cpp_struct) ).head(1).eval()(0);
                         }
                         
                   } else if (Model_type == "latent_trait") {
@@ -442,7 +490,11 @@ inline  void  fn_lp_only_InPlace(      double &lp,
                           std::cout << "ERROR: For the latent_trait model, the MANUAL-LOG-SCALE lp_grad function isn't yet working fully, so please set force_PartialLog = FALSE" << std::endl; 
                           throw std::invalid_argument("force_PartialLog = TRUE is unsupported for Model_type = latent_trait; use force_PartialLog = FALSE.");
                         } else { 
-                          lp =  (  fn_lp_grad_LT_LC_NoLog_MD_and_AD(theta_main_vec_ref, theta_us_vec_ref, y_ref, grad_option, Model_args_as_cpp_struct) ).head(1).eval()(0);
+                          lp =  (  fn_lp_grad_LT_LC_NoLog_MD_and_AD( theta_main_vec_ref,
+                                                                     theta_us_vec_ref,
+                                                                     y_ref,
+                                                                     grad_option,
+                                                                     Model_args_as_cpp_struct) ).head(1).eval()(0);
                         }
                         //// #endif
                         
@@ -451,11 +503,19 @@ inline  void  fn_lp_only_InPlace(      double &lp,
             
             if ((Model_type == "LC_MVP") || (Model_type == "MVP")) {
                     
-                    lp =  (  fn_lp_and_grad_MVP_Pinkney_AD_log_scale(theta_main_vec_ref, theta_us_vec_ref, y_ref,  grad_option, Model_args_as_cpp_struct) ).head(1).eval()(0);
+                    lp =  (  fn_lp_and_grad_MVP_Pinkney_AD_log_scale( theta_main_vec_ref,
+                                                                      theta_us_vec_ref,
+                                                                      y_ref,
+                                                                      grad_option,
+                                                                      Model_args_as_cpp_struct) ).head(1).eval()(0);
                     
                   } else if (Model_type == "latent_trait") {
                     //// #if COMPILE_LATENT_TRAIT
-                    lp =  (  fn_lp_and_grad_LC_LT_AD_log_scale(theta_main_vec_ref, theta_us_vec_ref, y_ref,  grad_option, Model_args_as_cpp_struct) ).head(1).eval()(0);
+                    lp =  (  fn_lp_and_grad_LC_LT_AD_log_scale( theta_main_vec_ref,
+                                                                theta_us_vec_ref,
+                                                                y_ref,
+                                                                grad_option,
+                                                                Model_args_as_cpp_struct) ).head(1).eval()(0);
                     //// #endif
                     
                   } 

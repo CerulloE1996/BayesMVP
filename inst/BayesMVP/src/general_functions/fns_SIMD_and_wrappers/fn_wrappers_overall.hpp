@@ -12,7 +12,7 @@
 #include <Eigen/Core>
  
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)   //// (x86-64 only: ARM CPUs have no AVX)
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
 
 #include <string>
@@ -44,7 +44,9 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
       
           if (vect_type == "Stan") {
       
-                fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);
+                fn_void_Ref_double_Stan( x_Ref,
+                                         fn,
+                                         skip_checks);
        
           } else if (vect_type == "AVX512") { 
       
@@ -81,14 +83,18 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
       
           } else if (vect_type == "Loop") {
             
-                fn_return_Loop(x_Ref, fn, skip_checks);
+                fn_return_Loop( x_Ref,
+                                fn,
+                                skip_checks);
       
           } else { 
             
                 //// ---- Unrecognised vect_type string: the exact Stan-math value (not x UNCHANGED).
                 ////      The R front end rejects unknown strings before sampling; here the exact Stan-math
                 ////      value is computed rather than silently returning the input.
-                fn_void_Ref_double_Stan(x_Ref, fn, skip_checks);
+                fn_void_Ref_double_Stan( x_Ref,
+                                         fn,
+                                         skip_checks);
       
           }
       
@@ -102,13 +108,17 @@ ALWAYS_INLINE  void               fn_EIGEN_Ref_double(      Eigen::Ref<T> x_Ref,
 template <typename T>
 inline  auto          fn_EIGEN_double(        T  &&x_R_val,
                                                      const std::string &fn,
-                                                     const std::string &vect_type = "Stan",
-                                                     const bool &skip_checks = false
+                                                     const std::string &vect_type,
+                                                     const bool &skip_checks
 ) {
        
-       using T_matrix_type = Eigen::Matrix<double, -1, -1>;
-       T_matrix_type x_matrix = x_R_val;   
-       fn_EIGEN_Ref_double(Eigen::Ref<T_matrix_type>(x_matrix), fn, vect_type, skip_checks);
+       Eigen::Matrix<double, -1, -1> x_matrix = x_R_val;   
+       fn_EIGEN_Ref_double( Eigen::Ref<Eigen::Matrix<double,
+                            -1,
+                            -1>>(x_matrix),
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_matrix;
    
 }
@@ -117,11 +127,14 @@ inline  auto          fn_EIGEN_double(        T  &&x_R_val,
 template <typename T>
 inline  auto          fn_EIGEN_double(   Eigen::Ref<T> x_L_val,
                                                 const std::string &fn,
-                                                const std::string &vect_type = "Stan",
-                                                const bool &skip_checks = false
+                                                const std::string &vect_type,
+                                                const bool &skip_checks
 ) {
   
-       fn_EIGEN_Ref_double(x_L_val, fn, vect_type, skip_checks);
+       fn_EIGEN_Ref_double( x_L_val,
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_L_val;
   
 }
@@ -131,99 +144,115 @@ inline  auto          fn_EIGEN_double(   Eigen::Ref<T> x_L_val,
 template <typename T>
 inline  auto          fn_EIGEN_double(   const Eigen::Ref<const T> x_L_val,
                                                 const std::string &fn,
-                                                const std::string &vect_type = "Stan",
-                                                const bool &skip_checks = false
+                                                const std::string &vect_type,
+                                                const bool &skip_checks
 ) {
   
        T x_copy = x_L_val;
-       fn_EIGEN_Ref_double(Eigen::Ref<T>(x_copy), fn, vect_type, skip_checks);
+       fn_EIGEN_Ref_double( Eigen::Ref<T>(x_copy),
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_copy;
   
 }
 
  
 //// blocks
-template <typename T, int n_rows = Eigen::Dynamic, int n_cols = Eigen::Dynamic>
+template <typename T, int n_rows = -1, int n_cols = -1>
 inline auto  fn_EIGEN_double(                 Eigen::Ref<Eigen::Block<T, n_rows, n_cols>> x_Ref,
                                                      const std::string &fn,
-                                                     const std::string &vect_type = "Stan",
-                                                     const bool &skip_checks = false
+                                                     const std::string &vect_type,
+                                                     const bool &skip_checks
 ) {
        
        T x_matrix = x_Ref;
-       fn_EIGEN_Ref_double(Eigen::Ref<T>(x_matrix), fn, vect_type, skip_checks);
+       fn_EIGEN_Ref_double( Eigen::Ref<T>(x_matrix),
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_matrix;
    
 }
  
  
 //// arrays
-template <int n_rows = Eigen::Dynamic, int n_cols = Eigen::Dynamic>
+template <int n_rows = -1, int n_cols = -1>
 inline auto  fn_EIGEN_double(         const Eigen::Array<double, n_rows, n_cols> &x,
                                              const std::string &fn, 
-                                             const std::string &vect_type = "Stan",
-                                             const bool &skip_checks = false
+                                             const std::string &vect_type,
+                                             const bool &skip_checks
 ) {
    
-       using T = Eigen::Matrix<double, n_rows, n_cols>;
-       T x_matrix = x.matrix();
-       fn_EIGEN_Ref_double(Eigen::Ref<T>(x_matrix), fn, vect_type, skip_checks);
+       Eigen::Matrix<double, n_rows, n_cols> x_matrix = x.matrix();
+       fn_EIGEN_Ref_double( Eigen::Ref<Eigen::Matrix<double,
+                            n_rows,
+                            n_cols>>(x_matrix),
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_matrix;
    
 }
  
  
-// New overload for general expressions
+//// New overload for general expressions
 template <typename Derived>
 inline auto fn_EIGEN_double(  const Eigen::EigenBase<Derived> &x,
                                      const std::string &fn,
-                                     const std::string &vect_type = "Stan",
-                                     const bool &skip_checks = false
+                                     const std::string &vect_type,
+                                     const bool &skip_checks
 ) {
    
-       using T = Eigen::Matrix<typename Derived::Scalar, 
-                               Derived::RowsAtCompileTime, 
-                               Derived::ColsAtCompileTime>;
-       T x_copy = x;
-       fn_EIGEN_Ref_double(Eigen::Ref<T>(x_copy), fn, vect_type, skip_checks);
+       Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime> x_copy = x;
+       fn_EIGEN_Ref_double( Eigen::Ref<Eigen::Matrix<typename Derived::Scalar,
+                            Derived::RowsAtCompileTime,
+                            Derived::ColsAtCompileTime>>(x_copy),
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_copy;
    
 }
  
  
  
-// Additional Matrix expression overload
+//// Additional Matrix expression overload
 template <typename Derived>
 inline auto fn_EIGEN_double(  const Eigen::MatrixBase<Derived> &x,
                                      const std::string &fn,
-                                     const std::string &vect_type = "Stan",
-                                     const bool &skip_checks = false
+                                     const std::string &vect_type,
+                                     const bool &skip_checks
 ) {
    
-       using T = Eigen::Matrix<typename Derived::Scalar,
-                               Derived::RowsAtCompileTime,
-                               Derived::ColsAtCompileTime>;
-       T x_copy = x;
-       fn_EIGEN_Ref_double(Eigen::Ref<T>(x_copy), fn, vect_type, skip_checks);
+       Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime> x_copy = x;
+       fn_EIGEN_Ref_double( Eigen::Ref<Eigen::Matrix<typename Derived::Scalar,
+                            Derived::RowsAtCompileTime,
+                            Derived::ColsAtCompileTime>>(x_copy),
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_copy;
        
 }
  
  
  
-// Additional overload for array expressions
+//// Additional overload for array expressions
 template <typename Derived>
 inline auto fn_EIGEN_double(  const Eigen::ArrayBase<Derived> &x,
                                      const std::string &fn,
-                                     const std::string &vect_type = "Stan", 
-                                     const bool &skip_checks = false
+                                     const std::string &vect_type, 
+                                     const bool &skip_checks
 ) {
    
-       using T = Eigen::Matrix<typename Derived::Scalar,
-                               Derived::RowsAtCompileTime,
-                               Derived::ColsAtCompileTime>;
-       T x_copy = x.matrix();
-       fn_EIGEN_Ref_double(Eigen::Ref<T>(x_copy), fn, vect_type, skip_checks);
+       Eigen::Matrix<typename Derived::Scalar, Derived::RowsAtCompileTime, Derived::ColsAtCompileTime> x_copy = x.matrix();
+       fn_EIGEN_Ref_double( Eigen::Ref<Eigen::Matrix<typename Derived::Scalar,
+                            Derived::RowsAtCompileTime,
+                            Derived::ColsAtCompileTime>>(x_copy),
+                            fn,
+                            vect_type,
+                            skip_checks);
        return x_copy;
 
 }
@@ -241,13 +270,16 @@ template <typename T_destination, typename T_x>
 inline         void   fn_EIGEN_double_into(      T_destination &&destination,
                                                 const T_x &x,
                                                 const std::string &fn,
-                                                const std::string &vect_type = "Stan",
-                                                const bool &skip_checks = false
+                                                const std::string &vect_type,
+                                                const bool &skip_checks
 ) {
 
        destination.resize(x.rows(), x.cols());   //// (a plain vector or matrix takes x's size, as with =)
        destination.array() = x.array();
-       fn_EIGEN_Ref_double<Eigen::Matrix<double, -1, -1>>(destination, fn, vect_type, skip_checks);
+       fn_EIGEN_Ref_double<Eigen::Matrix<double, -1, -1>>( destination,
+                                                           fn,
+                                                           vect_type,
+                                                           skip_checks);
 
 }
 
@@ -260,8 +292,8 @@ template <typename T_x>
 inline  Eigen::Map<Eigen::Matrix<double, -1, -1>>   fn_EIGEN_double_in_a_per_thread_buffer(
                                                                     const T_x &x,
                                                                     const std::string &fn,
-                                                                    const std::string &vect_type = "Stan",
-                                                                    const bool &skip_checks = false
+                                                                    const std::string &vect_type,
+                                                                    const bool &skip_checks
 ) {
 
        static thread_local std::vector<double> buffer;
@@ -270,7 +302,10 @@ inline  Eigen::Map<Eigen::Matrix<double, -1, -1>>   fn_EIGEN_double_in_a_per_thr
        if (static_cast<Eigen::Index>(buffer.size()) < n_rows * n_cols) buffer.resize(n_rows * n_cols);
        Eigen::Map<Eigen::Matrix<double, -1, -1>> x_in_the_buffer(buffer.data(), n_rows, n_cols);
        x_in_the_buffer.array() = x.array();
-       fn_EIGEN_Ref_double<Eigen::Matrix<double, -1, -1>>(x_in_the_buffer, fn, vect_type, skip_checks);
+       fn_EIGEN_Ref_double<Eigen::Matrix<double, -1, -1>>( x_in_the_buffer,
+                                                           fn,
+                                                           vect_type,
+                                                           skip_checks);
        return x_in_the_buffer;
 
 }

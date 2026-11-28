@@ -28,15 +28,15 @@
 #pragma once
 // #include "MVP_helpers_migrated.hpp"
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// PART 0: (REMOVED - KernelChoice, kernel_choice_from_args, apply_col_inplace, Phi_col_inplace,
 ////          inv_Phi_col_inplace all live in MVP_helpers_migrated.hpp; include that instead.)
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// PART A: fn_MVOP_compute_lp_GHK_cols - rewritten. Same outputs, same maths, no strings,
 ////         no temporaries. Note the pattern: copy the input column INTO the output column,
 ////         then transform the output column in place.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
                                            Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
@@ -102,9 +102,9 @@ inline void fn_MVOP_compute_lp_GHK_cols_T(   const int t,
 
 }
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// PART B: fn_MVOP_compute_phi_Bound_Z_cols - rewritten.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
                                                Eigen::Matrix<double, -1, -1> &phi_Bound_Z,
@@ -155,7 +155,7 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 // //// =====================================================================================
 // //// PART C: fn_MVP_compute_lp_GHK_cols (the binary-only MVP version the driver calls).
 // //// =====================================================================================
-// template <Vec vec>
+//// template <Vec vec>
 // inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
 //                                           Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
 //                                           Eigen::Ref<Eigen::Matrix<double, -1, -1>> Phi_Z,
@@ -185,11 +185,11 @@ inline void fn_MVOP_compute_phi_Bound_Z_cols_T(  const int t,
 //   apply_col_inplace<vec, Fn::log>(y1_log_prob, t);
 // }
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// PART D: the driver. Exact edits to
 ////   fn_lp_grad_MVP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial_impl
 //// (numbered so for sequential implementation and builds).
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 ////
 //// D1. Make it a template and add a non-template wrapper that does the ONE runtime dispatch.
 ////     Rename the existing function to ..._serial_impl_T and put `template <Vec vec>` in

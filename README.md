@@ -11,6 +11,7 @@ The extension contains:
 - **MVOP:** the multivariate ordinal probit model.
 - **2LC-MVOP:** the two-class latent-class multivariate ordinal probit model.
 - **Two-class latent trait:** the two-class latent-trait model, selected with `Model_type = "latent_trait"`.
+- **CLC-MVOP:** the co-morbidity latent class multivariate ordinal probit model, for two conditions that can co-occur, selected with `Model_type = "CLC_MVOP"` (see [below](#the-clc-mvop-co-morbidity-model)).
 
 These models are used for correlated binary and ordinal outcomes, including diagnostic and screening test-accuracy models without a perfect reference standard. The ordinal latent-class model is described in [Cerullo et al. (2022)](https://doi.org/10.1002/jrsm.1567), and the latent-class MVP versus latent-trait simulation study is reported in [Cerullo et al. (2025)](https://arxiv.org/abs/2509.18489v1).
 
@@ -59,6 +60,74 @@ Note that the backups only change how the gradient is computed at that position 
 - Stan model files and examples for using the specialised functions through CmdStanR or NicoStan.
 
 The AVX functions are general external kernels. They are also used by the native BayesMVP implementations where the selected processor supports the required instruction set. The compiled implementation reports the detected SIMD lane count.
+
+## The CLC-MVOP (co-morbidity) model
+
+`Model_type = "CLC_MVOP"` implements the **co-morbidity latent class multivariate ordinal probit (CLC-MVOP)** model for jointly estimating the true prevalence, co-occurrence, and diagnostic/screening accuracy of **two conditions that can co-occur** (e.g., autism and borderline personality disorder, or heart disease and dementia), without assuming any test is a perfect gold standard.
+
+### Model structure & latent classes
+- **Four factorial latent classes:** $d \in \{(0,0), (1,0), (0,1), (1,1)\}$ representing neither condition, condition A only, condition B only, and both conditions.
+- **Mixed binary and ordinal tests:** supports any combination of binary tests ($K_t = 2$) and ordinal tests with arbitrary numbers of categories ($K_t \ge 3$), without collapsing ordinal scales.
+- **Own-status accuracy & cross-loadings:** each test measures its designated target condition with own-status location parameters (for binary tests) or stochastically ordered cut-points $C^{[1]} \le C^{[0]}$ (for ordinal tests). Optional **cross-loadings** (`allow_cross_loading`) allow the *other* condition to shift a test's latent mean (separately by own status, with symmetric or asymmetric priors), plus optional covariate-by-other-condition cross-loading interactions (`n_cross_cov`) and optional perfect-reference pinning (`is_perfect_ref`).
+- **Covariates on both prevalence and test accuracy:** supports subject-level covariates (`X_prevalence`) on both conditions' prevalences and test-specific covariates (`X`) on measurement accuracy, either shared across disease statuses (`covariate_effects_by_own_status = 0`) or separate by own status (`covariate_effects_by_own_status = 1`, enabling differential item functioning on sensitivity vs. specificity).
+- **Survey missingness & interval censoring:** handles both two-phase (trailing) and arbitrary item/test missingness cleanly under the GHK likelihood, and natively supports **interval-censored ordinal scores** (`y_upper_when_interval_censored`, e.g., partially answered questionnaires whose true total lies in $[y_{\text{lo}}, y_{\text{hi}}]$).
+
+### Prevalence & co-occurrence parameterisations
+- **Dirichlet stratum simplex (`use_OR_prior = 0`):** independent Dirichlet priors on the 4-class simplex per population/stratum.
+- **Hierarchical logit-normal margins + conditional $\Pr(B \mid A)$ (`use_OR_prior = 1, use_cond_prior = 1`):** non-centred stratum-level logit-normal effects for A and B (`mu_logit_A/B`, `sigma_logit_A/B`, `z_logit_A/B`) plus prevalence covariates, linked via a shared comorbidity log-odds parameter with an exact change-of-variables prior directly on the survey-standardised conditional probability $\Pr(B \mid A)$, and optionally (`use_pop_prev_prior = 1`) an exact $3 \times 3$ Jacobian prior directly on the survey-standardised population prevalences $\mathrm{prev}_A$, $\mathrm{prev}_B$, and $\Pr(B \mid A)$.
+- **Plackett bivariate copula (`use_OR_prior = 1, use_cond_prior = 0`):** exact numerically stable [Plackett (1965)](https://doi.org/10.1080/01621459.1965.10480807) $2 \times 2$ cell probabilities with either a shared (`log_OR_shared = 1`) or stratum-specific (`log_OR_shared = 0`) odds ratio.
+
+### Test-accuracy & cut-point priors
+- **Induced-Dirichlet cut-point priors:** places coherent induced-Dirichlet priors on ordinal cut-points for each own-status set.
+- **Multi-cutoff `Se`/`Sp` priors (`use_Se_Sp_prior = 1`):** supports four prior families (`Se_Sp_prior_type = 1..4`: Dirichlet, Beta, logit-normal, probit-normal) on any chosen subset of binary tests and ordinal cut-offs.
+- **Survey-standardised population `Se`/`Sp` priors (`use_pop_Se_Sp_prior = 1`):** places the probit-normal `Se`/`Sp` priors directly on the weighted survey-standardised population scale (with exact 1-D diagonal Jacobian and SIMD-accelerated evaluation over standardisation profiles), eliminating probit covariate-variance attenuation without anchoring priors at $X = 0$.
+
+### Within-class correlation structures
+All non-independent modes use the bounded Cholesky parameterisation of [Pinkney (2024)](https://arxiv.org/abs/2405.07286), supporting positive constraints (`corr_force_positive = 1`), custom element-wise bounds (`lb_corr`, `ub_corr`), and arbitrary fixed/known correlations (`known_values_indicator_list`, `known_values_list`):
+- **P1 (single shared matrix, `pool_correlations_across_classes = 2`):** one correlation matrix shared across all four classes.
+- **P2 (partial pooling, `pool_correlations_across_classes = 1`):** a global correlation matrix combined with class-specific departures via class-level mixing weights $\lambda_c \in (0, 1)$, $\Omega_c = (1 - \lambda_c)\Omega_{\text{global}} + \lambda_c \Omega_{\text{dep}, c}$.
+- **P3 (separate matrices, `pool_correlations_across_classes = 0`):** an independent correlation matrix for each of the four classes.
+- **P4 (class 1 own + classes 2-4 shared, `pool_correlations_across_classes = 3`):** separate correlation matrix for the neither-condition class $(0,0)$ and one shared matrix across the three morbid classes $(1,0), (0,1), (1,1)$.
+- **CI (conditional independence):** when all off-diagonal correlations are fixed to $0$, BayesMVP automatically switches to an exact closed-form zero-nuisance path (`n_nuisance = 0`).
+
+### Computation, test ordering & usage
+- **Shared hand-coded gradients & chunking:** reuses BayesMVP's tiled AVX-512/AVX2 GHK forward/backward kernels, standard-scale (`NoLog`) and log-scale (`PartialLog`) hand-coded gradients, cache-aware chunking, and OpenMP within-chain parallelism (WCP).
+- **Custom `latent_test_order`:** supports arbitrary latent GHK test permutations (e.g., `c(4, 3, 2, 1)`) whilst automatically unpermuting constrained parameters, correlation matrices, and accuracy summaries back to the original observed test order.
+- **Summaries & LOO:** `$summary()` computes constrained parameters, transformed parameters (`Omega`, `Omega_global`, `C_vec_tp`, `beta`), survey-standardised generated quantities (`prev`, `prev_A_overall`, `prev_B_overall`, `Pr_B_given_A_overall`, `Pr_A_given_B_overall`, `Se_bin`/`Sp_bin`, `Se_ord`/`Sp_ord`), and per-observation `log_lik` traces for PSIS-LOO.
+
+```r
+library(BayesMVP)
+
+mod <- MVP_model$new(
+  Model_type = "CLC_MVOP",
+  sample_nuisance = TRUE,
+  model_args_list = list(
+    stan_data = clc_stan_data,
+    vect_type = "AVX512",
+    Phi_type = "Phi_approx",
+    inv_Phi_type = "inv_Phi_approx",
+    nuisance_transformation = "Phi",
+    use_pop_Se_Sp_prior = 1L
+  )
+)
+
+fit <- mod$sample(
+  partitioned_HMC = TRUE,
+  diffusion_HMC = TRUE,
+  n_chains_burnin = 8L,
+  n_chains_sampling = 8L,
+  n_burnin = 500L,
+  n_iter = 1000L,
+  store_log_lik_trace = TRUE,
+  init_lists_per_chain = init_lists
+)
+
+res <- fit$summary(
+  save_log_lik_trace = TRUE,
+  compute_transformed_parameters = TRUE,
+  compute_generated_quantities = TRUE
+)
+```
 
 ## Automatic test (column) reordering
 

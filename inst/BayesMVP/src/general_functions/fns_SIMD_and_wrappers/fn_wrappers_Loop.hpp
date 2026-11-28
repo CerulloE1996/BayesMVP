@@ -22,7 +22,7 @@
 #include <Eigen/Core>
  
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)   //// (x86-64 only: ARM CPUs have no AVX)
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
 
  
@@ -38,7 +38,7 @@ inline void fn_Loop_row_or_col_vector(      Eigen::Ref<T>  x,
   
    const int N = x.size();
    
-     for (int i = 0; i < N; ++i) {
+     for (int i = 0; i < N; i++) {
        x(i) = fn_double(x(i));
      }
    
@@ -56,8 +56,8 @@ inline void fn_Loop_matrix(  Eigen::Ref<T> x,
      const int rows = x.rows(); 
      const int cols = x.cols();
       
-     for (int j = 0; j < cols; ++j) {
-           for (int i = 0; i < rows; ++i) {
+     for (int j = 0; j < cols; j++) {
+           for (int i = 0; i < rows; i++) {
              x(i, j) = fn_double(x(i, j));
            }
      }
@@ -77,15 +77,18 @@ inline void fn_Loop_dbl_Eigen( Eigen::Ref<T> x,
      
      if constexpr (n_rows == 1 && n_cols == -1) {   // Row vector case
        
-       fn_Loop_row_or_col_vector(x, fn_double);
+       fn_Loop_row_or_col_vector( x,
+                                  fn_double);
        
      } else if constexpr (n_rows == -1 && n_cols == 1) {  // Column vector case
        
-       fn_Loop_row_or_col_vector(x, fn_double);
+       fn_Loop_row_or_col_vector( x,
+                                  fn_double);
        
      } else {   // General matrix case
        
-       fn_Loop_matrix(x, fn_double);
+       fn_Loop_matrix( x,
+                       fn_double);
        
      }
  
@@ -105,11 +108,13 @@ inline void    fn_process_double_Loop_sub_function(     Eigen::Ref<T> x,
   
   if (skip_checks == false) {
     
-    fn_Loop_dbl_Eigen(x, fn_fast_double_function);
+    fn_Loop_dbl_Eigen( x,
+                       fn_fast_double_function);
     
   }   else  {
     
-    fn_Loop_dbl_Eigen(x, fn_fast_double_function_wo_checks);
+    fn_Loop_dbl_Eigen( x,
+                       fn_fast_double_function_wo_checks);
     
   }
   

@@ -5,7 +5,7 @@
 #include <string>
 #include <stdexcept>
 
-//// ============================================================================================================
+//// ------------------------------------------------------------------------------------------------------------
 //// The PartialLog (log-scale) evaluation of the LC_MVP / MVP and LC_MVOP / MVOP models runs with
 //// n_chunks_multiplier times as many chunks as the stored num_chunks (smaller chunks for the log-scale work),
 //// with n_chunks_multiplier = the sample() argument n_chunks_multiplier_for_PartialLog_log_scale_evaluation
@@ -18,7 +18,7 @@
 //// layouts. This is the C++ counterpart of fn_nuisance_chunk_layout_positions() and
 //// fn_nuisance_chunk_remap_index() (R_fns_misc_BayesMVP.R); its buffers are allocated once per thread and
 //// size, never per evaluation.
-//// ============================================================================================================
+//// ------------------------------------------------------------------------------------------------------------
 
 
 ////
@@ -33,12 +33,12 @@ inline void fn_nuisance_chunk_layout_positions_cpp( const int N,
 
         const ChunkSizeInfo chunk_info = calculate_chunk_sizes(N, vec_size, n_chunks);
         position_of_observation_and_test.resize(static_cast<size_t>(N) * static_cast<size_t>(n_tests));
-        for (int chunk_index = 0; chunk_index < chunk_info.n_total_chunks; ++chunk_index) {
+        for (int chunk_index = 0; chunk_index < chunk_info.n_total_chunks; chunk_index++) {
               const int row_start  = chunk_index * chunk_info.normal_chunk_size;
               const int chunk_size = (chunk_index < chunk_info.n_full_chunks) ? chunk_info.normal_chunk_size :
                                                                                  chunk_info.last_chunk_size;
-              for (int t = 0; t < n_tests; ++t) {
-                    for (int r = 0; r < chunk_size; ++r) {
+              for (int t = 0; t < n_tests; t++) {
+                    for (int r = 0; r < chunk_size; r++) {
                           position_of_observation_and_test[(row_start + r) + N * t] =
                                 row_start * n_tests + t * chunk_size + r;
                     }
@@ -77,13 +77,19 @@ struct PartialLog_nuisance_chunk_relayout_workspace {
                      (n_chunks_evaluation_now == n_chunks_evaluation) && (vec_size_now == vec_size) ) return;
                 N = N_now ; n_tests = n_tests_now ; n_chunks_stored = n_chunks_stored_now ;
                 n_chunks_evaluation = n_chunks_evaluation_now ; vec_size = vec_size_now;
-                fn_nuisance_chunk_layout_positions_cpp( N, n_tests, n_chunks_stored, vec_size,
+                fn_nuisance_chunk_layout_positions_cpp( N,
+                                                        n_tests,
+                                                        n_chunks_stored,
+                                                        vec_size,
                                                         positions_stored_layout);
-                fn_nuisance_chunk_layout_positions_cpp( N, n_tests, n_chunks_evaluation, vec_size,
+                fn_nuisance_chunk_layout_positions_cpp( N,
+                                                        n_tests,
+                                                        n_chunks_evaluation,
+                                                        vec_size,
                                                         positions_evaluation_layout);
                 const int n_us = N * n_tests;
                 stored_position_of_evaluation_position.resize(static_cast<size_t>(n_us));
-                for (int i = 0; i < n_us; ++i) {
+                for (int i = 0; i < n_us; i++) {
                       stored_position_of_evaluation_position[positions_evaluation_layout[i]] =
                             positions_stored_layout[i];
                 }
@@ -142,7 +148,9 @@ inline void fn_PartialLog_evaluation_in_its_own_chunk_layout(
                   const int n_chunks_multiplier,
                   EvaluatePartialLog &&evaluate) {
 
-        const int n_chunks_evaluation = fn_PartialLog_n_chunks_of_evaluation( N, n_chunks_stored, vec_size,
+        const int n_chunks_evaluation = fn_PartialLog_n_chunks_of_evaluation( N,
+                                                                              n_chunks_stored,
+                                                                              vec_size,
                                                                               n_chunks_multiplier);
         if (n_chunks_evaluation == n_chunks_stored) {
               evaluate(out_mat, theta_us_vec_ref);
@@ -157,12 +165,12 @@ inline void fn_PartialLog_evaluation_in_its_own_chunk_layout(
               fn_PartialLog_relayout_workspace_of_this_thread();
         workspace.prepare(N, n_tests, n_chunks_stored, n_chunks_evaluation, vec_size);
         const std::vector<int> &stored_position = workspace.stored_position_of_evaluation_position;
-        for (int p = 0; p < n_us; ++p) {
+        for (int p = 0; p < n_us; p++) {
               workspace.theta_us_in_evaluation_layout(p) = theta_us_vec_ref(stored_position[p]);
         }
         evaluate(out_mat, workspace.theta_us_in_evaluation_layout);
         workspace.grad_us_in_evaluation_layout = out_mat.segment(1, n_us);
-        for (int p = 0; p < n_us; ++p) {
+        for (int p = 0; p < n_us; p++) {
               out_mat(1 + stored_position[p]) = workspace.grad_us_in_evaluation_layout(p);
         }
 

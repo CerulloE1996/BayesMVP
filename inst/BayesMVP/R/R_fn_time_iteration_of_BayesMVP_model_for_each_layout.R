@@ -1,8 +1,8 @@
 ##
 ## ==== R_fn_time_iteration_of_BayesMVP_model_for_each_layout.R ==================================================
 ##
-## ---- Seconds per iteration of a BayesMVP model with manual gradients (Model_type "MVP", "MVOP", "LC_MVP" or
-##      "LC_MVOP") for each layout of within-chain threads and chunks, in NicoStan's persistent burn-in worker -
+## ---- Seconds per iteration of a BayesMVP model with manual gradients (Model_type "MVP", "MVOP", "LC_MVP",
+##      "LC_MVOP" or "CLC_MVOP") for each layout of within-chain threads and chunks, in NicoStan's persistent burn-in worker -
 ##
 ## The same timing as NicoStan's fn_time_burnin_iteration_for_each_num_chunks() for Stan models (all chains
 ## advanced one diffusion-HMC iteration in parallel, at a tiny step size, eps = 1e-5, with a fixed trajectory
@@ -18,7 +18,7 @@
 #### ---- the timing --------------------------------------------------------------------------------------------
 #' Seconds per iteration of a BayesMVP model (manual gradients) for each layout of threads and chunks
 #'
-#' @param Model_type "MVP", "MVOP", "LC_MVP" or "LC_MVOP".
+#' @param Model_type "MVP", "MVOP", "LC_MVP", "LC_MVOP", "CLC_MVOP" or "CLC-MVOP".
 #' @param init_object The model's initialisation object (from BayesMVP::initialise_model() or the init_object of
 #'   BayesMVP::MVP_model$new(); it holds Model_args_as_Rcpp_List, model_args_list, n_params_main and n_nuisance).
 #' @param n_chains The chains advanced in parallel (e.g. the 4 burn-in chains, or the sampling chains).
@@ -36,17 +36,17 @@ fn_time_iteration_of_BayesMVP_model_for_each_layout <-  function( Model_type,
                                                                  init_object,
                                                                  n_chains,
                                                                  layouts,
-                                                                 n_rounds                    = 2,
-                                                                 n_timed_iterations          = 2,
-                                                                 minimum_seconds_per_timing  = 0.1,
-                                                                 L_main                      = 20,
-                                                                 eps_main                    = 1e-5,
-                                                                 n_untimed_iterations_before_timing  = 0
+                                                                 n_rounds,
+                                                                 n_timed_iterations,
+                                                                 minimum_seconds_per_timing,
+                                                                 L_main,
+                                                                 eps_main,
+                                                                 n_untimed_iterations_before_timing
 ) {
         ##
-        if (!(Model_type %in% c("MVP", "MVOP", "LC_MVP", "LC_MVOP"))) {
+        if (!(Model_type %in% c("MVP", "MVOP", "LC_MVP", "LC_MVOP", "CLC-MVOP", "CLC_MVOP"))) {
               stop(paste0("fn_time_iteration_of_BayesMVP_model_for_each_layout: Model_type must be \"MVP\", ",
-                          "\"MVOP\", \"LC_MVP\" or \"LC_MVOP\" (BayesMVP's models with manual gradients); got: ",
+                          "\"MVOP\", \"LC_MVP\", \"LC_MVOP\", \"CLC_MVOP\" or \"CLC-MVOP\" (BayesMVP's models with manual gradients); got: ",
                           paste(as.character(Model_type), collapse = ", ")))
         }
         if (!is.data.frame(layouts) || !all(c("n_threads_WCP", "num_chunks") %in% names(layouts))) {
@@ -69,7 +69,7 @@ fn_time_iteration_of_BayesMVP_model_for_each_layout <-  function( Model_type,
         EHMC_args_as_Rcpp_List$tau_us <-  L_main * eps_main
         EHMC_Metric_as_Rcpp_List <-  init_EHMC_Metric_as_Rcpp_List( n_params_main     = n_params_main,
                                                                     n_nuisance        = n_nuisance,
-                                                                    metric_shape_main = "dense")
+                                                                    metric_shape_main = "diag")
         fn_small_values <-  function(n_values) 0.005 * (((seq_len(n_values) * 7) %% 5) - 2)
         initial_main <-  matrix(fn_small_values(n_params_main * n_chains), nrow = n_params_main, ncol = n_chains)
         initial_nuisance <-  matrix(fn_small_values(n_nuisance * n_chains), nrow = n_nuisance, ncol = n_chains)
@@ -100,7 +100,9 @@ fn_time_iteration_of_BayesMVP_model_for_each_layout <-  function( Model_type,
                                      n_threads_WCP = n_threads_WCP)
                     fn_persistent_burnin_update_adaptation(worker, EHMC_args_as_Rcpp_List,
                                                            EHMC_Metric_as_Rcpp_List)
-                    fn_persistent_burnin_set_theta(worker, initial_main, initial_nuisance)
+                    fn_persistent_burnin_set_theta(worker,
+                                                   initial_main,
+                                                   initial_nuisance)
                     ## ## (one untimed iteration, then at least n_timed_iterations and at least
                     ## ##  minimum_seconds_per_timing of timed iterations)
                     ## fn_persistent_burnin_run_one_iter(worker, 1000 * round_index, 1)
@@ -143,7 +145,7 @@ fn_time_iteration_of_BayesMVP_model_for_each_layout <-  function( Model_type,
                     seconds[round_index, layout_index] <-  (proc.time()[["elapsed"]] - start_time) /
                                                            n_iterations_timed
                     rm(worker)
-                    invisible(gc(verbose = FALSE))
+                    gc(verbose = FALSE)
                     seconds_spent_timing[layout_index] <-  seconds_spent_timing[layout_index] +
                                                            (proc.time()[["elapsed"]] - time_layout_start)
               }

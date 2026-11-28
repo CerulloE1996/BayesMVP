@@ -9,33 +9,24 @@ Rcpp_BayesMVP_compiled_SIMD_levels <- function() {
     .Call(`_BayesMVP_Rcpp_BayesMVP_compiled_SIMD_levels`)
 }
 
-#' Compute Se/Sp at custom baseline covariate values for LC-MVOP models
-#' (mixed binary + ordinal latent class multivariate probit).
-#'
-#' All internal storage and computation uses Eigen.
-#' Output is reshaped back into R arrays at the end.
-#'
-#' Se/Sp formulas (probit link):
-#'   Binary test t:
 #'     Se      = Phi( X_d' * beta[2][, t] )
 #'     Fp      = Phi( X_nd' * beta[1][, t] )
-#'   Ordinal test t_ord at threshold k:
+NULL
+
 #'     Se[k]   = Phi( X_d' * beta[2][, t]  - C_d[k] )
 #'     Sp[k]   = Phi( C_nd[k] - X_nd' * beta[1][, t] )
-#'
-#' Test order: the traces (beta, C), n_covs_nd / n_covs_d, n_thr_per_ord_test and
-#' n_cat_per_test_in_trace_order are in the TRACE layout, i.e. the order of the columns of y the model was
+NULL
+
 #' fitted to; n_cat_per_test_in_trace_order[s] = 2 for a binary test and the number of categories for an
 #' ordinal test (NULL = the binary tests first, then the ordinal tests: the layout the two counts describe on
 #' their own). test_perm[s] = the ORIGINAL test held by trace slot s (the run's test_perm; NULL = identity).
-#' baseline_case_nd / baseline_case_d and every output (Se/Sp/Fp, AUC, AUC differences, threshold map) are in
-#' ORIGINAL test order, with the binary and ordinal tests in any positions.
-#'
-Rcpp_compute_LC_MVOP_Se_Sp_baseline <- function(trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name = "C_vec", n_cat_per_test_in_trace_order = NULL, test_perm = NULL) {
+NULL
+
+Rcpp_compute_LC_MVOP_Se_Sp_baseline <- function(trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name, n_cat_per_test_in_trace_order, test_perm) {
     .Call(`_BayesMVP_Rcpp_compute_LC_MVOP_Se_Sp_baseline`, trace_beta_flat, beta_dims, beta_names, trace_C_flat, C_dims, C_names, baseline_case_nd, baseline_case_d, n_covs_nd, n_covs_d, n_binary_tests, n_ordinal_tests, n_thr_per_ord_test, C_param_name, n_cat_per_test_in_trace_order, test_perm)
 }
 
-cpp_fn_post_burnin_prep_for_sampling <- function(n_chains_burnin, n_chains_sampling, n_superchains, n_params_main, n_nuisance, theta_main_in, theta_us_in, nuisance_jitter_scale = 0.25, seed = 123L) {
+cpp_fn_post_burnin_prep_for_sampling <- function(n_chains_burnin, n_chains_sampling, n_superchains, n_params_main, n_nuisance, theta_main_in, theta_us_in, nuisance_jitter_scale, seed) {
     .Call(`_BayesMVP_cpp_fn_post_burnin_prep_for_sampling`, n_chains_burnin, n_chains_sampling, n_superchains, n_params_main, n_nuisance, theta_main_in, theta_us_in, nuisance_jitter_scale, seed)
 }
 
@@ -53,6 +44,10 @@ fn_get_stan_load_count <- function() {
 
 fn_reset_stan_load_timer <- function() {
     invisible(.Call(`_BayesMVP_fn_reset_stan_load_timer`))
+}
+
+Rcpp_fn_set_the_positions_of_the_nuisance_values_kept_in_the_trace <- function(positions_from_0) {
+    invisible(.Call(`_BayesMVP_Rcpp_fn_set_the_positions_of_the_nuisance_values_kept_in_the_trace`, positions_from_0))
 }
 
 Rcpp_fn_check_joint_trajectory <- function(EHMC_args_as_Rcpp_List) {
@@ -87,6 +82,10 @@ Rcpp_compute_MCMC_diagnostics <- function(mcmc_3D_array, diagnostic, n_threads) 
     .Call(`_BayesMVP_Rcpp_compute_MCMC_diagnostics`, mcmc_3D_array, diagnostic, n_threads)
 }
 
+Rcpp_compute_all_summaries <- function(trace, n_rows_trace, n_params, n_iter, n_chains, n_threads) {
+    .Call(`_BayesMVP_Rcpp_compute_all_summaries`, trace, n_rows_trace, n_params, n_iter, n_chains, n_threads)
+}
+
 detect_vectorization_support <- function() {
     .Call(`_BayesMVP_detect_vectorization_support`)
 }
@@ -107,7 +106,7 @@ fn_Rcpp_wrapper_update_M_diag_Hessian <- function(M_main_vec, M_inv_main_vec, sh
     .Call(`_BayesMVP_fn_Rcpp_wrapper_update_M_diag_Hessian`, M_main_vec, M_inv_main_vec, shrinkage_factor, ratio_Hess_main, interval_width, num_diff_e, Model_type, force_autodiff, force_PartialLog, multi_attempts, theta_main_vec, theta_us_vec, y, Model_args_as_Rcpp_List, ii, n_burnin, metric_type)
 }
 
-fn_find_initial_eps_main_and_us <- function(theta_main_vec_initial_ref, theta_us_vec_initial_ref, partitioned_HMC, seed, Model_type, force_autodiff, force_PartialLog, multi_attempts, y_ref, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads = 1L) {
+fn_find_initial_eps_main_and_us <- function(theta_main_vec_initial_ref, theta_us_vec_initial_ref, partitioned_HMC, seed, Model_type, force_autodiff, force_PartialLog, multi_attempts, y_ref, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads) {
     .Call(`_BayesMVP_fn_find_initial_eps_main_and_us`, theta_main_vec_initial_ref, theta_us_vec_initial_ref, partitioned_HMC, seed, Model_type, force_autodiff, force_PartialLog, multi_attempts, y_ref, Model_args_as_Rcpp_List, EHMC_args_as_Rcpp_List, EHMC_Metric_as_Rcpp_List, n_threads)
 }
 
@@ -163,8 +162,8 @@ Rcpp_shrink_matrix <- function(mat, shrinkage_factor) {
     .Call(`_BayesMVP_Rcpp_shrink_matrix`, mat, shrinkage_factor)
 }
 
-fn_compute_param_constrain_from_trace_parallel <- function(unc_params_trace_input_main, unc_params_trace_input_nuisance, pars_indicies_to_track, n_params_full, n_params_main, n_nuisance, model_so_file, json_file_path, use_disk = FALSE, trace_dir = "/tmp/constrain_traces") {
-    .Call(`_BayesMVP_fn_compute_param_constrain_from_trace_parallel`, unc_params_trace_input_main, unc_params_trace_input_nuisance, pars_indicies_to_track, n_params_full, n_params_main, n_nuisance, model_so_file, json_file_path, use_disk, trace_dir)
+fn_compute_param_constrain_from_trace_parallel <- function(unc_params_trace_input_main, unc_params_trace_input_nuisance, pars_indicies_to_track, n_params_full, n_params_main, n_nuisance, model_so_file, json_file_path, use_disk, trace_dir, include_tp, include_gq) {
+    .Call(`_BayesMVP_fn_compute_param_constrain_from_trace_parallel`, unc_params_trace_input_main, unc_params_trace_input_nuisance, pars_indicies_to_track, n_params_full, n_params_main, n_nuisance, model_so_file, json_file_path, use_disk, trace_dir, include_tp, include_gq)
 }
 
 fn_compute_param_constrain_from_trace_v2 <- function(unc_params_trace_input_main, n_params_full, n_params_main, include_nuisance, model_so_file, json_file_path) {

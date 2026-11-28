@@ -169,14 +169,14 @@ endif
 ##
 ####### ----- OpenMP flags  ---------------------------------------------------------------------------------------------------------
 ##
-override OMP_LIB_FLAGS=$(shell "$(R_HOME)/bin/Rscript" "$(PWD)/R_script_load_OMP_Linux.R")
+override OMP_LIB_FLAGS=$(subst ",,$(filter-out [%] 0,$(shell "$(R_HOME)/bin/Rscript" "$(PWD)/R_script_load_OMP_Linux.R")))   ## the libgomp path or -fopenmp; any R printout ("[1]", quotes) or a bare 0 is dropped, so only a path or a flag reaches PKG_LIBS on any machine
 override LD_LIBRARY_PATH+="$(OMP_LIB_FLAGS)"
 override OMP_SO=$(OMP_LIB_FLAGS)
 ##
 ## Initialize empty flags:
 override OMP_FLAGS=
 ##
-ifneq ($(OMP_LIB_FLAGS),0)
+ifneq ($(OMP_LIB_FLAGS),)
   override OMP_FLAGS+=-fopenmp
 endif
 ##

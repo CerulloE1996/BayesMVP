@@ -15,20 +15,20 @@
  
  
  // ============================================================================
- // Multi-population prevalence helpers for LC-MVP / LC-MVOP
+ //// Multi-population prevalence helpers for LC-MVP / LC-MVOP
  //
- // Replaces the single-prevalence code with n_pops independent prevalences.
- // Each population g has its own unconstrained parameter u_raw[g], transformed
- // to prev[g] = 0.5 * (tanh(u_raw[g]) + 1) ∈ (0, 1).
+ //// Replaces the single-prevalence code with n_pops independent prevalences.
+ //// Each population g has its own unconstrained parameter u_raw[g], transformed
+ //// to prev[g] = 0.5 * (tanh(u_raw[g]) + 1) ∈ (0, 1).
  //
- // n_class is always 2 (non-diseased / diseased).
- // n_pops >= 1 (number of populations, e.g. 3 for Afrikaans/Xhosa/Zulu).
- //f
- // Parameter layout in theta_main_vec:
+ //// n_class is always 2 (non-diseased / diseased).
+ //// n_pops >= 1 (number of populations, e.g. 3 for Afrikaans/Xhosa/Zulu).
+ //// f
+ //// Parameter layout in theta_main_vec:
  //   [corrs | coeffs | u_prev_raw[0..n_pops-1] | cutpoints]
  //   i.e. n_pops params starting at index (n_corrs + n_covariates_total)
  //
- // Data required: pop_ind (length N, 0-indexed) mapping each observation
+ //// Data required: pop_ind (length N, 0-indexed) mapping each observation
  //   to its population.
  // ============================================================================
  
@@ -37,7 +37,7 @@
 // 1. Forward transform (doubles): u_raw → prev, log_prev, Jacobian
 // ============================================================================
 //
-// Inputs:
+//// Inputs:
 //   u_prev_raw:   (n_pops × 1) unconstrained prevalence params
 //   pop_ind:      (N × 1) 0-indexed population index per observation
 //   n_pops, N:    dimensions
@@ -53,7 +53,7 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_transform_double( const Eigen::Ref<cons
                                                            const Eigen::Ref<const Eigen::Matrix<int, -1, 1>> pop_ind,
                                                            const int n_pops,
                                                            const int N,
-                                                           // outputs:
+                                                           //// outputs:
                                                            Eigen::Matrix<double, -1, -1> &prev,           // n_pops × 2
                                                            Eigen::Matrix<double, -1, -1> &log_prev_mat,   // N × 2
                                                            Eigen::Matrix<double, -1, 1>  &tanh_u,         // n_pops
@@ -63,7 +63,7 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_transform_double( const Eigen::Ref<cons
   
        log_det_J = 0.0;
        
-       for (int g = 0; g < n_pops; ++g) {
+       for (int g = 0; g < n_pops; g++) {
              
              tanh_u(g) = stan::math::tanh(u_prev_raw(g));
              double prev_g = 0.5 * (tanh_u(g) + 1.0);
@@ -78,8 +78,8 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_transform_double( const Eigen::Ref<cons
        
        Eigen::Matrix<double, -1, -1> log_prev = stan::math::log(prev);
        
-       // Build per-observation log_prev matrix
-       for (int n = 0; n < N; ++n) {
+       //// Build per-observation log_prev matrix
+       for (int n = 0; n < N; n++) {
          
              int g = pop_ind(n);  // 0-indexed
              log_prev_mat(n, 0) = log_prev(g, 0);   // log(1 - prev[g])
@@ -94,18 +94,18 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_transform_double( const Eigen::Ref<cons
 // 2. AD block: priors + Jacobian for prevalence parameters
 // ============================================================================
 //
-// Computes grad of [Beta priors + log_det_J] w.r.t. u_prev_raw
-// via Stan autodiff. 
+//// Computes grad of [Beta priors + log_det_J] w.r.t. u_prev_raw
+//// via Stan autodiff. 
 //
-// This replaces the existing AD block that handles a single prevalence.
+//// This replaces the existing AD block that handles a single prevalence.
 //
-// Inputs:
+//// Inputs:
 //   u_prev_raw:    (n_pops × 1) unconstrained params (doubles, will be converted to var)
 //   prior_prev_a:   (n_pops × 1) Beta prior alpha per population
 //   prior_prev_b:   (n_pops × 1) Beta prior beta per population
 //   n_pops:        number of populations
 //
-// Outputs:
+//// Outputs:
 //   prior_densities_prev_double: scalar prior density value
 //   log_det_J_prev_double:       scalar Jacobian value
 //   grad_prev_raw:               (n_pops × 1) gradient of (prior + Jacobian) w.r.t. u_raw
@@ -124,26 +124,26 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_AD( const Eigen::Ref<const Eigen::Matri
          
          stan::math::var target_AD_prev = 0.0;
          
-         // Create var versions of unconstrained params
+         //// Create var versions of unconstrained params
          Eigen::Matrix<stan::math::var, -1, 1> u_var(n_pops);
-         for (int g = 0; g < n_pops; ++g) {
+         for (int g = 0; g < n_pops; g++) {
            u_var(g) = stan::math::to_var(u_prev_raw(g));
          }
          
-         // Transform and compute Jacobian + priors
+         //// Transform and compute Jacobian + priors
          stan::math::var log_det_J_var = 0.0;
          stan::math::var prior_var = 0.0;
          
-         for (int g = 0; g < n_pops; ++g) {
+         for (int g = 0; g < n_pops; g++) {
              
              stan::math::var tanh_g = stan::math::tanh(u_var(g));
              stan::math::var prev_g = 0.5 * (tanh_g + 1.0);
              stan::math::var deriv_g = 0.5 * (1.0 - tanh_g * tanh_g);
              
-             // Jacobian: log|dp/du|
+             //// Jacobian: log|dp/du|
              log_det_J_var += stan::math::log(deriv_g);
              
-             // Beta prior on prev[g]
+             //// Beta prior on prev[g]
              prior_var += stan::math::beta_lpdf(prev_g, prior_prev_a(g), prior_prev_b(g));
            
          }
@@ -153,14 +153,14 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_AD( const Eigen::Ref<const Eigen::Matri
          
          // We differentiate (log_det_J + prior) w.r.t. u_raw
          // But log_det_J gradient is done manually in the likelihood gradient,
-         // so here we only AD the prior (matching existing pattern).
-         // The log_det_J_prev_double is added to log_prob separately.
+         //// so here we only AD the prior (matching existing pattern).
+         //// The log_det_J_prev_double is added to log_prob separately.
          target_AD_prev = prior_var;  // prior only (Jacobian handled manually)
          
          target_AD_prev.grad();
          
          grad_prev_raw.resize(n_pops);
-         for (int g = 0; g < n_pops; ++g) {
+         for (int g = 0; g < n_pops; g++) {
            grad_prev_raw(g) = u_var(g).adj();
          }
          
@@ -197,16 +197,16 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_AD( const Eigen::Ref<const Eigen::Matri
 // ============================================================================
 //
 // In the chunk loop, instead of accumulating a single scalar per class,
-// we accumulate per-population. This replaces:
+//// we accumulate per-population. This replaces:
 //
 //   rowwise_prod = prob[c].rowwise().prod();
 //   rowwise_prod.array() = prob_n_recip.array() * rowwise_prod.array();
 //   double prev_grad = rowwise_prod.sum();
 //   prev_grad_vec(c) += prev_grad;
 //
-// With per-population accumulation.
+//// With per-population accumulation.
 //
-// Inputs:
+//// Inputs:
 //   prob_c:        chunk_size × n_tests probability matrix for class c
 //   prob_n_recip:  chunk_size × 1 reciprocal of total probability
 //   pop_ind:       N × 1 (full), 0-indexed
@@ -227,14 +227,14 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_accumulate_grad(  const Eigen::Ref<cons
                                                            const int c,
                                                            // output (accumulated, NOT reset here):
                                                            Eigen::Matrix<double, -1, -1> &prev_grad_mat,  // n_pops × n_class
-                                                           // workspace:
+                                                           //// workspace:
                                                            Eigen::Matrix<double, -1, 1> &rowwise_prod_ws   // chunk_size
 ) {
    
        rowwise_prod_ws = prob_c.rowwise().prod();
        rowwise_prod_ws.array() *= prob_n_recip.array();
        
-       for (int n = 0; n < chunk_size; ++n) {
+       for (int n = 0; n < chunk_size; n++) {
          int g = pop_ind(chunk_offset + n);
          prev_grad_mat(g, c) += rowwise_prod_ws(n);
        }
@@ -246,31 +246,31 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_accumulate_grad(  const Eigen::Ref<cons
  // 5. Final prevalence gradient: chain rule u_raw → prev → log_lik
  // ============================================================================
  //
- // After all chunks, converts accumulated per-population gradients to
- // gradients w.r.t. the unconstrained parameters u_raw[g].
+ //// After all chunks, converts accumulated per-population gradients to
+ //// gradients w.r.t. the unconstrained parameters u_raw[g].
  //
- // For each population g:
+ //// For each population g:
  //   d(log_lik)/d(u[g]) = [prev_grad_mat(g,1) - prev_grad_mat(g,0)] * dp[g]/du[g]
  //                         + d(log_det_J[g])/du[g]
  //
  // Where d(log_det_J[g])/du[g] = -2 * tanh(u[g])
  //
- // This replaces the existing post-loop code:
+ //// This replaces the existing post-loop code:
  //   prev_unconstrained_grad_vec(c) = prev_grad_vec(c) * deriv_p_wrt_pu_double;
  //   prev_unconstrained_grad_vec(0) = prev_unconstrained_grad_vec(1) - prev_unconstrained_grad_vec(0) - 2*tanh_u_prev[1];
  //
 ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double, -1, -1> &prev_grad_mat,
-                                                     // n_pops × n_class
+                                                     //// n_pops × n_class
                                                      const Eigen::Matrix<double, -1, 1>  &tanh_u,         // n_pops
                                                      const Eigen::Matrix<double, -1, 1>  &deriv_p_wrt_u,  // n_pops
                                                      const int n_pops,
-                                                     // output:
+                                                     //// output:
                                                      Eigen::Matrix<double, -1, 1> &grad_u_raw_out         // n_pops
 ) {
   
-       for (int g = 0; g < n_pops; ++g) {
+       for (int g = 0; g < n_pops; g++) {
          
-             // Likelihood contribution: (weight_diseased - weight_nondiseased) * dp/du
+             //// Likelihood contribution: (weight_diseased - weight_nondiseased) * dp/du
              double lik_grad = (prev_grad_mat(g, 1) - prev_grad_mat(g, 0)) * deriv_p_wrt_u(g);
              
              // Jacobian contribution: d/du log(dp/du) = -2*tanh(u)
@@ -293,10 +293,10 @@ ALWAYS_INLINE void fn_MVP_prev_multi_pop_final_grad( const Eigen::Matrix<double,
  
  
  // ============================================================================
- // INTEGRATION GUIDE
+ //// INTEGRATION GUIDE
  // ============================================================================
  //
- // In fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial:
+ //// In fn_lp_grad_MVOP_LC_Pinkney_NoLog_MD_and_AD_Inplace_process_serial:
  //
  // 1. NEW DATA REQUIRED:
  //    - pop_ind: Eigen::Matrix<int, -1, 1> of length N, 0-indexed

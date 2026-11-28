@@ -9,7 +9,9 @@ functions {
  
  
  
-   vector lb_ub_lp (vector y, real lb, real ub) {
+   vector lb_ub_lp ( vector y,
+                     real lb,
+                     real ub) {
  
     int N = num_elements(y); 
     vector[N] tanh_y; 
@@ -20,7 +22,9 @@ functions {
     
   }
  
-    real lb_ub_lp (real y, real lb, real ub) {
+    real lb_ub_lp ( real y,
+                    real lb,
+                    real ub) {
       
        real  tanh_y = tanh(y);
     //   real tanh_y = tanh_1(y);
@@ -56,14 +60,14 @@ functions {
       //  real l_ij_old = L[i, j];
         real b1 = dot_product(L[j, 1:(j - 1)], D[1:j - 1]' .* L[i, 1:(j - 1)]);
           
-          // how to derive the bounds
-          // we know that the correlation value C is bound by
-          // b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
-          // Now we want our bounds to be enforced too so
+          //// how to derive the bounds
+          //// we know that the correlation value C is bound by
+          //// b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
+          //// Now we want our bounds to be enforced too so
           // max(lb, b1 - Ljj * Lij_old) <= C <= min(ub, b1 + Ljj * Lij_old)
           // We have the Lij_new = (C - b1) / Ljj
-          // To get the bounds on Lij_new is
-          // (bound - b1) / Ljj 
+          //// To get the bounds on Lij_new is
+          //// (bound - b1) / Ljj 
           
           real low = max({-sqrt(l_ij_old * D[j]), lb - b1});
           real up = min({sqrt(l_ij_old * D[j]), ub - b1});

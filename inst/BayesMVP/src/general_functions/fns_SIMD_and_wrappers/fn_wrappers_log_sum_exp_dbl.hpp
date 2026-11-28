@@ -21,7 +21,7 @@
 
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)   //// (x86-64 only: ARM CPUs have no AVX)
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
 
 
@@ -37,18 +37,26 @@ ALWAYS_INLINE  void log_sum_exp_general(      const Eigen::Ref<const Eigen::Matr
                                               Eigen::Ref<Eigen::Matrix<double, -1, 1>> log_sum_result,
                                               Eigen::Ref<Eigen::Matrix<double, -1, 1>> container_max_logs) {
     
-    // find max for each row across all columns
+    //// find max for each row across all columns
     container_max_logs = log_vals.rowwise().maxCoeff();
     //// (the shift of a row whose terms are all log(0) = -Inf is 0, so that no -Inf - (-Inf) = NaN)
     container_max_logs = (container_max_logs.array() == -std::numeric_limits<double>::infinity()).select(0.0,
                           container_max_logs);
     //// const Eigen::Matrix<double, -1, 1>  temp_container_max_logs = log_vals.rowwise().maxCoeff(); // this works on windows  //// BOOKMARK
     Eigen::Matrix<double, -1, -1> temp = (log_vals.colwise() - container_max_logs);
-    fn_EIGEN_double_into(temp, temp, "exp", vect_type_exp);   //// (exp in place: no second matrix)
+    fn_EIGEN_double_into( temp,
+                          temp,
+                          "exp",
+                          vect_type_exp,
+                          false);   //// (exp in place: no second matrix)
     const Eigen::Matrix<double, -1, 1>  sum_exp =  temp.rowwise().sum();
     const Eigen::Matrix<double, -1, 1>  sum_exp_abs = stan::math::abs(sum_exp);
     /// up to here OK on windows
-    fn_EIGEN_double_into( log_sum_result, sum_exp_abs, "log", vect_type_log);
+    fn_EIGEN_double_into( log_sum_result,
+                          sum_exp_abs,
+                          "log",
+                          vect_type_log,
+                          false);
     log_sum_result.array() += container_max_logs.array();
    
 }
@@ -85,13 +93,20 @@ ALWAYS_INLINE void log_abs_sum_exp_general_v2(   const Eigen::Ref<const Eigen::M
      
     //// Compute exp terms and sum over columns with signs 
     Eigen::Matrix<double, -1, -1> temp = (log_abs_vals.colwise() - container_max_logs);
-    fn_EIGEN_double_into(temp, temp, "exp", vect_type_exp);   //// (exp in place: no second matrix)
+    fn_EIGEN_double_into( temp,
+                          temp,
+                          "exp",
+                          vect_type_exp,
+                          false);   //// (exp in place: no second matrix)
     const Eigen::Matrix<double, -1, -1> temp_3 = (temp.array() * signs.array()).matrix();
     //// const Eigen::Matrix<double, -1, 1>  container_sum_exp_signed_temp = temp_3.rowwise().sum();  // this works on windows  //// BOOKMARK
     container_sum_exp_signed = temp_3.rowwise().sum();
     const Eigen::Matrix<double, -1, 1>  container_sum_exp_signed_temp_signed = stan::math::sign(container_sum_exp_signed);
     const Eigen::Matrix<double, -1, 1>  container_sum_exp_signed_temp_abs = stan::math::abs(container_sum_exp_signed);
-    const Eigen::Matrix<double, -1, 1>  container_sum_exp_signed_temp_log_abs = fn_EIGEN_double_in_a_per_thread_buffer( container_sum_exp_signed_temp_abs, "log", vect_type_log);
+    const Eigen::Matrix<double, -1, 1>  container_sum_exp_signed_temp_log_abs = fn_EIGEN_double_in_a_per_thread_buffer( container_sum_exp_signed_temp_abs,
+                                                                                                                        "log",
+                                                                                                                        vect_type_log,
+                                                                                                                        false);
     
     //// Compute sign_result and log_sum_abs_result
     sign_result = container_sum_exp_signed_temp_signed;
@@ -158,8 +173,11 @@ ALWAYS_INLINE  LogSumVecSingedResult log_sum_vec_signed_v1(   const Eigen::Ref<c
              const Eigen::Matrix<double, -1, 1> shifted_logs = (log_abs_vec.array() - max_log_abs);   ///// Shift logs and clip
              // shifted_logs = (shifted_logs.array() < huge_neg).select(huge_neg, shifted_logs);   ///// additionally clip (can comment out for no clipping)
              
-             // Compute sum with signs carefully
-             const Eigen::Matrix<double, -1, 1> exp_terms = fn_EIGEN_double_in_a_per_thread_buffer((log_abs_vec.array() - max_log_abs), "exp", vect_type);
+             //// Compute sum with signs carefully
+             const Eigen::Matrix<double, -1, 1> exp_terms = fn_EIGEN_double_in_a_per_thread_buffer( (log_abs_vec.array() - max_log_abs),
+                                                                                                    "exp",
+                                                                                                    vect_type,
+                                                                                                    false);
              double sum_exp = (signs.array() * exp_terms.array()).sum();
              
              // // Handle near-zero sums (optional)
@@ -202,10 +220,10 @@ ALWAYS_INLINE  void log_abs_matrix_vector_mult_v1(   const Eigen::Ref<const Eige
    int n_rows = log_abs_matrix.rows();
    int n_cols = log_abs_matrix.cols();
 
-             // Initialize temp storage for max finding pass
+             //// Initialize temp storage for max finding pass
              Eigen::Matrix<double, -1, 1> max_logs = Eigen::Matrix<double, -1, 1>::Constant(n_rows, -INFINITY);
 
-             // First pass: find max_log for each row
+             //// First pass: find max_log for each row
              for (int j = 0; j < n_cols; j++) {
                double log_vec_j = log_abs_vector(j);
                for (int i = 0; i < n_rows; i++) {
@@ -216,7 +234,7 @@ ALWAYS_INLINE  void log_abs_matrix_vector_mult_v1(   const Eigen::Ref<const Eige
              //// (the shift of a row whose terms are all log(0) = -Inf is 0, so that no -Inf - (-Inf) = NaN)
              max_logs = (max_logs.array() == -std::numeric_limits<double>::infinity()).select(0.0, max_logs);
 
-             // Second pass: compute sums using exp-trick
+             //// Second pass: compute sums using exp-trick
              Eigen::Matrix<double, -1, 1> sums = Eigen::Matrix<double, -1, 1>::Zero(n_rows);
              for (int j = 0; j < n_cols; j++) {
                
@@ -231,7 +249,7 @@ ALWAYS_INLINE  void log_abs_matrix_vector_mult_v1(   const Eigen::Ref<const Eige
                    
              }
 
-             // Final pass: compute results
+             //// Final pass: compute results
              for (int i = 0; i < n_rows; i++) {
                  sign_result(i) = (sums(i) >= 0) ? 1.0 : -1.0;
                  log_abs_result(i) = std::log(std::abs(sums(i))) + max_logs(i);
@@ -257,10 +275,10 @@ ALWAYS_INLINE void log_abs_matrix_vector_mult_v2(   const Eigen::Ref<const Eigen
    const int n_rows = log_abs_matrix.rows();
    const int n_cols = log_abs_matrix.cols();
    
-   // Add broadcasted log_abs_vector to each row of log_abs_matrix
+   //// Add broadcasted log_abs_vector to each row of log_abs_matrix
    Eigen::Matrix<double, -1, -1> combined_logs = (log_abs_matrix.rowwise() + log_abs_vector.transpose());
    
-   // Find max along rows
+   //// Find max along rows
    Eigen::Matrix<double, -1, 1> max_logs = combined_logs.rowwise().maxCoeff();
    //// (the shift of a row whose terms are all log(0) = -Inf is 0, so that no -Inf - (-Inf) = NaN)
    max_logs = (max_logs.array() == -std::numeric_limits<double>::infinity()).select(0.0, max_logs);
@@ -269,10 +287,10 @@ ALWAYS_INLINE void log_abs_matrix_vector_mult_v2(   const Eigen::Ref<const Eigen
    /// Eigen::Matrix<double, -1, -1> exp_terms = (combined_logs.colwise() - max_logs).array().exp();
    //// Eigen::Matrix<double, -1, -1> signed_terms = ( (combined_logs.colwise() - max_logs).array().exp().array() * sign_matrix.array() * sign_vector.transpose().array() ) ;
    
-   // Sum rows
+   //// Sum rows
    Eigen::Matrix<double, -1, 1> sums = ( (combined_logs.colwise() - max_logs).array().exp().array() * sign_matrix.array() * sign_vector.transpose().array() ).rowwise().sum();
    
-   // Compute final results
+   //// Compute final results
    sign_result = sums.array().sign().max(0.0); // Handles zero case
    log_abs_result = sums.array().abs().log() + max_logs.array();
    

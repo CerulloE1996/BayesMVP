@@ -1,7 +1,16 @@
 #pragma once
 
+#include <memory>
+
 struct LC_MVP_workspace_struct {
-  
+
+  //// the workspace of the last chunk when it is shorter or longer than the others: made once, at its own size, so
+  //// that neither workspace is resized during sampling
+  std::shared_ptr<LC_MVP_workspace_struct> ws_of_the_last_chunk;
+
+  //// this chain's own runtime state (NicoStan's chain_runtime_workspace_t): made once per chain, never copied
+  chain_runtime_workspace_holder_t chain_runtime_ws;
+
   // Constructors
   LC_MVP_workspace_struct() = default;
   

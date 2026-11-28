@@ -72,7 +72,8 @@ ALWAYS_INLINE double sl_log1m(const double x,
 }
 ////
 //// log Phi(x) ~=~ log_inv_logit(0.07056*x^3 + 1.5976*x)   [matches "log_Phi_approx"]:
-ALWAYS_INLINE double sl_log_Phi(const double x, const bool S) {
+ALWAYS_INLINE double sl_log_Phi(const double x,
+                                const bool S) {
 
       const double t = 0.07056*x*x*x + 1.5976*x;
       return S ? stan::math::log_inv_logit(t) : nico::math::reference::nico_log_inv_logit(t);
@@ -90,13 +91,16 @@ ALWAYS_INLINE double sl_inv_Phi_from_logit(const double logit_p,
 ////
 //// log(1 - exp(x)), x < 0. expm1 has no custom/SIMD counterpart in this codebase, so
 //// libm is used for the near-zero branch (exact, scalar, problem-rows only):
-ALWAYS_INLINE double sl_log1m_exp(const double x, const bool S) {
+ALWAYS_INLINE double sl_log1m_exp(const double x,
+                                  const bool S) {
 
       if (x > -0.6931471805599453) return std::log(-std::expm1(x));
       return sl_log1m(sl_exp(x, S), S);
 
 }
-ALWAYS_INLINE double sl_log_diff_exp(const double a, const double b, const bool S) {   //// log(e^a - e^b), a > b
+ALWAYS_INLINE double sl_log_diff_exp(const double a,
+                                     const double b,
+                                     const bool S) {   //// log(e^a - e^b), a > b
 
       return a + sl_log1m_exp(b - a, S);
 
@@ -138,7 +142,8 @@ ALWAYS_INLINE bool sl_is_zero(const SignedLog &a) {
 // }
 //// exact zero only if lg is -Inf; a NaN lg is kept (a NaN SignedLog), so the failure is flagged downstream
 //// instead of being masked as an exact zero:
-ALWAYS_INLINE SignedLog sl_make(const double lg, const double sg) {
+ALWAYS_INLINE SignedLog sl_make(const double lg,
+                                const double sg) {
 
   if (lg == SL_NEG_INF) return sl_zero();
   return { lg, (sg < 0.0) ? -1.0 : 1.0 };
@@ -195,7 +200,8 @@ ALWAYS_INLINE SignedLog sl_make(const double lg, const double sg) {
 //// exact zero only for x == 0. A NaN x gives a NaN SignedLog, and an infinite x gives lg = +Inf with the sign
 //// of x (an infinite value, not zero), so a failure is flagged downstream instead of being masked as zero.
 //// (An infinite x times an exact-zero SignedLog is still exact zero in sl_mul: the x phi(x) -> 0 limit.)
-ALWAYS_INLINE SignedLog sl_from_val(const double x_given, const bool S) {
+ALWAYS_INLINE SignedLog sl_from_val(const double x_given,
+                                    const bool S) {
 
   const double x = x_given;
   if (x == 0.0) return sl_zero();
@@ -212,7 +218,8 @@ ALWAYS_INLINE SignedLog sl_neg(const SignedLog &a) {
 
 }
 
-ALWAYS_INLINE SignedLog sl_mul(const SignedLog &a, const SignedLog &b) {
+ALWAYS_INLINE SignedLog sl_mul(const SignedLog &a,
+                               const SignedLog &b) {
 
   //// NaN times anything (also exact zero) stays NaN, as for doubles: no zero factor masks a failure:
   if (std::isnan(a.lg) || std::isnan(b.lg)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
@@ -221,7 +228,9 @@ ALWAYS_INLINE SignedLog sl_mul(const SignedLog &a, const SignedLog &b) {
 
 }
 
-ALWAYS_INLINE SignedLog sl_add(const SignedLog &a, const SignedLog &b, const bool S) {
+ALWAYS_INLINE SignedLog sl_add(const SignedLog &a,
+                               const SignedLog &b,
+                               const bool S) {
 
   //// a NaN term gives a NaN sum (not left to the fast exp / log approximations when S is false):
   if (std::isnan(a.lg) || std::isnan(b.lg)) return { std::numeric_limits<double>::quiet_NaN(), 1.0 };
@@ -241,7 +250,8 @@ ALWAYS_INLINE SignedLog sl_add(const SignedLog &a, const SignedLog &b, const boo
 
 }
 
-ALWAYS_INLINE double sl_val(const SignedLog &a, const bool S) {
+ALWAYS_INLINE double sl_val(const SignedLog &a,
+                            const bool S) {
 
   if (std::isnan(a.lg)) return std::numeric_limits<double>::quiet_NaN();   //// a failure stays a NaN value
   if (a.lg == std::numeric_limits<double>::infinity()) return a.sg * std::numeric_limits<double>::infinity();
@@ -279,7 +289,9 @@ ALWAYS_INLINE double log_Phi_approx_density(const double x) {
 // }
 //// -Inf (the log of an exact zero) returns the other argument. A NaN argument gives NaN (a failure is not masked
 //// by returning the other argument), and +Inf gives +Inf (not left to the fast log1p_exp):
-ALWAYS_INLINE double lse_2(const double a, const double b, const bool S) {
+ALWAYS_INLINE double lse_2(const double a,
+                           const double b,
+                           const bool S) {
 
   if (std::isnan(a) || std::isnan(b)) return std::numeric_limits<double>::quiet_NaN();
   if (a == SL_NEG_INF) return b;
@@ -416,7 +428,7 @@ ALWAYS_INLINE void fn_MVOP_compute_lp_GHK_cols_log_scale_ordinal(   const int t,
       //       Bound_U_Phi_Bound_Z(i, t) = (log_Phi_lb > SL_NEG_INF) ? std::exp(log_Phi_lb) : 0.0;
       //       
       // }
-      for (int ii = 0; ii < index_size; ++ii) {
+      for (int ii = 0; ii < index_size; ii++) {
         
             const int i = index[ii];
             const double lb = Bound_Z(i, t);
@@ -576,12 +588,12 @@ ALWAYS_INLINE SignedLog sl_chain_accumulate(  const int t0,
       
       const int n_future = n_tests - t0 - 1;
       
-      for (int ii = 1; ii < n_future; ++ii) {
+      for (int ii = 1; ii < n_future; ii++) {
         
             z_ws[ii] = sl_mul(sl_neg(sl_dZneg[t0 + ii]), prod);
             
             prod = sl_zero();
-            for (int k = 0; k < ii + 1; ++k) {
+            for (int k = 0; k < ii + 1; k++) {
               prod = sl_add(prod, sl_mul(z_ws[k], sl_from_val(L_Omega_double(t0 + ii + 1, t0 + k), S)), S);
             }
             
@@ -644,12 +656,12 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
                                                   //// the densities of the bounds and of Z: those of
                                                   //// Phi_approx and inv_Phi_approx (true) or the exact
                                                   //// Gaussian ones (false):
-                                                  const bool use_the_Phi_approx_density_of_the_bounds = false,
-                                                  const bool use_the_Phi_approx_density_of_Z = false,
+                                                  const bool use_the_Phi_approx_density_of_the_bounds,
+                                                  const bool use_the_Phi_approx_density_of_Z,
                                                   //// missing results (y = -1) of the chunk (1.0 = missing),
                                                   //// or nullptr when the chunk has none:
                                                   const Eigen::Matrix<double, -1,
-                                                                      -1> *is_missing_result_chunk = nullptr
+                                                                      -1> *is_missing_result_chunk
 ) {
   
       //// ---------------- per-test signed-log seeds + weights ----------------
@@ -664,9 +676,9 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
       std::vector<SignedLog> z_ws(n_tests);        //// chain workspace
       
       double S_ylp = 0.0;
-      for (int t = 0; t < n_tests; ++t) S_ylp += y1_log_prob_c(n, t);
+      for (int t = 0; t < n_tests; t++) S_ylp += y1_log_prob_c(n, t);
       
-      for (int t = 0; t < n_tests; ++t) {
+      for (int t = 0; t < n_tests; t++) {
         if (n_class > 1) {
           log_W[t] = log_prev_nc + log_prob_n_recip_n + (S_ylp - y1_log_prob_c(n, t));
         } else {
@@ -685,7 +697,7 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
       //   }
       // }
       
-      for (int t = 0; t < n_tests; ++t) {
+      for (int t = 0; t < n_tests; t++) {
             
             const double L_tt      = L_Omega_double_c(t, t);
             // const double log_L_recip = -std::log(L_tt);   //// L(t,t) > 0
@@ -827,7 +839,7 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
       //     //// t = n_tests-1 has no future tests -> zero gradient contribution.
       // }
       if (do_us) {
-          for (int t = 0; t < n_tests - 1; ++t) {
+          for (int t = 0; t < n_tests - 1; t++) {
             const SignedLog z0 = sl_make(y1_log_prob_c(n, t) + lphZr[t], 1.0);
             const SignedLog acc = sl_chain_accumulate(t, sl_zero(), z0, sl_dphi, sl_dZneg,
                                                       L_Omega_double_c, log_W, n_tests, z_ws, S);
@@ -852,13 +864,14 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
       //     }
       // }
       if (do_coeff) {
-          for (int t = 0; t < n_tests; ++t) {
+          for (int t = 0; t < n_tests; t++) {
             const SignedLog acc_mu = sl_chain_accumulate(t, sl_dphi[t], sl_neg(sl_dZneg[t]), sl_dphi, sl_dZneg,
                                                          L_Omega_double_c, log_W, n_tests, z_ws, S);
             const double val_mu = sl_val(acc_mu, S);
             if (n_covariates_max > 1) {
-              for (int k = 0; k < n_cov_vec_c(t); ++k) {
-                beta_grad_array_c(k, t) += X_c[t](n_global, k) * val_mu;
+              const int t_X = (X_c.size() == 1) ? 0 : t;
+              for (int k = 0; k < n_cov_vec_c(t); k++) {
+                beta_grad_array_c(k, t) += X_c[t_X](n_global, k) * val_mu;
               }
             } else {
               beta_grad_array_c(0, t) += val_mu;
@@ -888,14 +901,14 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
       // }
       if (do_corr) {
           //// diagonals (seeds:  gp0 = dphi_times_bz(t1),  z0 = -dZ_times_bz(t1) ):
-          for (int t1 = 0; t1 < n_tests; ++t1) {
+          for (int t1 = 0; t1 < n_tests; t1++) {
             const SignedLog acc = sl_chain_accumulate(t1, sl_dphibz[t1], sl_neg(sl_dZbz[t1]), sl_dphi, sl_dZneg,
                                                       L_Omega_double_c, log_W, n_tests, z_ws, S);
             U_Omega_grad_array_c(t1, t1) += sl_val(acc, S);
           }
           //// off-diagonals (seeds:  gp0 = dphi_over_L(t1)*Z(t2),  z0 = -dZ_dmu_neg(t1)*Z(t2) ):
-          for (int t1 = 1; t1 < n_tests; ++t1) {
-            for (int t2 = 0; t2 < t1; ++t2) {
+          for (int t1 = 1; t1 < n_tests; t1++) {
+            for (int t2 = 0; t2 < t1; t2++) {
               const SignedLog Z_t2 = sl_from_val(Z_std_norm_c(n, t2), S);
               const SignedLog gp0  = sl_mul(sl_dphi[t1], Z_t2);
               const SignedLog z0   = sl_mul(sl_neg(sl_dZneg[t1]), Z_t2);
@@ -948,7 +961,7 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
       ////   y = j+1  ->  C_j is the UPPER bound;   y = j+2  ->  C_j is the LOWER bound.
       if (do_cut) {
         
-          for (int t = 0; t < n_tests; ++t) {
+          for (int t = 0; t < n_tests; t++) {
             
                 const int t_ord = ord_idx_of_test(t);
                 if (t_ord < 0) continue;   //// binary slot -> no cutpoints
@@ -961,7 +974,7 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
                 const double log_u       =  sl_log(u_array(n, t), S);
                 const double log_1mu     =  sl_log1m(u_array(n, t), S);
                 
-                if (y_i < K_t) {  //// C_{y-1} is the upper bound:
+                if (y_i < K_t) {  //// C_{y - 1} is the upper bound:
                     const int j = y_i - 1;
                     const SignedLog gp0 = sl_make(lph_ub[t] + log_L_recip, 1.0);
                     const SignedLog z0  = sl_make(log_u + lph_ub[t] + lphZr[t] + log_L_recip, 1.0);
@@ -969,7 +982,7 @@ ALWAYS_INLINE void fn_MVOP_row_grads_log_scale(   const int n,          //// row
                                                               L_Omega_double_c, log_W, n_tests, z_ws, S);
                     cutpoint_grad_array_c(j, t_ord) += sl_val(acc, S);
                 }
-                if (y_i >= 2) {   //// C_{y-2} is the lower bound:
+                if (y_i >= 2) {   //// C_{y - 2} is the lower bound:
                     const int j = y_i - 2;
                     const SignedLog gp0 = sl_make(lph_lb[t] + log_L_recip, -1.0);
                     const SignedLog z0  = sl_make(log_1mu + lph_lb[t] + lphZr[t] + log_L_recip, 1.0);

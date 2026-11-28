@@ -169,7 +169,9 @@ functions {
             
       }
  
-      vector lb_ub_lp (vector y, real lb, real ub) {
+      vector lb_ub_lp ( vector y,
+                        real lb,
+                        real ub) {
  
             int N = num_elements(y); 
             vector[N] tanh_y; 
@@ -180,7 +182,9 @@ functions {
     
       }  
  
-      real lb_ub_lp (real y, real lb, real ub) {
+      real lb_ub_lp ( real y,
+                      real lb,
+                      real ub) {
           
              real  tanh_y = tanh(y);
           //   real tanh_y = tanh_1(y);  
@@ -339,14 +343,14 @@ functions {
                               //  real L_ij_old = L[i, j];
                               real b1 = dot_product(L[j, 1:(j - 1)], D[1:j - 1]' .* L[i, 1:(j - 1)]);
 
-                              // how to derive the bounds
-                              // we know that the correlation value C is bound by
-                              // b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
-                              // Now we want our bounds to be enforced too so
+                              //// how to derive the bounds
+                              //// we know that the correlation value C is bound by
+                              //// b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
+                              //// Now we want our bounds to be enforced too so
                               // max(lb_corr, b1 - Ljj * Lij_old) <= C <= min(ub_corr, b1 + Ljj * Lij_old)
                               // We have the Lij_new = (C - b1) / Ljj
-                              // To get the bounds on Lij_new is
-                              // (bound - b1) / Ljj
+                              //// To get the bounds on Lij_new is
+                              //// (bound - b1) / Ljj
 
                               if (known_values_indicator[i, j] == 1)  {
 
@@ -524,7 +528,6 @@ transformed data {
      for (j in 1:n_tests) {
         inv_perm[test_perm[j]] = j;
      }
-     int n_covariates_total = sum(to_array_1d(n_covs_per_outcome));
      ////
      //// ---- slot-order ordinal index per FITTED slot (-1 for binary) — mirrors C++ ord_idx_of_test:
      ////
@@ -559,7 +562,7 @@ transformed data {
 parameters {
      //// matrix[N, n_tests] u_raw; //  put nuisance parameters FIRST (NOTE: doesnt have to be on "raw" scale to work as grad is computed w.r.t unconstrained anyway!)
      array[n_class] vector[n_corrs_per_class] Omega_unconstrained_vec;
-     vector[n_covariates_total] beta_vec;
+     array[n_class] matrix[n_covariates_max, n_tests] beta;
      vector[n_pops] p_raw;
      // array[2] vector[sum(n_thr_per_ord_test)] C_unc_vec;  //// RAW LOG-DIFFS - Global cutpoints for each test (staggered array/matrix using "n_thr_per_ord_test[t]" to index correctly)
      array[2] vector[sum(n_thr_per_ord_test)] C_unc_vec;  //// UNCONSTRAINED (mapped to bounded raw log-diffs via lb_ub in TP block)
@@ -567,24 +570,6 @@ parameters {
 
 
 transformed parameters {
-     //// ---- the coefficients the model samples (beta_vec: for each class, each test, its n_covs_per_outcome[c, t]
-     ////      coefficients, the order of the native C++ model), as the full table beta (0 in unused cells) and in the
-     ////      ORIGINAL test order (beta_orig):
-     array[n_class] matrix[n_covariates_max, n_tests] beta;
-     array[n_class] matrix[n_covariates_max, n_tests] beta_orig;
-     {
-       int position = 1;
-       for (c in 1:n_class) {
-         beta[c] = rep_matrix(0.0, n_covariates_max, n_tests);
-         for (t in 1:n_tests) {
-           for (k in 1:n_covs_per_outcome[c, t]) {
-             beta[c][k, t] = beta_vec[position];
-             position += 1;
-           }
-         }
-         for (t in 1:n_tests) beta_orig[c][:, t] = beta[c][:, inv_perm[t]];
-       }
-     }
      vector<lower=0, upper=1>[n_pops] prev = lb_ub(p_raw, 0.0, 1.0);
      array[n_class] matrix[n_tests, n_tests] L_Omega;
      array[n_class] matrix[n_tests, n_tests] Omega;
@@ -689,9 +674,9 @@ generated quantities {
       ////
       // vector[N] log_lik = rep_vector(0.0, N);
       ////
-      //// ======================================================================
+      //// ----------------------------------------------------------------------
       //// ---- Baseline Se/Sp (dot product with baseline covariate vector):
-      //// ======================================================================
+      //// ----------------------------------------------------------------------
       ////
       //// ---- Binary baseline Se/Sp:
       ////

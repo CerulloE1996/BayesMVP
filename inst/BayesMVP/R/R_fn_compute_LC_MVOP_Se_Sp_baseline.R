@@ -37,11 +37,11 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
                                                 n_binary_tests,
                                                 n_ordinal_tests,
                                                 n_thr_per_ord_test,
-                                                C_param_name = "C_vec",
-                                                test_names = NULL,
-                                                debugging = FALSE,
-                                                n_cat_per_test = NULL,
-                                                test_perm = NULL
+                                                C_param_name,
+                                                test_names,
+                                                debugging,
+                                                n_cat_per_test,
+                                                test_perm
 ) {
   
         require(tibble)
@@ -60,10 +60,10 @@ R_fn_compute_LC_MVOP_Se_Sp_baseline <- function( trace_beta,
         is_ordinal_original_test    <-  (n_cat_per_trace_slot[trace_slot_of_original_test] > 2)
         
         ## ---- Validate ----
-        stopifnot(is.array(trace_beta) && length(dim(trace_beta)) == 3)
-        stopifnot(is.array(trace_C)    && length(dim(trace_C))    == 3)
-        stopifnot(length(baseline_case_nd) == n_tests)
-        stopifnot(length(baseline_case_d)  == n_tests)
+        if (!(is.array(trace_beta) && length(dim(trace_beta)) == 3)) stop("is.array(trace_beta) && length(dim(trace_beta)) == 3 is not TRUE")
+        if (!(is.array(trace_C)    && length(dim(trace_C))    == 3)) stop("is.array(trace_C) && length(dim(trace_C)) == 3 is not TRUE")
+        if (!(length(baseline_case_nd) == n_tests)) stop("length(baseline_case_nd) == n_tests is not TRUE")
+        if (!(length(baseline_case_d)  == n_tests)) stop("length(baseline_case_d) == n_tests is not TRUE")
         
         n_iter   <- dim(trace_beta)[1]
         n_chains <- dim(trace_beta)[2]
@@ -253,7 +253,7 @@ extract_params_from_trace <- function( trace_3d,
         if (length(idx) == 0)
           stop(paste0("No parameters found matching prefix '", param_prefix, "'"))
         
-        trace_3d[, , idx, drop = FALSE]
+        return(trace_3d[, , idx, drop = FALSE])
   
 }
 

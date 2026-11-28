@@ -6,7 +6,9 @@ functions {
           return quad_form_diag(V, Is); 
       }
  
-      vector lb_ub_lp (vector y, real lb, real ub) {
+      vector lb_ub_lp ( vector y,
+                        real lb,
+                        real ub) {
  
             int N = num_elements(y); 
             vector[N] tanh_y; 
@@ -17,7 +19,9 @@ functions {
     
       }  
  
-      real lb_ub_lp (real y, real lb, real ub) {
+      real lb_ub_lp ( real y,
+                      real lb,
+                      real ub) {
           
              real  tanh_y = tanh(y);
           //   real tanh_y = tanh_1(y);  
@@ -143,7 +147,7 @@ data {
 
 
 parameters {
-      // Internal constrain-only skeleton: the native sampler owns the nuisance block.
+      //// Internal constrain-only skeleton: the native sampler owns the nuisance block.
       vector[n_class * n_tests] LT_b_raw_vec; //// Put the b's before the a's for this model!
       vector[n_class * n_tests] LT_a_vec; //// Put the b's before the a's for this model!
       vector[n_pops] p_raw;

@@ -35,7 +35,7 @@ fn_cholesky_factor_of_correlation_matrix_from_bounded_LDL_raw_vector <-  functio
 ) {
 
         n_tests <-  nrow(lb_corr)
-        stopifnot(length(raw_vector) == n_tests * (n_tests - 1) / 2)
+        if (!all(length(raw_vector) == n_tests * (n_tests - 1) / 2)) stop("length(raw_vector) == n_tests * (n_tests - 1) / 2 is not TRUE")
         ##
         fn_bounded_value <-  function( raw_value,
                                        lower,
@@ -196,13 +196,14 @@ fn_u_raw_initial_values_in_fitted_test_order <-  function( u_raw,
         n_tests <-  length(test_perm)
         ##
         if (is.matrix(u_raw)) {
-              stopifnot(nrow(u_raw) == N, ncol(u_raw) == n_tests)
+              if (!(nrow(u_raw) == N)) stop("nrow(u_raw) == N is not TRUE")
+              if (!(ncol(u_raw) == n_tests)) stop("ncol(u_raw) == n_tests is not TRUE")
               return(u_raw[, test_perm, drop = FALSE])
         }
         ##
         ## ---- a vector, read column by column:
         ##
-        stopifnot(length(u_raw) == N * n_tests)
+        if (!all(length(u_raw) == N * n_tests)) stop("length(u_raw) == N * n_tests is not TRUE")
         u_raw_as_matrix <-  matrix(u_raw, nrow = N, ncol = n_tests)
         ##
         return(as.vector(u_raw_as_matrix[, test_perm, drop = FALSE]))
@@ -257,14 +258,15 @@ fn_Omega_unconstrained_vec_initial_values_in_fitted_test_order <-  function(
                     raw_per_class[[class_index]] <-  Omega_unconstrained_vec[class_index, ]
               }
         } else {
-              stopifnot(length(Omega_unconstrained_vec) == n_class * n_pairs)
+              if (!all(length(Omega_unconstrained_vec) == n_class * n_pairs)) stop("length(Omega_unconstrained_vec) == n_class * n_pairs is not TRUE")
               for (class_index in seq_len(n_class)) {
                     positions_of_class <-  (class_index - 1) * n_pairs + seq_len(n_pairs)
                     raw_per_class[[class_index]] <-  Omega_unconstrained_vec[positions_of_class]
               }
         }
         ##
-        stopifnot(length(raw_per_class) == n_class, all(lengths(raw_per_class) == n_pairs))
+        if (!(length(raw_per_class) == n_class)) stop("length(raw_per_class) == n_class is not TRUE")
+        if (!all(lengths(raw_per_class) == n_pairs)) stop("all(lengths(raw_per_class) == n_pairs) is not TRUE")
         ##
         ## ---- the bounds and known values of one class (with corr_force_positive, the lower bound of every
         ##      correlation is 0, as in the C++):

@@ -1,0 +1,18 @@
+Package: BayesMVP
+Type: Package
+Title: BayesMVP: Specialised Multivariate Probit Models Using NicoStan
+Version: 0.1.9000
+Date: 2026-09-21
+Author: Enzo Cerullo
+Maintainer: Enzo Cerullo <enzo.cerullo@bath.edu>
+Description: Native manually differentiated multivariate probit and ordinal probit models, latent class models and reusable vectorised special functions using the shared NicoStan sampler.
+License: GPL-3
+Imports: Rcpp (>= 1.0.10), RcppEigen, RcppParallel, dqrng, cmdstanr, bridgestan, bayesplot, posterior, dplyr, ggplot2, tibble, tictoc, R6, digest, jsonlite, stringr, NicoStan (>= 0.1.9000), NicoSIMD (>= 0.1.9000)
+LinkingTo: Rcpp, RcppEigen, RcppParallel, dqrng, NicoStan, NicoSIMD
+Remotes: CerulloE1996/NicoSIMD
+Suggests: roxygen2
+Roxygen: list(markdown = TRUE, roclets = c("namespace", "rd"))
+SystemRequirements: GNU make, C++17
+RoxygenNote: 7.3.2
+Encoding: UTF-8
+Depends: R (>= 3.5.0)

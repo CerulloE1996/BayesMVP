@@ -65,7 +65,10 @@ ALWAYS_INLINE  void  fn_MVP_compute_nuisance(         Eigen::Matrix<double, -1, 
         
           } else if (nuisance_transformation == "tanh") {
         
-              u_vec.array() +=   ( 0.5 * ( fn_EIGEN_double_in_a_per_thread_buffer( u_unc_vec, "tanh", vect_type_tanh, false).matrix().array() + 1.0).array() ).array();
+              u_vec.array() +=   ( 0.5 * ( fn_EIGEN_double_in_a_per_thread_buffer( u_unc_vec,
+                                                                                   "tanh",
+                                                                                   vect_type_tanh,
+                                                                                   false).matrix().array() + 1.0).array() ).array();
         
           } else if (nuisance_transformation == "inv_logit") {
             
@@ -117,29 +120,56 @@ ALWAYS_INLINE double fn_MVP_compute_nuisance_log_jac_u(       const Eigen::Ref<c
         
           } else if (nuisance_transformation == "Phi_approx") {
         
-              log_jac_u   =  fn_EIGEN_double_in_a_per_thread_buffer((a_times_3 * u_unc_vec.array().square() +  b).matrix(), "log", vect_type_log).sum();
-              log_jac_u   += fn_EIGEN_double_in_a_per_thread_buffer(u_vec, "log", vect_type_log).sum(); 
-              log_jac_u   += fn_EIGEN_double_in_a_per_thread_buffer(u_vec, "log1m", vect_type_log).sum();
+              log_jac_u   =  fn_EIGEN_double_in_a_per_thread_buffer( (a_times_3 * u_unc_vec.array().square() +  b).matrix(),
+                                                                     "log",
+                                                                     vect_type_log,
+                                                                     false).sum();
+              log_jac_u   += fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                     "log",
+                                                                     vect_type_log,
+                                                                     false).sum(); 
+              log_jac_u   += fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                     "log1m",
+                                                                     vect_type_log,
+                                                                     false).sum();
         
           } else if (nuisance_transformation == "Phi_approx_rough") {
         
               log_jac_u  = u_unc_vec.size() * stan::math::log(1.702);
-              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec, "log", vect_type_log).sum();
-              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec, "log1m", vect_type_log).sum();
+              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                   "log",
+                                                                   vect_type_log,
+                                                                   false).sum();
+              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                   "log1m",
+                                                                   vect_type_log,
+                                                                   false).sum();
         
         
           } else if (nuisance_transformation == "tanh") {
         
               log_jac_u  = u_unc_vec.size() * stan::math::log(2.0);
-              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec, "log", vect_type_log ).sum();
-              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec , "log1m", vect_type_log ).sum();
+              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                   "log",
+                                                                   vect_type_log,
+                                                                   false ).sum();
+              log_jac_u += fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                   "log1m",
+                                                                   vect_type_log,
+                                                                   false ).sum();
         
           } else if (nuisance_transformation == "inv_logit") {
             
               //// du/dx = u (1 - u), so log J = sum log(u) + log(1 - u) (no constant), as in
               //// fn_MVP_compute_nuisance_log_jac_u_T (MVP_helpers_migrated.hpp).
-              log_jac_u  =    fn_EIGEN_double_in_a_per_thread_buffer( u_vec, "log", vect_type_log ).sum();
-              log_jac_u +=    fn_EIGEN_double_in_a_per_thread_buffer( u_vec , "log1m", vect_type_log ).sum();
+              log_jac_u  =    fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                      "log",
+                                                                      vect_type_log,
+                                                                      false ).sum();
+              log_jac_u +=    fn_EIGEN_double_in_a_per_thread_buffer( u_vec,
+                                                                      "log1m",
+                                                                      vect_type_log,
+                                                                      false ).sum();
             
           } else {
             
@@ -183,7 +213,10 @@ ALWAYS_INLINE void fn_MVP_nuisance_first_deriv(     Eigen::Matrix<double, -1, 1>
         
           if (nuisance_transformation == "Phi") { 
       
-              du_wrt_duu.array() +=    ( sqrt_2_pi_recip * fn_EIGEN_double_in_a_per_thread_buffer(  ( -0.5 * (u_unc_vec.array().square()) ).matrix() , "exp", vect_type_exp) ).array() ;  
+              du_wrt_duu.array() +=    ( sqrt_2_pi_recip * fn_EIGEN_double_in_a_per_thread_buffer( ( -0.5 * (u_unc_vec.array().square()) ).matrix(),
+                                                                                                   "exp",
+                                                                                                   vect_type_exp,
+                                                                                                   false) ).array() ;  
         
           } else if (nuisance_transformation == "Phi_approx") {  
              

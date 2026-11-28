@@ -11,7 +11,7 @@
 ##      is read only from the model itself with its likelihood switched off (MetaOrdDTA:
 ##      run_prior_predictive_check_of_Se_and_Sp(); BayesMVP: a prior-only fit). Used for MetaOrdDTA's
 ##      informative priors from the literature (the sim study of arXiv 2505.23393, the DIAQANDI network
-##      meta-analysis) and the APMS latent class models. ----
+##      meta-analysis) and the latent class models. ----
 ##
 #' fn_alpha_from_target
 #'
@@ -74,26 +74,26 @@ fn_alpha_from_target <-  function( n_categories,
     fn_is_finite_scalar <-  function(candidate_value)
         is.numeric(x = candidate_value) && length(x = candidate_value) == 1L && is.finite(x = candidate_value)
     ##
-    stopifnot( fn_is_finite_scalar(candidate_value = n_categories),
-               n_categories >= 2,
-               n_categories == round(x = n_categories),
-               fn_is_finite_scalar(candidate_value = default_cutoff),
-               default_cutoff == round(x = default_cutoff),
-               default_cutoff >= 2,
-               default_cutoff <= n_categories,
-               fn_is_finite_scalar(candidate_value = target_mean),
-               target_mean > 0,
-               target_mean < 1,
-               fn_is_finite_scalar(candidate_value = alpha_floor),
-               alpha_floor > 0,
-               fn_is_finite_scalar(candidate_value = CI_level),
-               CI_level > 0,
-               CI_level < 1)
+    if (!all(fn_is_finite_scalar(candidate_value = n_categories))) stop("fn_is_finite_scalar(candidate_value = n_categories) is not TRUE")
+    if (!all(n_categories >= 2)) stop("n_categories >= 2 is not TRUE")
+    if (!all(n_categories == round(x = n_categories))) stop("n_categories == round(x = n_categories) is not TRUE")
+    if (!all(fn_is_finite_scalar(candidate_value = default_cutoff))) stop("fn_is_finite_scalar(candidate_value = default_cutoff) is not TRUE")
+    if (!all(default_cutoff == round(x = default_cutoff))) stop("default_cutoff == round(x = default_cutoff) is not TRUE")
+    if (!all(default_cutoff >= 2)) stop("default_cutoff >= 2 is not TRUE")
+    if (!all(default_cutoff <= n_categories)) stop("default_cutoff <= n_categories is not TRUE")
+    if (!all(fn_is_finite_scalar(candidate_value = target_mean))) stop("fn_is_finite_scalar(candidate_value = target_mean) is not TRUE")
+    if (!all(target_mean > 0)) stop("target_mean > 0 is not TRUE")
+    if (!all(target_mean < 1)) stop("target_mean < 1 is not TRUE")
+    if (!all(fn_is_finite_scalar(candidate_value = alpha_floor))) stop("fn_is_finite_scalar(candidate_value = alpha_floor) is not TRUE")
+    if (!all(alpha_floor > 0)) stop("alpha_floor > 0 is not TRUE")
+    if (!all(fn_is_finite_scalar(candidate_value = CI_level))) stop("fn_is_finite_scalar(candidate_value = CI_level) is not TRUE")
+    if (!all(CI_level > 0)) stop("CI_level > 0 is not TRUE")
+    if (!all(CI_level < 1)) stop("CI_level < 1 is not TRUE")
     ##
     if (!is.null(x = shape_centre)) {
-        stopifnot( fn_is_finite_scalar(candidate_value = shape_centre),
-                   shape_centre >= 1,
-                   shape_centre <= n_categories)
+        if (!all(fn_is_finite_scalar(candidate_value = shape_centre))) stop("fn_is_finite_scalar(candidate_value = shape_centre) is not TRUE")
+        if (!all(shape_centre >= 1)) stop("shape_centre >= 1 is not TRUE")
+        if (!all(shape_centre <= n_categories)) stop("shape_centre <= n_categories is not TRUE")
     }
     ##
     ## ---- UNITS. shape_centre is a CATEGORY index, exactly like default_cutoff: category 1 is
@@ -109,8 +109,8 @@ fn_alpha_from_target <-  function( n_categories,
         stop("shape_kind = 'plateau' is only defined for shape_join = 'smooth'.")
     ##
     if (!is.null(x = shape_sd)) {
-        stopifnot( fn_is_finite_scalar(candidate_value = shape_sd),
-                   shape_sd > 0)
+        if (!all(fn_is_finite_scalar(candidate_value = shape_sd))) stop("fn_is_finite_scalar(candidate_value = shape_sd) is not TRUE")
+        if (!all(shape_sd > 0)) stop("shape_sd > 0 is not TRUE")
         ##
         if (is.null(x = shape_centre)) stop("shape_sd requires shape_centre; otherwise the shape is uniform.")
     }
@@ -151,13 +151,13 @@ fn_alpha_from_target <-  function( n_categories,
     ##
     if (!is.null(x = target_interval)) {
 
-        stopifnot( is.numeric(x = target_interval),
-                   length(x = target_interval) == 2L,
-                   all(is.finite(x = target_interval)),
-                   target_interval[1] > 0,
-                   target_interval[1] < target_mean,
-                   target_interval[2] > target_mean,
-                   target_interval[2] < 1)
+        if (!is.numeric(x = target_interval)) stop("is.numeric(x = target_interval) is not TRUE")
+        if (!(length(x = target_interval) == 2L)) stop("length(x = target_interval) == 2L is not TRUE")
+        if (!all(is.finite(x = target_interval))) stop("all(is.finite(x = target_interval)) is not TRUE")
+        if (!all(target_interval[1] > 0)) stop("target_interval[1] > 0 is not TRUE")
+        if (!all(target_interval[1] < target_mean)) stop("target_interval[1] < target_mean is not TRUE")
+        if (!all(target_interval[2] > target_mean)) stop("target_interval[2] > target_mean is not TRUE")
+        if (!all(target_interval[2] < 1)) stop("target_interval[2] < 1 is not TRUE")
         ##
         ## A fixed mean leaves ONE Beta parameter free. Match interval WIDTH, and print the
         ## achieved endpoints: an arbitrary mean and both endpoints cannot all be matched exactly.
@@ -165,9 +165,9 @@ fn_alpha_from_target <-  function( n_categories,
 
             concentration <-  exp(x = log_concentration)
             ##
-            diff(x = qbeta( p = tail_probabilities,
+            return(diff(x = qbeta( p = tail_probabilities,
                             shape1 = concentration * target_mean,
-                            shape2 = concentration * (1 - target_mean))) - diff(x = target_interval)
+                            shape2 = concentration * (1 - target_mean))) - diff(x = target_interval))
 
         }
         ##
@@ -183,8 +183,8 @@ fn_alpha_from_target <-  function( n_categories,
                                                      tol = 1e-10)$root)
 
     } else {
-        stopifnot( fn_is_finite_scalar(candidate_value = prior_n_pseudo_cases),
-                   prior_n_pseudo_cases > 0)
+        if (!all(fn_is_finite_scalar(candidate_value = prior_n_pseudo_cases))) stop("fn_is_finite_scalar(candidate_value = prior_n_pseudo_cases) is not TRUE")
+        if (!all(prior_n_pseudo_cases > 0)) stop("prior_n_pseudo_cases > 0 is not TRUE")
         ##
         concentration_requested <-  prior_n_pseudo_cases
     }
@@ -309,7 +309,7 @@ fn_alpha_from_target <-  function( n_categories,
             ##
             if (is.null(x = candidate)) return(NA_real_)
             ##
-            candidate$mass_above - prior_mass_above_cutoff
+            return(candidate$mass_above - prior_mass_above_cutoff)
 
         }
         ##
@@ -317,9 +317,8 @@ fn_alpha_from_target <-  function( n_categories,
                                    to = log(x = 10 * n_categories),
                                    length.out = 400L)
         ##
-        gap_grid <-  vapply( X = log_shape_sd_grid,
-                             FUN = fn_smooth_gap,
-                             FUN.VALUE = numeric(length = 1))
+        gap_grid <-  unlist(sapply( X = log_shape_sd_grid,
+                                    FUN = fn_smooth_gap))
         ##
         usable <-  which(is.finite(x = gap_grid))
         ##

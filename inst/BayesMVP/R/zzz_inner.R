@@ -106,7 +106,7 @@ R_fn_stop_if_several_TBB_copies_loaded <-  function(package_name) {
       ##      load path fail loudly. Linux only (reads /proc/self/maps).
       ##
       if (!file.exists("/proc/self/maps")) {
-            return(invisible(NULL))
+            return(value_not_printed <- NULL)
       }
       ##
       mapped_file_paths <-  sub("^.* ", "", readLines("/proc/self/maps", warn = FALSE))
@@ -119,7 +119,7 @@ R_fn_stop_if_several_TBB_copies_loaded <-  function(package_name) {
                         "BayesMVP before anything else that loads a TBB library."))
       }
       ##
-      return(invisible(TBB_library_paths))
+      return(value_not_printed <- TBB_library_paths)
 
 }
 
@@ -136,6 +136,9 @@ R_fn_stop_if_several_TBB_copies_loaded <-  function(package_name) {
       library(RcppParallel)
       ##
       R_fn_stop_if_several_TBB_copies_loaded(package_name = pkgname)
+      ##
+      ## ---- NicoStan's shared R functions, from the NicoStan installed now (BayesMVP keeps no copy):
+      R_fn_bind_NicoStan_shared_functions_into_BayesMVP()
   
       is_windows <- .Platform$OS.type == "windows"
       

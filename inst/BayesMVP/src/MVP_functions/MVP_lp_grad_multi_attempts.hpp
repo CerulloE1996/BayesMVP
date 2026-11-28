@@ -47,7 +47,7 @@
 
  
 #if defined(__AVX2__) || defined(__AVX512F__)
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
  
  
@@ -61,24 +61,12 @@
 
 
 
-using std_vec_of_EigenVecs = std::vector<Eigen::Matrix<double, -1, 1>>;
-using std_vec_of_EigenVecs_int = std::vector<Eigen::Matrix<int, -1, 1>>;
-
-using std_vec_of_EigenMats = std::vector<Eigen::Matrix<double, -1, -1>>;
-using std_vec_of_EigenMats_int = std::vector<Eigen::Matrix<int, -1, -1>>;
-
-using two_layer_std_vec_of_EigenVecs =  std::vector<std::vector<Eigen::Matrix<double, -1, 1>>>;
-using two_layer_std_vec_of_EigenVecs_int = std::vector<std::vector<Eigen::Matrix<int, -1, 1>>>;
-
-using two_layer_std_vec_of_EigenMats = std::vector<std::vector<Eigen::Matrix<double, -1, -1>>>;
-using two_layer_std_vec_of_EigenMats_int = std::vector<std::vector<Eigen::Matrix<int, -1, -1>>>;
 
 
-using three_layer_std_vec_of_EigenVecs =  std::vector<std::vector<std::vector<Eigen::Matrix<double, -1, 1>>>>;
-using three_layer_std_vec_of_EigenVecs_int =  std::vector<std::vector<std::vector<Eigen::Matrix<int, -1, 1>>>>;
 
-using three_layer_std_vec_of_EigenMats = std::vector<std::vector<std::vector<Eigen::Matrix<double, -1, -1>>>>; 
-using three_layer_std_vec_of_EigenMats_int = std::vector<std::vector<std::vector<Eigen::Matrix<int, -1, -1>>>>;
+
+
+
 
 
 
@@ -118,10 +106,9 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
                                                            const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                            std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
                                                            const int n_threads_WCP,
-                                                           const bool use_autodiff_fallback = false,
-                                                           const bool use_standard_MVP_autodiff = false,
-                                                           const bool force_autodiff = false,
-                                                           const bool force_PartialLog = false
+                                                           const bool use_standard_MVP_autodiff,
+                                                           const bool force_autodiff,
+                                                           const bool force_PartialLog
 ) {
  
         int NaN_or_Inf_indicator = 0;  
@@ -207,13 +194,12 @@ inline void fn_lp_grad_MVP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Mat
         ///// Optional 3rd evaluation at EXACTLY the same position, before the caller consumes the gradient.
         ///// No position/velocity update, trajectory restart, random draw or Metropolis decision happens here.
         ///// The energy-divergence check belongs to the sampler, not this position-only evaluator.
-        // if (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) {
         //// force_autodiff = TRUE: the autodiff evaluation runs first and only (the 1st and 2nd attempts are
-        //// skipped, whatever force_PartialLog, multi_attempts and autodiff_fallback are; a failure leaves the
-        //// NaN flag below). Otherwise it runs after a failed 1st / 2nd attempt when the autodiff fallback is on.
+        //// skipped, whatever force_PartialLog and multi_attempts are; a failure leaves the
+        //// NaN flag below). There is no autodiff fallback (removed 26 Nov 2026): a failed 1st / 2nd attempt is flagged.
         //// (The commented-out condition of the 3rd attempt below required force_autodiff AND
         //// force_PartialLog.)
-        if ( (force_autodiff == true) || (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) ) {
+        if (force_autodiff == true) {
 
               out_mat = out_mat_orig;
               try {
@@ -284,9 +270,8 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
                                                             const Model_fn_args_struct &Model_args_as_cpp_struct,
                                                             std::vector<LC_MVP_workspace_struct> &LC_MVP_ws_structs,
                                                             const int n_threads_WCP,
-                                                            const bool use_autodiff_fallback = false,
-                                                            const bool force_autodiff = false,
-                                                            const bool force_PartialLog = false
+                                                            const bool force_autodiff,
+                                                            const bool force_PartialLog
 ) {
   
         int NaN_or_Inf_indicator = 0;  
@@ -364,13 +349,12 @@ inline void fn_lp_grad_MVOP_multi_attempts_InPlace_process( Eigen::Ref<Eigen::Ma
         }
         
         ///// Optional autodiff evaluation at the same position; no integrator or random-number calls.
-        // if (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) {
         //// force_autodiff = TRUE: the autodiff evaluation runs first and only (the 1st and 2nd attempts are
-        //// skipped, whatever force_PartialLog, multi_attempts and autodiff_fallback are; a failure leaves the
-        //// NaN flag below). Otherwise it runs after a failed 1st / 2nd attempt when the autodiff fallback is on.
+        //// skipped, whatever force_PartialLog and multi_attempts are; a failure leaves the
+        //// NaN flag below). There is no autodiff fallback (removed 26 Nov 2026): a failed 1st / 2nd attempt is flagged.
         //// (The commented-out condition of the 3rd attempt below required force_autodiff AND
         //// force_PartialLog.)
-        if ( (force_autodiff == true) || (NaN_or_Inf_indicator == 1 && use_autodiff_fallback) ) {
+        if (force_autodiff == true) {
 
               out_mat = out_mat_orig;
               try {

@@ -1,8 +1,8 @@
 ##
 ## ==== R_fn_time_sampling_of_BayesMVP_model_for_each_layout.R ===================================================
 ##
-## ---- Seconds per iteration of a BayesMVP model with manual gradients (Model_type "MVP", "MVOP", "LC_MVP" or
-##      "LC_MVOP") for each sampling layout of chains, within-chain threads and chunks, in the sampler of the
+## ---- Seconds per iteration of a BayesMVP model with manual gradients (Model_type "MVP", "MVOP", "LC_MVP",
+##      "LC_MVOP" or "CLC_MVOP") for each sampling layout of chains, within-chain threads and chunks, in the sampler of the
 ##      sampling phase -
 ##
 ## Each layout is timed in the sampler that $sample() runs for the sampling
@@ -31,7 +31,7 @@
 #' Seconds per iteration of a BayesMVP model (manual gradients) in the sampler of the sampling phase, for each
 #' layout of chains, within-chain threads and chunks
 #'
-#' @param Model_type "MVP", "MVOP", "LC_MVP" or "LC_MVOP".
+#' @param Model_type "MVP", "MVOP", "LC_MVP", "LC_MVOP", "CLC_MVOP" or "CLC-MVOP".
 #' @param init_object The model's initialisation object (from BayesMVP::initialise_model() or the init_object of
 #'   BayesMVP::MVP_model$new(); it holds Model_args_as_Rcpp_List, model_args_list, n_params_main and n_nuisance).
 #' @param layouts A data frame with columns n_chains (the sampling chains, run in parallel), n_threads_WCP
@@ -55,15 +55,15 @@
 fn_time_sampling_of_BayesMVP_model_for_each_layout <-  function( Model_type,
                                                                 init_object,
                                                                 layouts,
-                                                                minimum_seconds_per_timing     = 2,
-                                                                n_iterations_of_short_call     = 1,
-                                                                L_main                         = 10,
-                                                                eps_main                       = 1e-05,
-                                                                fn_snapshot_hardware_counters  = NULL) {
+                                                                minimum_seconds_per_timing,
+                                                                n_iterations_of_short_call,
+                                                                L_main,
+                                                                eps_main,
+                                                                fn_snapshot_hardware_counters) {
         ##
-        if (!(Model_type %in% c("MVP", "MVOP", "LC_MVP", "LC_MVOP"))) {
+        if (!(Model_type %in% c("MVP", "MVOP", "LC_MVP", "LC_MVOP", "CLC-MVOP", "CLC_MVOP"))) {
               stop(paste0("fn_time_sampling_of_BayesMVP_model_for_each_layout: Model_type must be \"MVP\", ",
-                          "\"MVOP\", \"LC_MVP\" or \"LC_MVOP\" (BayesMVP's models with manual gradients); got: ",
+                          "\"MVOP\", \"LC_MVP\", \"LC_MVOP\", \"CLC_MVOP\" or \"CLC-MVOP\" (BayesMVP's models with manual gradients); got: ",
                           paste(as.character(Model_type), collapse = ", ")))
         }
         columns_of_layouts <-  c("n_chains", "n_threads_WCP", "num_chunks")
@@ -77,7 +77,7 @@ fn_time_sampling_of_BayesMVP_model_for_each_layout <-  function( Model_type,
         y <-  init_object$model_args_list$y
         ##
         ## ---- the sampler's arguments: diffusion HMC (kick-flow-kick), a fixed trajectory of L_main leapfrog
-        ##      steps at eps_main, no log-lik trace, and a dense main metric (the identity):
+        ##      steps at eps_main, no log-lik trace, and a diagonal main metric (the identity):
         ##
         EHMC_args_as_Rcpp_List <-  init_EHMC_args_as_Rcpp_List( diffusion_HMC = TRUE,
                                                                 diffusion_HMC_integrator = "kick_flow_kick")
@@ -89,7 +89,7 @@ fn_time_sampling_of_BayesMVP_model_for_each_layout <-  function( Model_type,
         EHMC_args_as_Rcpp_List$store_log_lik_trace <-  FALSE
         EHMC_Metric_as_Rcpp_List <-  init_EHMC_Metric_as_Rcpp_List( n_params_main = n_params_main,
                                                                     n_nuisance = n_nuisance,
-                                                                    metric_shape_main = "dense")
+                                                                    metric_shape_main = "diag")
         fn_small_values <-  function(n_values) 0.005 * (((seq_len(n_values) * 7) %% 5) - 2)
         ##
         layouts$seconds_per_iteration <-  NA_real_
@@ -161,7 +161,8 @@ fn_time_sampling_of_BayesMVP_model_for_each_layout <-  function( Model_type,
               initial_nuisance <-  matrix(fn_small_values(n_nuisance * n_chains), nrow = n_nuisance,
                                           ncol = n_chains)
               RcppParallel::setThreadOptions(numThreads = n_chains * n_threads_WCP)
-              fn_sampling_call <-  function(n_iterations, seed_of_call) {
+              fn_sampling_call <-  function(n_iterations,
+                                            seed_of_call) {
                     Rcpp_fn_RcppParallel_EHMC_sampling(
                           n_threads_R                                 = n_chains,
                           seed_R                                      = seed_of_call,
@@ -255,7 +256,7 @@ fn_time_sampling_of_BayesMVP_model_for_each_layout <-  function( Model_type,
               layouts$counter_snapshot_after_short_call[layout_index] <-  short_call$snapshot_after
               layouts$counter_snapshot_before_long_call[layout_index] <-  long_call$snapshot_before
               layouts$counter_snapshot_after_long_call[layout_index] <-  long_call$snapshot_after
-              invisible(gc(verbose = FALSE))
+              gc(verbose = FALSE)
         ##
         }
         return(layouts)

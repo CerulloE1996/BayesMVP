@@ -44,7 +44,7 @@
  
  
 #if defined(__AVX2__) || defined(__AVX512F__) 
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
  
  
@@ -68,7 +68,7 @@
 //// Function to manually construct a cutpoint vector from raw unconstrained parameters - using exp() / log-differences.
 ////
 inline  Eigen::Matrix<stan::math::var, -1, 1> construct_C_var( Eigen::Matrix<stan::math::var, -1, 1> C_raw_vec,
-                                                               // parameter - log_diffs
+                                                               //// parameter - log_diffs
                                                               bool softplus) {
        
        const int n_total_cutpoints = C_raw_vec.size();
@@ -77,12 +77,12 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> construct_C_var( Eigen::Matrix<sta
        
        if (softplus == true) { 
          Eigen::Matrix<stan::math::var, -1, 1> softplus_C_vec = stan::math::log1p_exp(C_raw_vec.segment(1, n_total_cutpoints - 1));
-         for (int k = 2; k <= n_total_cutpoints; ++k) {
+         for (int k = 2; k <= n_total_cutpoints; k++) {
            C_vec(k - 1) = C_vec(k - 2) + softplus_C_vec(k - 2);
          }
        } else { 
          Eigen::Matrix<stan::math::var, -1, 1> exp_C_vec = stan::math::exp(C_raw_vec.segment(1, n_total_cutpoints - 1));
-         for (int k = 2; k <= n_total_cutpoints; ++k) {
+         for (int k = 2; k <= n_total_cutpoints; k++) {
            C_vec(k - 1) = C_vec(k - 2) + exp_C_vec(k - 2);
          }
        }
@@ -93,7 +93,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> construct_C_var( Eigen::Matrix<sta
 
 
 inline  stan::math::var raw_C_to_C_log_det_J_lp_var( Eigen::Matrix<stan::math::var, -1, 1> raw_C,
-                                                     // parameter - log_diffs
+                                                     //// parameter - log_diffs
                                                     bool softplus) {
          
        const int n_cutpoints = raw_C.size();
@@ -123,7 +123,7 @@ inline  stan::math::var induced_dirichlet_given_C_lpdf_var( Eigen::Matrix<stan::
        
        stan::math::var log_prob = 0.0;
        
-       for (int k = 1; k <= n_thr; ++k) {
+       for (int k = 1; k <= n_thr; k++) {
          if (use_probit_link == true)  log_prob += stan::math::normal_lpdf(C(k - 1), 0.0, 1.0);
          else                          log_prob += stan::math::log_inv_logit(C(k - 1)) + stan::math::log1m_inv_logit(C(k - 1));
        }
@@ -144,7 +144,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> cumul_probs_to_ord_probs_var( Eige
        Eigen::Matrix<stan::math::var, -1, 1> ord_probs(n_cat);
       
        ord_probs(0) = cumul_probs(0) - 0.0;
-       for (int k = 2; k <= n_thr; ++k) {
+       for (int k = 2; k <= n_thr; k++) {
          ord_probs(k - 1) = cumul_probs(k - 1) - cumul_probs(k - 2); // since probs are INCREASING with k
        }
        ord_probs(n_cat - 1) =  1.0 - cumul_probs(n_cat - 2);
@@ -164,7 +164,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> ord_probs_to_cumul_probs_var( Eige
        Eigen::Matrix<stan::math::var, -1, 1> cumul_probs(n_thr);
       
        cumul_probs(0) = ord_probs(0);
-       for (int k = 2; k <= n_thr; ++k) {
+       for (int k = 2; k <= n_thr; k++) {
          cumul_probs(k - 1) = cumul_probs(k - 2) + ord_probs(k - 1); // since probs are INCREASING with k 
        }
       
@@ -184,7 +184,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> ID_cumul_probs_to_C( Eigen::Matrix
        const int n_cat = n_thr + 1;
        Eigen::Matrix<stan::math::var, -1, 1> C(n_thr);
       
-       for (int k = 1; k <= n_thr; ++k) {
+       for (int k = 1; k <= n_thr; k++) {
          if (cumul_probs(k - 1) < 1e-300) {
            C(k - 1) = -37.5; ////  prob = 1e-38; 
          } else if (cumul_probs(k - 1) > 0.99999999999999999) {
@@ -340,14 +340,14 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_LDL_bounds_opt_dbl( int K,
        
        Eigen::Matrix<double, -1, -1> L = Eigen::Matrix<double, -1, -1>::Zero(K, K);
        
-       for (int i = 0; i < K; ++i) {
+       for (int i = 0; i < K; i++) {
          L(i, i) = 1.0;
        } 
        
        Eigen::Matrix<double, -1, 1> D = Eigen::Matrix<double, -1, 1>::Zero(K);
        
        D(0) = 1.0;
-       for (int i = 2; i < K + 1; ++i) {
+       for (int i = 2; i < K + 1; i++) {
          if (known_values_indicator(i-1, 0) == 1) {
            L(i-1, 0) = known_values(i-1, 0);
            //// ---- the raw coordinate of a known (fixed) correlation is not read by the
@@ -371,14 +371,14 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_LDL_bounds_opt_dbl( int K,
          stan::math::check_finite("Pinkney_LDL_bounds_opt_dbl", "first-column LDL remainder", D(i-1));
        }
        
-       for (int i = 3; i < K + 1; ++i) {
+       for (int i = 3; i < K + 1; i++) {
          
              D(i-1) = 1.0 - stan::math::square(L(i-1, 0)); // checked
              Eigen::Matrix<double, 1, -1> row_vec_rep = stan::math::rep_row_vector(1.0 - stan::math::square(L(i-1, 0)), i - 2); // checked
              L.row(i - 1).segment(1, i - 2) = row_vec_rep; // checked
              double l_ij_old = L(i-1, 1); // checked
              
-             for (int j = 2; j < i; ++j) {
+             for (int j = 2; j < i; j++) {
                
                      double b1 = stan::math::dot_product(L.row(j - 1).head(j - 1), (D.head(j - 1).transpose().array() * L.row(i - 1).head(j - 1).array()).matrix()); // checked
                      
@@ -459,14 +459,14 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
        
        Eigen::Matrix<stan::math::var, -1, -1 > L = Eigen::Matrix<stan::math::var, -1, -1 >::Zero(K, K);
        
-       for (int i = 0; i < K; ++i) {
+       for (int i = 0; i < K; i++) {
          L(i, i) = 1.0;
        }
        
        Eigen::Matrix<stan::math::var, -1, 1 >  D = Eigen::Matrix<stan::math::var, -1, 1 >::Zero(K);
        
        D(0) = 1.0;
-       for (int i = 2; i < K + 1; ++i) {
+       for (int i = 2; i < K + 1; i++) {
          if (known_values_indicator(i-1, 0) == 1) {
            L(i-1, 0) = stan::math::to_var(known_values(i-1, 0));
            //// ---- the raw coordinate of a known (fixed) correlation is not read by the
@@ -490,14 +490,14 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
          stan::math::check_finite("Pinkney_LDL_bounds_opt", "first-column LDL remainder", D(i-1));
        }
        
-       for (int i = 3; i < K + 1; ++i) {
+       for (int i = 3; i < K + 1; i++) {
              
              D(i-1) = 1.0 - stan::math::square(L(i-1, 0)) ; // checked
              Eigen::Matrix<stan::math::var, 1, -1 >  row_vec_rep = stan::math::rep_row_vector(1.0 - stan::math::square(L(i-1, 0)), i - 2) ; // checked
              L.row(i - 1).segment(1, i - 2) = row_vec_rep; // checked
              stan::math::var   l_ij_old = L(i-1, 1); // checked
              
-             for (int j = 2; j < i; ++j) {
+             for (int j = 2; j < i; j++) {
                
                    stan::math::var b1 = stan::math::dot_product(L.row(j - 1).head(j - 1), (D.head(j - 1).transpose().array() * L.row(i - 1).head(j - 1).array() ).matrix()  ) ; // checked
                    
@@ -564,17 +564,17 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
 
 
 // =============================================================================
-// Pinkney C-vine correlation parameterization with per-element bounds
+//// Pinkney C-vine correlation parameterization with per-element bounds
 // =============================================================================
 //
-// Based on Sean Pinkney's corr_cvine2.stan (private repo), adapted for
-// BayesMVP with:
+//// Based on Sean Pinkney's corr_cvine2.stan (private repo), adapted for
+//// BayesMVP with:
 //   - Per-element bounds (lb[i,j], ub[i,j] matrices on correlations)
 //   - Known values support (known_values_indicator, known_values)
 //   - Both stan::math::var (AD) and double versions
 //   - Eigen C++ matching existing BayesMVP interface
 //
-// KEY DIFFERENCE FROM LDL:
+//// KEY DIFFERENCE FROM LDL:
 //   LDL parameterizes Cholesky entries L[i,j] with a shrinking remainder
 //   l_ij_old that couples all parameters within each row through a ratio
 //   (x/D[j]) and multiplicative update. The C-vine parameterizes *partial
@@ -583,13 +583,13 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
 //   a depend on previous P values but the coupling is through products of
 //   sqrt(1 - P^2) rather than through a collapsing remainder.
 //
-// RETURN FORMAT:
+//// RETURN FORMAT:
 //   (K+1) x K matrix:
 //     out(0, 0) = target (log Jacobian of unconstrained y -> C)
 //     out(0, 1) = log_det_C = sum log(1 - P[i,j]^2), for LKJ prior
 //     out.block(1, 0, K, K) = C (the correlation matrix, NOT Cholesky factor)
 //
-// LKJ PRIOR APPLICATION (user applies separately):
+//// LKJ PRIOR APPLICATION (user applies separately):
 //   target += (eta - 1.0) * log_det_C;
 //   where log_det_C = out(0, 1)
 //
@@ -600,7 +600,7 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
 //   L = chol(C)  -- user computes this separately
 //   For K=6 this is ~36 flops, negligible vs likelihood.
 //
-// UNCONSTRAINED PARAMETER LAYOUT in Omega_theta_unconstrained_array (K x K):
+//// UNCONSTRAINED PARAMETER LAYOUT in Omega_theta_unconstrained_array (K x K):
 //   Column 0, rows 1..K-1 : first-column correlations C(j, 0) -> P(0, j)
 //   Lower triangle (j, i) for 1 <= i < j <= K-1 : partial correlation P(i, j)
 //   Same total count K(K-1)/2 as LDL.
@@ -612,8 +612,8 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_LDL_bounds_opt(  int K,
 
 // =============================================================================
 // Scalar lb_ub_lp: unconstrained y -> bounded [lb, ub] via tanh
-// Returns 2-vector: (0) = log Jacobian contribution, (1) = bounded value
-// These should match the existing lb_ub_lp_dbl / lb_ub_lp functions.
+//// Returns 2-vector: (0) = log Jacobian contribution, (1) = bounded value
+//// These should match the existing lb_ub_lp_dbl / lb_ub_lp functions.
 // Included here for self-containedness; remove if already defined.
 // =============================================================================
 inline  Eigen::Matrix<double, -1, 1> lb_ub_lp_cvine_dbl( double y, 
@@ -662,7 +662,7 @@ inline  Eigen::Matrix<double, -1, 1> lb_ub_lp_vec_cvine_dbl(  const Eigen::Matri
        Eigen::Matrix<double, -1, 1> out(1 + N);
        double target = 0.0;
        
-       for (int n = 0; n < N; ++n) {
+       for (int n = 0; n < N; n++) {
          double tanh_y = std::tanh(y(n));
          out(1 + n) = lb_vec(n) + (ub_vec(n) - lb_vec(n)) * 0.5 * (1.0 + tanh_y);
          target += std::log(ub_vec(n) - lb_vec(n)) - std::log(2.0)
@@ -684,7 +684,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> lb_ub_lp_vec_cvine( const Eigen::M
        Eigen::Matrix<stan::math::var, -1, 1> out(1 + N);
        stan::math::var target = 0.0;
        
-       for (int n = 0; n < N; ++n) {
+       for (int n = 0; n < N; n++) {
          stan::math::var tanh_y = stan::math::tanh(y(n));
          out(1 + n) = lb_vec(n) + (ub_vec(n) - lb_vec(n)) * 0.5 * (1.0 + tanh_y);
          target += stan::math::log(ub_vec(n) - lb_vec(n)) - std::log(2.0)
@@ -698,7 +698,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> lb_ub_lp_vec_cvine( const Eigen::M
  
  
 // =============================================================================
-// C-VINE: DOUBLE VERSION
+//// C-VINE: DOUBLE VERSION
 // =============================================================================
 inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
                                                                    Eigen::Matrix<double, -1, -1> lb,
@@ -726,8 +726,8 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
        Eigen::Matrix<double, -1, 1> first_col_lb = lb.col(0).segment(1, K - 1);
        Eigen::Matrix<double, -1, 1> first_col_ub = ub.col(0).segment(1, K - 1);
        
-       // Process column 0 with known-value support
-       for (int j = 1; j < K; ++j) {
+       //// Process column 0 with known-value support
+       for (int j = 1; j < K; j++) {
          
            if (known_values_indicator(j, 0) == 1) {
              P(0, j) = known_values(j, 0);
@@ -747,20 +747,20 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
        // =========================================================================
        // Inner entries: vine levels 1, ..., K-2  (0-indexed)
        //
-       // At vine level i (0-indexed), for each pair (i, j) with j > i:
+       //// At vine level i (0-indexed), for each pair (i, j) with j > i:
        //   P(i, j) = partial correlation of tests i and j given tests 0,...,i-1
        //   C(i, j) = full correlation = c + a * P(i, j)
        //   where c = reconstruction(P=0) and a = prod(b2) > 0
        //
-       // Unconstrained param: Omega_theta_unconstrained_array(j, i) [lower tri]
+       //// Unconstrained param: Omega_theta_unconstrained_array(j, i) [lower tri]
        // Correlation bounds: lb(j, i) <= C(i, j) <= ub(j, i)
        //   -> translated to partial correlation bounds:
        //      P_low = max(-1+eps, (lb_C - c) / a)
        //      P_up  = min( 1-eps, (ub_C - c) / a)
        // =========================================================================
-       for (int i = 1; i <= K - 2; ++i) {
+       for (int i = 1; i <= K - 2; i++) {
          
-           for (int j = i + 1; j <= K - 1; ++j) {
+           for (int j = i + 1; j <= K - 1; j++) {
                
                // --- Compute b1, b2 vectors (size i) ---
                // b1[k] = P(m, i) * P(m, j)     for m = i-1, ..., 0
@@ -768,20 +768,20 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
                Eigen::Matrix<double, -1, 1> b1_vec(i);
                Eigen::Matrix<double, -1, 1> b2_vec(i);
                int m = i;
-               for (int k = 0; k < i; ++k) {
+               for (int k = 0; k < i; k++) {
                  m -= 1;   // m goes from i-1 down to 0
                  b1_vec(k) = P(m, i) * P(m, j);
                  b2_vec(k) = std::sqrt((1.0 - P(m, i) * P(m, i)) * (1.0 - P(m, j) * P(m, j)));
                }
                
                // --- Compute c = reconstruction(P[i,j] = 0) and a = prod(b2) ---
-               // Since C[i,j] = c + a * P[i,j], this gives us the affine map.
+               //// Since C[i,j] = c + a * P[i,j], this gives us the affine map.
                double c_val = 0.0;
-               for (int k = 0; k < i; ++k) {
+               for (int k = 0; k < i; k++) {
                  c_val = b1_vec(k) + c_val * b2_vec(k);
                }
                double a_val = 1.0;
-               for (int k = 0; k < i; ++k) {
+               for (int k = 0; k < i; k++) {
                  a_val *= b2_vec(k);
                }
                
@@ -789,7 +789,7 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
                  // Known correlation C(i, j) -> compute forced partial correlation
                  P(i, j) = (known_values(j, i) - c_val) / a_val;
                } else {
-                 // Translate correlation bounds to partial correlation bounds
+                 //// Translate correlation bounds to partial correlation bounds
                  // C = c + a*P,  a > 0  =>  P = (C - c) / a
                  double lb_C = lb(j, i);
                  double ub_C = ub(j, i);
@@ -803,11 +803,11 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
                  target += out(0);
                  P(i, j) = out(1);
                  
-                 // Vine Jacobian: log |dC/dP| = log(a) for this entry
+                 //// Vine Jacobian: log |dC/dP| = log(a) for this entry
                  target += std::log(a_val);
                }
                
-               // Accumulate log_det_C
+               //// Accumulate log_det_C
                log_det_C += std::log(1.0 - P(i, j) * P(i, j));
                
                // --- Reconstruct C(i, j) = c + a * P(i, j) ---
@@ -819,7 +819,7 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
        }
        
        // =========================================================================
-       // Pack output
+       //// Pack output
        // =========================================================================
        Eigen::Matrix<double, -1, -1> out_mat = Eigen::Matrix<double, -1, -1>::Zero(1 + K, K);
        out_mat(0, 0) = target;
@@ -832,7 +832,7 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_cvine_bounds_opt_dbl( int K,
  
 
 // =============================================================================
-// C-VINE: stan::math::var (AUTODIFF) VERSION
+//// C-VINE: stan::math::var (AUTODIFF) VERSION
 // =============================================================================
 inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
                                                                          Eigen::Matrix<stan::math::var, -1, -1> lb,
@@ -850,9 +850,9 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
                                                                                       K).cast<stan::math::var>();
        
        // =========================================================================
-       // Column 0
+       //// Column 0
        // =========================================================================
-       for (int j = 1; j < K; ++j) {
+       for (int j = 1; j < K; j++) {
          
            if (known_values_indicator(j, 0) == 1) {
              P(0, j) = known_values(j, 0);
@@ -870,16 +870,16 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
        }
        
        // =========================================================================
-       // Inner entries: vine levels 1, ..., K-2
+       //// Inner entries: vine levels 1, ..., K-2
        // =========================================================================
-       for (int i = 1; i <= K - 2; ++i) {
+       for (int i = 1; i <= K - 2; i++) {
          
-           for (int j = i + 1; j <= K - 1; ++j) {
+           for (int j = i + 1; j <= K - 1; j++) {
                  
                Eigen::Matrix<stan::math::var, -1, 1> b1_vec(i);
                Eigen::Matrix<stan::math::var, -1, 1> b2_vec(i);
                int m = i;
-               for (int k = 0; k < i; ++k) {
+               for (int k = 0; k < i; k++) {
                  m -= 1;
                  b1_vec(k) = P(m, i) * P(m, j);
                  b2_vec(k) = stan::math::sqrt(
@@ -889,19 +889,19 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
                
                // c = reconstruction with P[i,j] = 0
                stan::math::var c_val = 0.0;
-               for (int k = 0; k < i; ++k) {
+               for (int k = 0; k < i; k++) {
                  c_val = b1_vec(k) + c_val * b2_vec(k);
                }
                // a = prod(b2)
                stan::math::var a_val = 1.0;
-               for (int k = 0; k < i; ++k) {
+               for (int k = 0; k < i; k++) {
                  a_val *= b2_vec(k);
                }
                
                if (known_values_indicator(j, i) == 1) {
                  P(i, j) = (known_values(j, i) - c_val) / a_val;
                } else {
-                 // Translate correlation bounds to partial correlation bounds
+                 //// Translate correlation bounds to partial correlation bounds
                  stan::math::var lb_C = lb(j, i);
                  stan::math::var ub_C = ub(j, i);
                  stan::math::var P_low = stan::math::fmax(stan::math::var(-1.0 + 1e-10), (lb_C - c_val) / a_val);
@@ -911,7 +911,7 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
                  target += out(0);
                  P(i, j) = out(1);
                  
-                 // Vine Jacobian
+                 //// Vine Jacobian
                  target += stan::math::log(a_val);
                }
                
@@ -925,7 +925,7 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
        }
        
        // =========================================================================
-       // Pack output
+       //// Pack output
        // =========================================================================
        Eigen::Matrix<stan::math::var, -1, -1> out_mat = Eigen::Matrix<double, -1, -1>::Zero(1 + K, K).cast<stan::math::var>();
        out_mat(0, 0) = target;
@@ -954,13 +954,13 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
  
  
 // =============================================================================
-// Pinkney Cholesky-corr "proposal" parameterization  (NO bounds, NO known values), from:
-// https://discourse.mc-stan.org/t/updated-cholesky-corr-parameterization-testing/38827
+//// Pinkney Cholesky-corr "proposal" parameterization  (NO bounds, NO known values), from:
+//// https://discourse.mc-stan.org/t/updated-cholesky-corr-parameterization-testing/38827
 // =============================================================================
 //
-// Direct translation of Sean Pinkney's cholesky_corr_constrain_proposal_lp (Stan).
-// Maps unconstrained y (length K*(K-1)/2) DIRECTLY to a Cholesky factor L of a
-// correlation matrix + log-Jacobian. Row i (1-based) construction:
+//// Direct translation of Sean Pinkney's cholesky_corr_constrain_proposal_lp (Stan).
+//// Maps unconstrained y (length K*(K-1)/2) DIRECTLY to a Cholesky factor L of a
+//// correlation matrix + log-Jacobian. Row i (1-based) construction:
 //
 //   y_star  = the (i-1) raw params for row i
 //   dsy     = dot_self(y_star)
@@ -969,10 +969,10 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
 //   L[i, 1:i-1] = gamma * y_star ;  L[i, i] = alpha_r
 //   target += 0.5*(i-2)*log(dsy + 2) - i*log1p(dsy)
 //
-// Unit row norms by construction: gamma^2*dsy + alpha_r^2
+//// Unit row norms by construction: gamma^2*dsy + alpha_r^2
 //   = ((dsy+2)*dsy + 1)/(dsy+1)^2 = 1.
 //
-// PARAMETER LAYOUT: y is stacked ROW-WISE over the strict lower triangle
+//// PARAMETER LAYOUT: y is stacked ROW-WISE over the strict lower triangle
 //   (row 2: 1 element, row 3: 2 elements, ...) -- i.e. the SAME flat order as
 //   the existing theta packing loop (for i, for j < i), so per class c just pass
 //   Omega_raw_vec.segment(c * dim_choose_2, dim_choose_2) directly; no
@@ -987,7 +987,7 @@ inline Eigen::Matrix<stan::math::var, -1, -1> Pinkney_cvine_bounds_opt(  int K,
 // LKJ PRIOR (user applies separately, same as existing AD-block usage):
 //   target += stan::math::lkj_corr_cholesky_lpdf(L, eta);
 //
-// KEY DIFFERENCES FROM LDL / C-VINE VERSIONS:
+//// KEY DIFFERENCES FROM LDL / C-VINE VERSIONS:
 //   - NO per-element bounds and NO known-value pinning: lb_corr / ub_corr /
 //     known_values_indicator / corr_force_positive CANNOT be honoured here.
 //     Do not route models that need those through this transform.
@@ -1007,7 +1007,7 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_chol_corr_proposal_lp_dbl( int K,
        
        int counter = 0;   // 0-based (Stan version starts at 1)
        
-       for (int i = 2; i < K + 1; ++i) {   // i = 1-based row index (matches Stan / LDL loop style)
+       for (int i = 2; i < K + 1; i++) {   // i = 1-based row index (matches Stan / LDL loop style)
          
              const int n_row = i - 1;   // number of raw params in this row
              
@@ -1049,7 +1049,7 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_chol_corr_proposal_lp( in
        
        int counter = 0;   // 0-based (Stan version starts at 1)
        
-       for (int i = 2; i < K + 1; ++i) {   // i = 1-based row index (matches Stan / LDL loop style)
+       for (int i = 2; i < K + 1; i++) {   // i = 1-based row index (matches Stan / LDL loop style)
          
              const int n_row = i - 1;   // number of raw params in this row
              
@@ -1088,11 +1088,11 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_chol_corr_proposal_lp( in
  
  
 // =============================================================================
-// MASTER correlation-transform dispatch
+//// MASTER correlation-transform dispatch
 // =============================================================================
 //
-// Inspects the constraint pattern (lb / ub / known_values) ONCE and routes to
-// the recommended Pinkney transform (per S.P. corr-bounds blog + Discourse):
+//// Inspects the constraint pattern (lb / ub / known_values) ONCE and routes to
+//// the recommended Pinkney transform (per S.P. corr-bounds blog + Discourse):
 //
 //   code 0: fully UNRESTRICTED (all lb == -1, ub == +1, no known values)
 //             -> Pinkney_chol_corr_proposal_lp   ("proposal", Discourse 38827)
@@ -1103,13 +1103,13 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_chol_corr_proposal_lp( in
 //   code 3: anything else (finite boxes, nonzero fixed values, mixtures)
 //             -> Pinkney_LDL_bounds_opt  ("entry-wise")
 //
-// RETURN FORMAT: identical across all branches, (K+1) x K:
+//// RETURN FORMAT: identical across all branches, (K+1) x K:
 //     out(0, 0)             = target (log Jacobian, unconstrained -> L)
 //     out.block(1, 0, K, K) = L (Cholesky factor of correlation matrix)
 //   so existing callers (Chol_Schur_outs usage) work unchanged.
 //   All branches pair with lkj_corr_cholesky_lpdf(L, eta) applied downstream.
 //
-// NB: the DISPATCH DECISION is computed from the DOUBLE bound matrices in BOTH
+//// NB: the DISPATCH DECISION is computed from the DOUBLE bound matrices in BOTH
 //     the dbl and var versions (var version takes lb/ub as doubles and converts
 //     internally) => the two versions CANNOT dispatch differently.
 //
@@ -1129,8 +1129,8 @@ inline  int fn_detect_corr_constraint_type( const int K,
        bool all_free_unrestricted = true;
        bool all_free_sign = true;   //// every free cell exactly [0,1] or [-1,0]
        
-       for (int i = 1; i < K; ++i) {
-         for (int j = 0; j < i; ++j) {
+       for (int i = 1; i < K; i++) {
+         for (int j = 0; j < i; j++) {
            
                if (known_values_indicator(i, j) == 1) {
                  
@@ -1169,8 +1169,8 @@ inline  Eigen::Matrix<double, -1, 1> fn_corr_unc_mat_to_flat_dbl( const int K,
 
        Eigen::Matrix<double, -1, 1> y(K * (K - 1) / 2);
        int counter = 0;
-       for (int i = 1; i < K; ++i) {
-         for (int j = 0; j < i; ++j) {
+       for (int i = 1; i < K; i++) {
+         for (int j = 0; j < i; j++) {
            y(counter) = Omega_unc(i, j);
            counter += 1;
          }
@@ -1187,8 +1187,8 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> fn_corr_unc_mat_to_flat_var( const
 
        Eigen::Matrix<stan::math::var, -1, 1> y(K * (K - 1) / 2);
        int counter = 0;
-       for (int i = 1; i < K; ++i) {
-         for (int j = 0; j < i; ++j) {
+       for (int i = 1; i < K; i++) {
+         for (int j = 0; j < i; j++) {
            y(counter) = Omega_unc(i, j);
            counter += 1;
          }
@@ -1200,7 +1200,7 @@ inline  Eigen::Matrix<stan::math::var, -1, 1> fn_corr_unc_mat_to_flat_var( const
 
 
 // =============================================================================
-// MASTER: DOUBLE VERSION
+//// MASTER: DOUBLE VERSION
 // =============================================================================
 inline  Eigen::Matrix<double, -1, -1> Pinkney_corr_master_dbl( int K,
                                                                       const Eigen::Matrix<double, -1, -1> lb,
@@ -1233,7 +1233,7 @@ inline  Eigen::Matrix<double, -1, -1> Pinkney_corr_master_dbl( int K,
 
 
 // =============================================================================
-// Jacobian helpers of the correlation priors with known (fixed) correlations
+//// Jacobian helpers of the correlation priors with known (fixed) correlations
 // =============================================================================
 //// ---- number of FREE (not known) correlations below the diagonal in column `column` (0-indexed) of a
 ////      correlation matrix: the power of L_Omega(column, column) in the Jacobian of the map from the free
@@ -1245,7 +1245,7 @@ inline int fn_number_of_free_correlations_below_diagonal_in_column(
 ) {
 
        int number_of_free_correlations = 0;
-       for (int row = column + 1; row < known_values_indicator.rows(); ++row) {
+       for (int row = column + 1; row < known_values_indicator.rows(); row++) {
              if (known_values_indicator(row, column) != 1) number_of_free_correlations += 1;
        }
        return number_of_free_correlations;
@@ -1263,8 +1263,8 @@ inline void fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_chole
                                                   const Eigen::Matrix<int, -1, -1> &known_values_indicator
 ) {
 
-       for (int i = 1; i < L_Omega.rows(); ++i) {
-             for (int j = 0; j < i; ++j) {
+       for (int i = 1; i < L_Omega.rows(); i++) {
+             for (int j = 0; j < i; j++) {
                    if (known_values_indicator(i, j) == 1) density -= stan::math::log(L_Omega(j, j));
              }
        }
@@ -1305,9 +1305,10 @@ inline stan::math::var fn_log_density_of_beta_or_normal_prior_on_correlations_on
              }
        }
        Eigen::Matrix<stan::math::var, -1, 1> jacobian_diag_elements(n_tests);
-       for (int i = 0; i < n_tests; ++i) {
+       for (int i = 0; i < n_tests; i++) {
              const int number_of_free_correlations_below_diagonal_in_column_i =
-                   fn_number_of_free_correlations_below_diagonal_in_column(known_values_indicator, i);
+                   fn_number_of_free_correlations_below_diagonal_in_column( known_values_indicator,
+                                                                            i);
              jacobian_diag_elements(i) = number_of_free_correlations_below_diagonal_in_column_i *
                                          stan::math::log(L_Omega(i, i));
        }
@@ -1343,8 +1344,8 @@ inline void fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true( const 
 
 
 // =============================================================================
-// MASTER: stan::math::var (AUTODIFF) VERSION
-// NB: takes lb / ub as DOUBLES (converts internally for the LDL branch) so the
+//// MASTER: stan::math::var (AUTODIFF) VERSION
+//// NB: takes lb / ub as DOUBLES (converts internally for the LDL branch) so the
 //     dispatch decision is guaranteed identical to the dbl version.
 // =============================================================================
 inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_corr_master( int K,
@@ -1457,13 +1458,15 @@ inline  Eigen::Matrix<stan::math::var, -1, -1> Pinkney_corr_master( int K,
  
  
  
-inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> vec_of_mats_var(int n_rows, int n_cols, int n_mats) {
+inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> vec_of_mats_var(int n_rows,
+                                                                           int n_cols,
+                                                                           int n_mats) {
        
        std::vector<Eigen::Matrix<stan::math::var, -1, -1>> my_vec;
        
        my_vec.reserve(n_mats);  
         
-       for (int c = 0; c < n_mats; ++c) {
+       for (int c = 0; c < n_mats; c++) {
          my_vec.emplace_back(Eigen::Matrix<stan::math::var, -1, -1>::Zero(n_rows, n_cols));
        }
         
@@ -1536,7 +1539,7 @@ inline std::vector<stan::math::var> Eigen_vec_to_std_vec_var(Eigen::Matrix<stan:
 
        std::vector<stan::math::var>  std_vec(Eigen_vec.rows(), 0.0);
     
-       for (int i = 0; i < Eigen_vec.rows(); ++i) {
+       for (int i = 0; i < Eigen_vec.rows(); i++) {
          std_vec[i] = Eigen_vec(i);
        }
     
@@ -1590,7 +1593,7 @@ inline std::vector<stan::math::var> Eigen_vec_to_std_vec_var(Eigen::Matrix<stan:
  
  
  
-// input vector, outputs upper-triangular 3d array of corrs- double
+//// input vector, outputs upper-triangular 3d array of corrs- double
 inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> fn_convert_std_vec_of_corrs_to_3d_array_var( std::vector<stan::math::var> input_vec,
                                                                                                         int n_rows,
                                                                                                         int n_arrays) {
@@ -1598,9 +1601,9 @@ inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> fn_convert_std_vec_of
        std::vector<Eigen::Matrix<stan::math::var, -1, -1 > >   output_array = vec_of_mats_var(n_rows, n_rows, n_arrays); // 1d vector to output
     
        int k = 0;
-       for (int c = 0; c < n_arrays; ++c) {
-         for (int i = 1; i < n_rows; ++i)  {
-           for (int j = 0; j < i; ++j) { // equiv to 1 to K - 2 in R
+       for (int c = 0; c < n_arrays; c++) {
+         for (int i = 1; i < n_rows; i++)  {
+           for (int j = 0; j < i; j++) { // equiv to 1 to K - 2 in R
              output_array[c](i,j) =  input_vec[k];
              k = k + 1;
            }
@@ -1616,7 +1619,7 @@ inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> fn_convert_std_vec_of
 
  
  
-// input vector, outputs upper-triangular 3d array of corrs- double
+//// input vector, outputs upper-triangular 3d array of corrs- double
 inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> fn_convert_Eigen_vec_of_corrs_to_3d_array_var( Eigen::Matrix<stan::math::var, -1, 1> input_vec,
                                                                                                           int n_rows,
                                                                                                           int n_arrays) {
@@ -1624,9 +1627,9 @@ inline std::vector<Eigen::Matrix<stan::math::var, -1, -1>> fn_convert_Eigen_vec_
        std::vector<Eigen::Matrix<stan::math::var, -1, -1 > >   output_array = vec_of_mats_var(n_rows, n_rows, n_arrays); // 1d vector to output
         
        int k = 0;
-       for (int c = 0; c < n_arrays; ++c) {
-         for (int i = 1; i < n_rows; ++i)  {
-           for (int j = 0; j < i; ++j) { // equiv to 1 to K - 2 in R
+       for (int c = 0; c < n_arrays; c++) {
+         for (int i = 1; i < n_rows; i++)  {
+           for (int j = 0; j < i; j++) { // equiv to 1 to K - 2 in R
              output_array[c](i, j) =  input_vec(i);
              k = k + 1;
            }
@@ -2215,7 +2218,7 @@ inline Eigen::Matrix<stan::math::var, -1, 1  >   log_sum_exp_2d_Stan_var(   Eige
 
 
 // 
-// inline  Eigen::Matrix<stan::math::var, 1, -1>     fn_first_element_neg_rest_pos_var(
+//// inline  Eigen::Matrix<stan::math::var, 1, -1>     fn_first_element_neg_rest_pos_var(
 //      Eigen::Matrix<stan::math::var, 1, -1>  row_vec
 //  ) {
 // 
@@ -2251,7 +2254,7 @@ inline Eigen::Matrix<stan::math::var, -1, 1  >   log_sum_exp_2d_Stan_var(   Eige
 //  }
 // 
 // // [[Rcpp::export(rng = false)]]
-// Rcpp::NumericVector commutation_dot
+//// Rcpp::NumericVector commutation_dot
 //   (unsigned const n, unsigned const m, Rcpp::NumericVector x,
 //    bool const transpose){
 //   size_t const nm = n * m;
@@ -2264,7 +2267,7 @@ inline Eigen::Matrix<stan::math::var, -1, 1  >   log_sum_exp_2d_Stan_var(   Eige
 //   return out;
 // }
 // 
-// Rcpp::NumericMatrix get_commutation_unequal
+//// Rcpp::NumericMatrix get_commutation_unequal
 //   (unsigned const n, unsigned const m){
 // 
 //   unsigned const nm = n * m,

@@ -8,12 +8,11 @@
 #include <algorithm>
 #include <cstdint>
 #include <cmath>
-using namespace Rcpp;
 
 
-// Groups matrix columns into superchain blocks, computes row-wise mean 
-// within each block, and replicates that mean across all columns in the block.
-// NOTE: Despite the R function name saying "median", the original R code uses mean().
+//// Groups matrix columns into superchain blocks, computes row-wise mean 
+//// within each block, and replicates that mean across all columns in the block.
+//// NOTE: Despite the R function name saying "median", the original R code uses mean().
 
 
 Eigen::Matrix<double, -1, -1> cpp_fn_grp_mat_cols_by_mean_per_superchain_grp( const Eigen::Matrix<double, -1, -1> &mat,
@@ -26,23 +25,23 @@ Eigen::Matrix<double, -1, -1> cpp_fn_grp_mat_cols_by_mean_per_superchain_grp( co
           
           Eigen::Matrix<double, -1, -1> out = mat;  // copy
           
-          // Process full superchains
-          for (int i = 0; i < n_full_superchains; ++i) {
+          //// Process full superchains
+          for (int i = 0; i < n_full_superchains; i++) {
             
                 int start_col = i * n_chains_per_superchain;
-                // Row-wise mean across columns in this superchain block
+                //// Row-wise mean across columns in this superchain block
                 Eigen::Matrix<double, -1, 1> mean_vec = out.block(0,
                                                                   start_col,
                                                                   n_params,
                                                                   n_chains_per_superchain).rowwise().mean();
-                // Replicate mean across all columns in this block
-                for (int j = 0; j < n_chains_per_superchain; ++j) {
+                //// Replicate mean across all columns in this block
+                for (int j = 0; j < n_chains_per_superchain; j++) {
                   out.col(start_col + j) = mean_vec;
                 }
             
           } 
           
-          // Handle remaining columns
+          //// Handle remaining columns
           int remaining_start = n_full_superchains * n_chains_per_superchain;
           int n_remaining = n_chains - remaining_start;
           if (n_remaining > 0) {
@@ -50,7 +49,7 @@ Eigen::Matrix<double, -1, -1> cpp_fn_grp_mat_cols_by_mean_per_superchain_grp( co
                                                               remaining_start,
                                                               n_params,
                                                               n_remaining).rowwise().mean();
-            for (int j = 0; j < n_remaining; ++j) {
+            for (int j = 0; j < n_remaining; j++) {
               out.col(remaining_start + j) = mean_vec;
             }
           } 
@@ -96,18 +95,18 @@ Eigen::Matrix<double, -1, -1> cpp_fn_grp_mat_cols_by_mean_per_superchain_grp( co
 //// than burn-in chains the burn-in endpoints are reused, and the function says so.
 ////
 // [[Rcpp::export]]
-List cpp_fn_post_burnin_prep_for_sampling(int n_chains_burnin,
+Rcpp::List cpp_fn_post_burnin_prep_for_sampling(int n_chains_burnin,
                                           int n_chains_sampling,
                                           int n_superchains,
                                           int n_params_main,
                                           int n_nuisance,
                                           const Eigen::Matrix<double, -1, -1> &theta_main_in,
                                           const Eigen::Matrix<double, -1, -1> &theta_us_in,
-                                          double nuisance_jitter_scale = 0.25,
-                                          int seed = 123
+                                          double nuisance_jitter_scale,
+                                          int seed
 ) {
 
-          // Cap n_superchains
+          //// Cap n_superchains
           if (n_superchains > n_chains_sampling) {
             n_superchains = n_chains_sampling;
           }
@@ -127,13 +126,13 @@ List cpp_fn_post_burnin_prep_for_sampling(int n_chains_burnin,
                         << " sensitivity) is limited by n_chains_burnin." << std::endl;
           }
 
-          // Allocate sampling matrices
+          //// Allocate sampling matrices
           Eigen::Matrix<double, -1, -1> theta_main_sampling(n_params_main, n_chains_sampling);
           Eigen::Matrix<double, -1, -1> theta_us_sampling = Eigen::Matrix<double, -1, -1>::Zero(n_nuisance, n_chains_sampling);
 
           //// ---- (1) one burn-in endpoint per SUPERCHAIN. Chains in the trailing partial block
           //// (when n_superchains does not divide n_chains_sampling) join the last superchain.
-          for (int kk = 0; kk < n_chains_sampling; ++kk) {
+          for (int kk = 0; kk < n_chains_sampling; kk++) {
 
                 const int superchain_id = std::min(kk / n_chains_per_superchain, n_superchains - 1);
                 const int burnin_col = superchain_id % n_chains_burnin;
@@ -159,7 +158,7 @@ List cpp_fn_post_burnin_prep_for_sampling(int n_chains_burnin,
                     (((theta_us_in.colwise() - mean_us).array().square().rowwise().sum())
                          / static_cast<double>(n_chains_burnin - 1)).sqrt();
                 //// coordinates on which the burn-in chains agree exactly get no jitter
-                for (int j = 0; j < n_nuisance; ++j) {
+                for (int j = 0; j < n_nuisance; j++) {
                   if (!std::isfinite(sd_us(j)) || sd_us(j) < 0.0) sd_us(j) = 0.0;
                 }
 
@@ -207,11 +206,11 @@ List cpp_fn_post_burnin_prep_for_sampling(int n_chains_burnin,
                               << " sigma off-shell, n_nuisance = " << n_nuisance << ")." << std::endl;
                   //// one stream per chain, widely separated seeds (a small seed offset leaves
                   //// mt19937-family streams poorly decorrelated at the start)
-                  for (int kk = 0; kk < n_chains_sampling; ++kk) {
+                  for (int kk = 0; kk < n_chains_sampling; kk++) {
                         std::mt19937_64 rng(static_cast<uint64_t>(seed)
                                             + 0x9E3779B97F4A7C15ULL * static_cast<uint64_t>(kk + 1));
                         std::normal_distribution<double> rnorm(0.0, 1.0);
-                        for (int j = 0; j < n_nuisance; ++j) {
+                        for (int j = 0; j < n_nuisance; j++) {
                           if (sd_us(j) > 0.0) {
                             theta_us_sampling(j, kk) += jitter_scale_effective * sd_us(j) * rnorm(rng);
                           }
@@ -221,9 +220,9 @@ List cpp_fn_post_burnin_prep_for_sampling(int n_chains_burnin,
 
           }
 
-          return List::create(
-            Named("theta_main_vectors_all_chains_input_from_R") = theta_main_sampling,
-            Named("theta_us_vectors_all_chains_input_from_R") = theta_us_sampling
+          return Rcpp::List::create(
+            Rcpp::Named("theta_main_vectors_all_chains_input_from_R") = theta_main_sampling,
+            Rcpp::Named("theta_us_vectors_all_chains_input_from_R") = theta_us_sampling
           );
 
 }

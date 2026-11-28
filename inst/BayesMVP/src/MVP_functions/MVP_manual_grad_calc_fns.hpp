@@ -83,22 +83,34 @@ ALWAYS_INLINE  void fn_MVP_compute_lp_GHK_cols(   const int t,
        }
 
        ////// Compute on NON-log-scale for all observations using ".col(t)".
-       fn_EIGEN_double_into( Bound_U_Phi_Bound_Z.col(t), Bound_Z.col(t), Phi_type, vect_type_Phi);
+       fn_EIGEN_double_into( Bound_U_Phi_Bound_Z.col(t),
+                             Bound_Z.col(t),
+                             Phi_type,
+                             vect_type_Phi,
+                             false);
 
        Phi_Z.col(t).array() = y_chunk.col(t).array() * Bound_U_Phi_Bound_Z.col(t).array() +   (y_chunk.col(t).array() -  Bound_U_Phi_Bound_Z.col(t).array()) *
                             ((y_chunk.col(t).array()  + (y_chunk.col(t).array()  - 1.0)) * u_array.col(t).array());
 
-       fn_EIGEN_double_into( Z_std_norm.col(t), Phi_Z.col(t),   inv_Phi_type, vect_type_inv_Phi);
+       fn_EIGEN_double_into( Z_std_norm.col(t),
+                             Phi_Z.col(t),
+                             inv_Phi_type,
+                             vect_type_inv_Phi,
+                             false);
 
 
        prob.col(t).array() =    y_chunk.col(t).array()  * (1.0 - Bound_U_Phi_Bound_Z.col(t).array() ) + ( y_chunk.col(t).array()  -  1.0)  *
                                 Bound_U_Phi_Bound_Z.col(t).array() * ( y_chunk.col(t).array()  +  (  y_chunk.col(t).array()  - 1.0)  )  ;
        // prob.col(t).array() = prob.col(t).array().max(1e-30);
 
-       fn_EIGEN_double_into( y1_log_prob.col(t), prob.col(t),  "log", vect_type_log);
+       fn_EIGEN_double_into( y1_log_prob.col(t),
+                             prob.col(t),
+                             "log",
+                             vect_type_log,
+                             false);
 
 }
-// template <Vec vec>
+//// template <Vec vec>
 // inline void fn_MVP_compute_lp_GHK_cols(   const int t,
 //                                           Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
 //                                           Eigen::Ref<Eigen::Matrix<double, -1, -1>> Phi_Z,
@@ -133,9 +145,9 @@ ALWAYS_INLINE  void fn_MVP_compute_lp_GHK_cols(   const int t,
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// PART C: fn_MVP_compute_lp_GHK_cols (the binary-only MVP version the driver calls).
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVP_compute_lp_GHK_cols_T(   const int t,
                                           Eigen::Ref<Eigen::Matrix<double, -1, -1>> Bound_U_Phi_Bound_Z,
@@ -263,7 +275,10 @@ ALWAYS_INLINE  void fn_MVP_compute_phi_Bound_Z_cols(      const int t,
               // temp = sqrt_2_pi_recip*temp;
               // phi_Bound_Z.col(t).array() +=   temp.array();
               ////
-              phi_Bound_Z.col(t).array() += (sqrt_2_pi_recip*fn_EIGEN_double_in_a_per_thread_buffer((-0.5)*stan::math::square(Bound_Z.col(t)), "exp", vect_type_exp)).array();
+              phi_Bound_Z.col(t).array() += (sqrt_2_pi_recip*fn_EIGEN_double_in_a_per_thread_buffer( (-0.5)*stan::math::square(Bound_Z.col(t)),
+                                                                                                     "exp",
+                                                                                                     vect_type_exp,
+                                                                                                     false)).array();
          }
          
          // ///////// grad stuff
@@ -284,7 +299,7 @@ ALWAYS_INLINE  void fn_MVP_compute_phi_Bound_Z_cols(      const int t,
  
  
  
-// fn that computes phi_Z_recip auto for the gradient of the GHK parameterisation of the MVP / LC_MVP (and latent_trait) models
+//// fn that computes phi_Z_recip auto for the gradient of the GHK parameterisation of the MVP / LC_MVP (and latent_trait) models
 ALWAYS_INLINE  void fn_MVP_compute_phi_Z_recip_cols(     const int t,
                                                          Eigen::Matrix<double, -1, -1> &phi_Z_recip,   //// updating this
                                                          const Eigen::Ref<const Eigen::Matrix<double, -1, -1>>  Phi_Z,
@@ -320,7 +335,10 @@ ALWAYS_INLINE  void fn_MVP_compute_phi_Z_recip_cols(     const int t,
                // temp = sqrt_2_pi_recip*fn_EIGEN_double((-0.5)*stan::math::square(Z_std_norm.col(t)), "exp", vect_type_exp);
                // temp = stan::math::inv(sqrt_2_pi_recip*fn_EIGEN_double((-0.5)*stan::math::square(Z_std_norm.col(t)), "exp", vect_type_exp));
                ////
-               phi_Z_recip.col(t).array() += (stan::math::inv(sqrt_2_pi_recip*fn_EIGEN_double_in_a_per_thread_buffer((-0.5)*stan::math::square(Z_std_norm.col(t)), "exp", vect_type_exp))).array();
+               phi_Z_recip.col(t).array() += (stan::math::inv(sqrt_2_pi_recip*fn_EIGEN_double_in_a_per_thread_buffer( (-0.5)*stan::math::square(Z_std_norm.col(t)),
+                                                                                                                      "exp",
+                                                                                                                      vect_type_exp,
+                                                                                                                      false))).array();
          
        }
        
@@ -341,7 +359,7 @@ ALWAYS_INLINE  void fn_MVP_compute_phi_Z_recip_cols(     const int t,
  
  
  
-// Helper functions for matrix products
+//// Helper functions for matrix products
 template<typename M1, typename M2>
 ALWAYS_INLINE void compute_rowwise_products( Eigen::Ref<M1> prod_temp,
                                              Eigen::Ref<M2> recip_temp, 
@@ -367,7 +385,7 @@ ALWAYS_INLINE void compute_rowwise_products( Eigen::Ref<M1> prod_temp,
 }
  
  
-// Helper for latent class calculations
+//// Helper for latent class calculations
 template<typename M>
 ALWAYS_INLINE void compute_latent_class_terms(   Eigen::Ref<M> common_grad,
                                                  const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> prod_temp_all,
@@ -386,7 +404,7 @@ ALWAYS_INLINE void compute_latent_class_terms(   Eigen::Ref<M> common_grad,
  
  
  
-// Helper for final transformations
+//// Helper for final transformations
 template<typename M1, typename M2>
 ALWAYS_INLINE void compute_final_terms(  Eigen::Ref<M1> y_sign_out,
                                          Eigen::Ref<M2> y_m_ysign_out,
@@ -447,7 +465,7 @@ ALWAYS_INLINE  void fn_MVP_grad_prep(            const Eigen::Ref<const Eigen::M
        const int chunk_size = y_sign_chunk.rows();
        const int n_tests = y_sign_chunk.cols();
        
-       // Calculate row-wise products
+       //// Calculate row-wise products
        compute_rowwise_products( prop_rowwise_prod_temp,
                                  prop_recip_rowwise_prod_temp,
                                  prob,
@@ -455,10 +473,10 @@ ALWAYS_INLINE  void fn_MVP_grad_prep(            const Eigen::Ref<const Eigen::M
                                  chunk_size,
                                  n_tests);
        
-       // Calculate full row products
+       //// Calculate full row products
        prop_rowwise_prod_temp_all.array() = prob.rowwise().prod().array();
        
-       // Handle latent class case
+       //// Handle latent class case
        if (n_class > 1) {
          compute_latent_class_terms(   common_grad_term_1,
                                        prop_rowwise_prod_temp_all,
@@ -470,7 +488,7 @@ ALWAYS_INLINE  void fn_MVP_grad_prep(            const Eigen::Ref<const Eigen::M
          common_grad_term_1.setOnes();
        }
        
-       // Final transformations
+       //// Final transformations
        compute_final_terms(  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip,
                              y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip,
                              y_sign_chunk,
@@ -626,7 +644,7 @@ ALWAYS_INLINE void fn_MVP_compute_nuisance_grad_v2(     Eigen::Ref<Eigen::Matrix
       
       }
 
-// no "return" unlike std::function since it modifies u_grad_array_CM_chunk by reference!
+//// no "return" unlike std::function since it modifies u_grad_array_CM_chunk by reference!
 
 }
 
@@ -741,7 +759,7 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
 
                     int t = n_tests - 1;
 
-                    for (int k = 0; k < n_covariates_per_outcome_vec(t); ++k)  {
+                    for (int k = 0; k < n_covariates_per_outcome_vec(t); k++)  {
 
                           if (n_class != 1) {  ///// if latent class
                             if (compute_final_scalar_grad)  coefficients_array(k, t) +=      (  common_grad_term_1.col(t).array()  *   (  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array()  *
@@ -762,7 +780,7 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
 
                     int t = n_tests - 2;
 
-                    for (int k = 0; k < n_covariates_per_outcome_vec(t); ++k)  {
+                    for (int k = 0; k < n_covariates_per_outcome_vec(t); k++)  {
 
                           Eigen::Matrix<double, -1, 1>  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t  =     y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array() * X[t].matrix().block(chunk_size * chunk_counter, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() ;
                           Eigen::Matrix<double, -1, 1>  y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip_for_coeffs_col_t  =   X[t].matrix().block(chunk_size * chunk_counter, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>()  * y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t).array()  ;
@@ -788,7 +806,7 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v2(   const int c, // latent
 
                       int t = n_tests - (i + 2) ;
 
-                      for (int k = 0; k < n_covariates_per_outcome_vec(t); ++k)  {
+                      for (int k = 0; k < n_covariates_per_outcome_vec(t); k++)  {
 
                             Eigen::Matrix<double, -1, 1>  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t  =     y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array() *  X[t].matrix().block(chunk_size * chunk_counter, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() ;
                             Eigen::Matrix<double, -1, 1>  y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip_for_coeffs_col_t  =   X[t].matrix().block(chunk_size * chunk_counter, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>()   * y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t).array()  ;
@@ -946,23 +964,20 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v3(      const int c, // lat
      
    } else {
      
+     //// every term of the chain below is X(n, k) times a term that does not depend on k, so the chain is
+     //// computed once per test (as for an intercept) and then summed against the covariate columns of X.
+     
      {
        
        int t = n_tests - 1;
        
-       for (int k = 0; k < n_covariates_per_outcome_vec(t); ++k)  {
-         
-         if (n_class != 1) {  ///// if latent class
-           if (compute_final_scalar_grad)  coefficients_array(k, t) += ( common_grad_term_1.col(t).array()  * ( y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array()  * 
-                                                                         X[t].block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() )).sum();
-         } else {   ////// if standard MVP
-           Eigen::Matrix<double, -1, 1> y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array() * 
-                                                                                                    // X[t].block(chunk_size * chunk_counter, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>();
-                                                                                                    X[t].block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>();
-           if (compute_final_scalar_grad)  coefficients_array(k, t) += ( y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t.array() * prob_recip.col(t).array() ).sum();
-         }
-         
+       if (n_class != 1) {  ///// if latent class
+         derivs_chain_container_vec.array() = common_grad_term_1.col(t).array() * y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array();
+       } else {   ////// if standard MVP
+         derivs_chain_container_vec.array() = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array() * prob_recip.col(t).array();
        }
+       
+       if (compute_final_scalar_grad)  coefficients_array.col(t).head(n_covariates_per_outcome_vec(t)).noalias() += X[(X.size() == 1) ? 0 : t].block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).transpose() * derivs_chain_container_vec;
        
      }
      
@@ -970,26 +985,17 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v3(      const int c, // lat
        
        int t = n_tests - 2;
        
-       for (int k = 0; k < n_covariates_per_outcome_vec(t); ++k)  {
-         
-         Eigen::Matrix<double, -1, 1>  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t  =     y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array() *
-                                                                                                        // X[t].matrix().block(chunk_size * chunk_counter, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() ;
-                                                                                                        X[t].matrix().block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() ;
-         Eigen::Matrix<double, -1, 1>  y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip_for_coeffs_col_t = X[t].matrix().block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() * 
-                                                                                                                                     y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t).array();
-         grad_prob.col(0).array() =           y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t.array();
-         z_grad_term.col(0).array()   =     - y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip_for_coeffs_col_t.array();
-         grad_prob.col(1).array()  =       (  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t + 1).array()    )   * (   L_Omega_double(t + 1, t) *      z_grad_term.col(0).array() ).array() ;
-         
-         
-         
-         if (n_class != 1) {  ///// if latent class
-           if (compute_final_scalar_grad)  coefficients_array(k, t) +=   (  common_grad_term_1.col(t).array()   * ( grad_prob.col(1).array() *  prob.col(t).array() + grad_prob.col(0).array() *   prob.col(t  + 1).array() ) ).sum();
-         } else {  //// if standard MVP
-           if (compute_final_scalar_grad)  coefficients_array(k, t) +=   (  grad_prob.col(1).array() *  prob_recip.col(t + 1).array()   +   grad_prob.col(0).array() *   prob_recip.col(t + 0).array()      ).sum();
-         }
-         
+       grad_prob.col(0).array() = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array();
+       z_grad_term.col(0).array() = - y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t).array();
+       grad_prob.col(1).array() = ( y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t + 1).array() ) * ( L_Omega_double(t + 1, t) * z_grad_term.col(0).array() ).array();
+       
+       if (n_class != 1) {  ///// if latent class
+         derivs_chain_container_vec.array() = common_grad_term_1.col(t).array() * ( grad_prob.col(1).array() * prob.col(t).array() + grad_prob.col(0).array() * prob.col(t + 1).array() );
+       } else {  //// if standard MVP
+         derivs_chain_container_vec.array() = grad_prob.col(1).array() * prob_recip.col(t + 1).array() + grad_prob.col(0).array() * prob_recip.col(t + 0).array();
        }
+       
+       if (compute_final_scalar_grad)  coefficients_array.col(t).head(n_covariates_per_outcome_vec(t)).noalias() += X[(X.size() == 1) ? 0 : t].block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).transpose() * derivs_chain_container_vec;
        
      }
      
@@ -997,46 +1003,37 @@ ALWAYS_INLINE void fn_MVP_compute_coefficients_grad_v3(      const int c, // lat
        
        int t = n_tests - (i + 2) ;
        
-       for (int k = 0; k < n_covariates_per_outcome_vec(t); ++k)  {
+       grad_prob.col(0).array() = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array();
+       z_grad_term.col(0).array() = - y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t).array();
+       grad_prob.col(1).array() = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t + 1).array() * ( L_Omega_double(t + 1, t) * z_grad_term.col(0).array() ) ;
+       
+       for (int ii = 1; ii < i + 1; ii++) {    // rest of components
          
-         Eigen::Matrix<double, -1, 1>  y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t).array() * 
-                                                                                                   X[t].matrix().block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() ;
-         Eigen::Matrix<double, -1, 1>  y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip_for_coeffs_col_t = X[t].matrix().block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).col(k).array().cast<double>() 
-                                                                                                                                     * y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t).array()  ;
-         grad_prob.col(0).array()  = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip_col_t.array();
-         z_grad_term.col(0).array() = - y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip_for_coeffs_col_t.array()   ;
-         grad_prob.col(1).array() = y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t + 1).array() * (   L_Omega_double(t + 1, t) *   z_grad_term.col(0).array() ) ;
-         
-         for (int ii = 1; ii < i + 1; ii++) {    // rest of components
-           
-               if (ii == 1)  prod_container = ( z_grad_term.leftCols(ii) * L_Omega_double.row( t + (ii - 1) + 1).segment(t + 0, ii + 0).transpose()  );
-               z_grad_term.col(ii) = - y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t + ii).array() * prod_container.array();
-               prod_container  = ( z_grad_term.leftCols(ii + 1)  *   L_Omega_double.row( t + (ii) + 1).segment(t + 0, ii + 1).transpose() );
-               grad_prob.col(ii + 1) = ( y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t + ii + 1).array() ).array() * prod_container.array();
-           
-         }
-         
-         if (n_class == 1) {  //// if standard MVP
-           
-               derivs_chain_container_vec.array() = 0.0;
-               for (int ii = 0; ii < i + 2; ii++) {
-                 derivs_chain_container_vec.array() +=   grad_prob.col(ii).array()  *   prob_recip.col(t + ii).array()  ;
-               }
-               // beta_grad_array_for_each_n[k].col(t) =         derivs_chain_container_vec;
-               if (compute_final_scalar_grad)  coefficients_array(k, t) +=  derivs_chain_container_vec.sum();
-           
-         } else {  //// if latent class
-           
-               derivs_chain_container_vec.array() = 0.0;
-               for (int ii = 0; ii < i + 2; ii++) {
-                 derivs_chain_container_vec.array() +=  ( grad_prob.col(ii).array()  * (        prop_rowwise_prod_temp.col(t).array() *   prob_recip.col(t + ii).array()  ).array() ).array() ;
-               }
-               if (compute_final_scalar_grad)  coefficients_array(k,
-                   t) +=   (   common_grad_term_1.col(t).array()   *  derivs_chain_container_vec.array() ).sum();
-               
-         }
+             if (ii == 1)  prod_container = ( z_grad_term.leftCols(ii) * L_Omega_double.row( t + (ii - 1) + 1).segment(t + 0, ii + 0).transpose()  );
+             z_grad_term.col(ii) = - y_m_ysign_x_u_array_times_phi_Z_times_phi_Bound_Z_times_L_Omega_diag_recip.col(t + ii).array() * prod_container.array();
+             prod_container  = ( z_grad_term.leftCols(ii + 1)  *   L_Omega_double.row( t + (ii) + 1).segment(t + 0, ii + 1).transpose() );
+             grad_prob.col(ii + 1) = ( y_sign_chunk_times_phi_Bound_Z_x_L_Omega_diag_recip.col(t + ii + 1).array() ).array() * prod_container.array();
          
        }
+       
+       derivs_chain_container_vec.array() = 0.0;
+       
+       if (n_class == 1) {  //// if standard MVP
+         
+             for (int ii = 0; ii < i + 2; ii++) {
+               derivs_chain_container_vec.array() +=   grad_prob.col(ii).array()  *   prob_recip.col(t + ii).array()  ;
+             }
+         
+       } else {  //// if latent class
+         
+             for (int ii = 0; ii < i + 2; ii++) {
+               derivs_chain_container_vec.array() +=  ( grad_prob.col(ii).array()  * (        prop_rowwise_prod_temp.col(t).array() *   prob_recip.col(t + ii).array()  ).array() ).array() ;
+             }
+             derivs_chain_container_vec.array() *= common_grad_term_1.col(t).array();
+         
+       }
+       
+       if (compute_final_scalar_grad)  coefficients_array.col(t).head(n_covariates_per_outcome_vec(t)).noalias() += X[(X.size() == 1) ? 0 : t].block(row_start, 0, chunk_size, n_covariates_per_outcome_vec(t)).transpose() * derivs_chain_container_vec;
        
      }
      
@@ -1300,7 +1297,7 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v2(   Eigen::Ref<Eigen::Matrix<do
   }
 
 
-  // no "return" unlike std::function since it modifies u_grad_array_CM_chunk by reference!
+  //// no "return" unlike std::function since it modifies u_grad_array_CM_chunk by reference!
 
 }
 
@@ -1528,7 +1525,7 @@ ALWAYS_INLINE void fn_MVP_compute_L_Omega_grad_v3(   Eigen::Ref<Eigen::Matrix<do
    }
    
    
-   // no "return" unlike std::function since it modifies u_grad_array_CM_chunk by reference!
+   //// no "return" unlike std::function since it modifies u_grad_array_CM_chunk by reference!
    
  }
  

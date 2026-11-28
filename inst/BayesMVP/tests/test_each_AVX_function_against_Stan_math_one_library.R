@@ -18,7 +18,8 @@
       dyn.load(library_file)
 }
 ##
-fn_log_density_and_gradient <- function(JSON_text, point) {
+fn_log_density_and_gradient <- function(JSON_text,
+                                        point) {
         construction <-  .C("bs_model_construct_R", as.character(JSON_text), as.integer(1), ptr_out = raw(8),
                             err_msg = as.character(""), err_ptr = raw(8), PACKAGE = library_name)
         model_pointer <-  construction$ptr_out

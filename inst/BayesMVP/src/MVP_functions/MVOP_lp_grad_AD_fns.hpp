@@ -50,8 +50,9 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         const bool corr_force_positive = Model_args_as_cpp_struct.Model_args_bools(2);
         const bool corr_prior_beta = Model_args_as_cpp_struct.Model_args_bools(3);
         const bool corr_prior_norm = Model_args_as_cpp_struct.Model_args_bools(4);
-        fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true(corr_prior_beta, corr_prior_norm,
-                                                                 "MVOP_lp_grad_AD_fns.hpp");
+        fn_stop_if_corr_prior_beta_and_corr_prior_norm_are_both_true( corr_prior_beta,
+                                                                      corr_prior_norm,
+                                                                      "MVOP_lp_grad_AD_fns.hpp");
         const bool handle_numerical_issues = Model_args_as_cpp_struct.Model_args_bools(5);
         const bool skip_checks_exp =   Model_args_as_cpp_struct.Model_args_bools(6);
         const bool skip_checks_log =   Model_args_as_cpp_struct.Model_args_bools(7);
@@ -82,7 +83,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         const Eigen::Matrix<int, -1, 1> &n_cat_per_test = Model_args_as_cpp_struct.Model_args_col_vecs_int[3];
         Eigen::Matrix<int, -1, 1> ordinal_slot_index_of_fitted_test(n_tests);   //// -1 for a binary test
         std::vector<int>          fitted_test_index_of_ordinal_slot;
-        for (int t = 0; t < n_tests; ++t) {
+        for (int t = 0; t < n_tests; t++) {
               if (n_cat_per_test(t) > 2) {
                     ordinal_slot_index_of_fitted_test(t) =
                           static_cast<int>(fitted_test_index_of_ordinal_slot.size());
@@ -105,25 +106,16 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         const int use_Se_Sp_prior = (A.Model_args_ints.rows() > 7) ? A.Model_args_ints(7) : 0;
         const int Se_Sp_prior_type = (use_Se_Sp_prior == 1) ? A.Model_args_ints(8) : 0;
         Se_Sp_prior_args_struct Se_Sp_args;
-        Eigen::Matrix<int, -1, -1> normal_prior_of_intercept_replaced =
-              Eigen::Matrix<int, -1, -1>::Zero(n_class, n_tests);
         if (use_Se_Sp_prior == 1) {
              Se_Sp_args = fn_Se_Sp_prior_args(A.Model_args_vecs_of_mats_int[1],
                                               A.Model_args_vecs_of_mats_double[8],
                                               A.Model_args_vecs_of_mats_double[9],
                                               A.Model_args_vecs_of_mats_double[10],
-                                              A.Model_args_vecs_of_mats_double[13],
-                                              A.Model_args_vecs_of_mats_double[14],
+                                              A.Model_args_vecs_of_mats_double[11],
+                                              A.Model_args_vecs_of_mats_double[12],
                                               prior_dirichlet_alpha,
                                               n_thr_per_ord_test,
                                               Se_Sp_prior_type);
-             for (int c = 0; c < n_class; ++c) {
-                  for (int t = 0; t < n_tests; ++t) {
-                       if (ordinal_slot_index_of_fitted_test(t) < 0) {
-                            normal_prior_of_intercept_replaced(c, t) = A.Model_args_vecs_of_mats_int[2][c](0, t);
-                       }
-                  }
-             }
         }
         
         // const double prev_prior_a = Model_args_as_cpp_struct.Model_args_doubles(0);
@@ -173,9 +165,9 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         //// ---- corr_force_positive: the lower bound of every correlation is 0, as in the manual-derivative
         ////      paths:
         if (corr_force_positive == true) {
-              for (int c = 0; c < static_cast<int>(lb_corr.size()); ++c)
-                    for (int i = 1; i < lb_corr[c].rows(); ++i)
-                          for (int j = 0; j < i; ++j)
+              for (int c = 0; c < static_cast<int>(lb_corr.size()); c++)
+                    for (int i = 1; i < lb_corr[c].rows(); i++)
+                          for (int j = 0; j < i; j++)
                                 lb_corr[c](i, j) = 0.0;
         }
         const std::vector<Eigen::Matrix<double, -1, -1>>   &ub_corr   = Model_args_as_cpp_struct.Model_args_vecs_of_mats_double[5]; 
@@ -186,8 +178,12 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         //////////////
         const int n_corrs =  n_class * n_tests * (n_tests - 1) * 0.5;
         
-        int n_covariates_total_nd, n_covariates_total_d, n_covariates_total;
-        int n_covariates_max_nd, n_covariates_max_d, n_covariates_max;
+        int n_covariates_total_nd;
+        int n_covariates_total_d;
+        int n_covariates_total;
+        int n_covariates_max_nd;
+        int n_covariates_max_d;
+        int n_covariates_max;
         
         if (n_class > 1)  {
               
@@ -228,7 +224,6 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         int n_full_chunks = chunk_size_info.n_full_chunks;
         
         /////////////////  ------------------------------------------------------------ 
-        using namespace stan::math;
          
         stan::math::nested_rev_autodiff nested_autodiff_scope;
         
@@ -251,9 +246,9 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         std::vector<Eigen::Matrix<stan::math::var, -1, -1>> beta_all_tests_class_var = vec_of_mats_var(n_covariates_max, n_tests, n_class);
         {
           int i = n_us + n_corrs;
-          for (int c = 0; c < n_class; ++c) {
-            for (int t = 0; t < n_tests; ++t) {
-              for (int k = 0; k < n_covariates_per_outcome_vec(c, t); ++k) {
+          for (int c = 0; c < n_class; c++) {
+            for (int t = 0; t < n_tests; t++) {
+              for (int k = 0; k < n_covariates_per_outcome_vec(c, t); k++) {
                 beta_all_tests_class_var[c](k, t) = theta_var(i);
                 i += 1;
               }
@@ -281,7 +276,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         // if (n_class > 1)  u_prev_diseased = theta_var(n_us + n_corrs + n_covariates_total);
         Eigen::Matrix<stan::math::var, -1, 1> u_prev_raw_var(n_pops); //// ----
         if (n_class > 1) { //// ----
-          for (int g = 0; g < n_pops; ++g) {
+          for (int g = 0; g < n_pops; g++) {
             u_prev_raw_var(g) = theta_var(n_us + n_corrs + n_covariates_total + g);
           }
         } 
@@ -290,7 +285,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         stan::math::var target_likelihood = 0.0;
         
         // ====================================================================
-        // ORDINAL ADDITION #1: Unpack C_raw_var, transform to C, prior + Jacobian
+        //// ORDINAL ADDITION #1: Unpack C_raw_var, transform to C, prior + Jacobian
         // ====================================================================
         const int n_cutpoints_max = (n_ordinal_tests > 0) ? n_thr_per_ord_test.maxCoeff() : 0;
         ////
@@ -313,9 +308,9 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
           //// default) every cutpoint would be read one position too far and the last one would read
           //// theta_var(n_params), past the end of the vector (force_autodiff = TRUE would segfault for MVOP).
           int i = n_us + n_corrs + n_covariates_total + ((n_class > 1) ? n_pops : 0);
-          for (int c = 0; c < n_class; ++c) {
-            for (int t_ord = 0; t_ord < n_ordinal_tests; ++t_ord) {
-              for (int k = 0; k < n_thr_per_ord_test(t_ord); ++k) {
+          for (int c = 0; c < n_class; c++) {
+            for (int t_ord = 0; t_ord < n_ordinal_tests; t_ord++) {
+              for (int k = 0; k < n_thr_per_ord_test(t_ord); k++) {
                 
                     // stan::math::var C_unc_k      = theta_var(i);
                     stan::math::var C_unc_vec_var = theta_var(i);
@@ -345,21 +340,21 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         }
         
         //// C_raw -> C transform + Jacobian + induced Dirichlet prior
-        for (int c = 0; c < n_class; ++c) {
+        for (int c = 0; c < n_class; c++) {
               
-              for (int t_ord = 0; t_ord < n_ordinal_tests; ++t_ord) {
+              for (int t_ord = 0; t_ord < n_ordinal_tests; t_ord++) {
                 
                     int n_thr_t = n_thr_per_ord_test(t_ord);
                     int n_cat_t = n_thr_t + 1;
                     
                     //// ordered cutpoints: C[0] = C_raw[0], C[k] = C[k-1] + exp(C_raw[k])
                     C_var[c](0, t_ord) = C_raw_var[c](0, t_ord);
-                    for (int k = 1; k < n_thr_t; ++k) {
+                    for (int k = 1; k < n_thr_t; k++) {
                       C_var[c](k, t_ord) = C_var[c](k - 1, t_ord) + stan::math::exp(C_raw_var[c](k, t_ord));
                     } 
                     
                     //// Jacobian for C_raw -> C: log|det(J)| = sum_{k>=1} C_raw[k]
-                    for (int k = 1; k < n_thr_t; ++k) {
+                    for (int k = 1; k < n_thr_t; k++) {
                       target_AD += C_raw_var[c](k, t_ord);
                     } 
                     
@@ -373,7 +368,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                     ////
                     if (use_Se_Sp_prior == 1 && Se_Sp_args.n_chosen[c](t_ord) > 0) {
                          Eigen::Matrix<stan::math::var, -1, 1> C_centred(n_thr_t);
-                         for (int k = 0; k < n_thr_t; ++k) {
+                         for (int k = 0; k < n_thr_t; k++) {
                               C_centred(k) = C_var[c](k, t_ord) - anchor;
                          }
                          if (exclude_priors == false) {
@@ -392,13 +387,13 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                     }
                     ////
                     Eigen::Matrix<stan::math::var, -1, 1> cumul_probs(n_thr_t);
-                    for (int k = 0; k < n_thr_t; ++k) {
+                    for (int k = 0; k < n_thr_t; k++) {
                       cumul_probs(k) = stan::math::Phi(C_var[c](k, t_ord) - anchor);
                     } 
                     
                     Eigen::Matrix<stan::math::var, -1, 1> p_ord(n_cat_t);
                     p_ord(0) = cumul_probs(0);
-                    for (int k = 1; k < n_thr_t; ++k) {
+                    for (int k = 1; k < n_thr_t; k++) {
                       p_ord(k) = cumul_probs(k) - cumul_probs(k - 1);
                     }
                     p_ord(n_cat_t - 1) = 1.0 - cumul_probs(n_thr_t - 1);
@@ -412,7 +407,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                     target_AD += stan::math::lgamma(alpha_sum);
                     ////
                     if (prior_dirichlet_alpha[c].col(t_ord).head(n_cat_t).isOnes() == false) {
-                      for (int k = 0; k < n_cat_t; ++k) {
+                      for (int k = 0; k < n_cat_t; k++) {
                         target_AD -= stan::math::lgamma(alpha_t(k));
                         double coeff = alpha_t(k) - 1.0;
                         if (std::abs(coeff) > 1e-15) {
@@ -423,7 +418,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                     ////
                     //// Jacobian for C -> p (induced Dirichlet): sum log(phi(C_k))  i.e. std_normal_lpdf
                     ////
-                    for (int k = 0; k < n_thr_t; ++k) {
+                    for (int k = 0; k < n_thr_t; k++) {
                       target_AD += stan::math::std_normal_lpdf(C_var[c](k, t_ord) - anchor);
                     }
                     } //// end of if (exclude_priors == false)
@@ -441,7 +436,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         
         if (n_class > 1) {
           
-          for (int g = 0; g < n_pops; ++g) {
+          for (int g = 0; g < n_pops; g++) {
             
             stan::math::var tanh_u = stan::math::tanh(u_prev_raw_var(g));
             stan::math::var prev_g = 0.5 * (tanh_u + 1.0);
@@ -452,7 +447,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
             stan::math::var deriv_p = 0.5 * (1.0 - tanh_u * tanh_u);
             target_AD += stan::math::log(deriv_p);
             
-            // Prior on prev for this population
+            //// Prior on prev for this population
             //// target_AD += stan::math::beta_lpdf(prev_var(g, 1), prev_prior_a(g), prev_prior_b(g));
             //// ---- a prior: left out with exclude_priors, as in the manual-derivative paths:
             if (exclude_priors == false) {
@@ -468,32 +463,32 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         stan::math::var log_jac_u = 0.0;
         
         if (nuisance_transformation == "Phi") {
-          u_vec.array() =   Phi(u_unconstrained_vec_var).array();
-          log_jac_u +=    - 0.5 * u_unconstrained_vec_var.size() * log(2 * M_PI) -  0.5 * sum(square(u_unconstrained_vec_var)) ;
+          u_vec.array() =   stan::math::Phi(u_unconstrained_vec_var).array();
+          log_jac_u +=    - 0.5 * u_unconstrained_vec_var.size() * stan::math::log(2 * M_PI) -  0.5 * stan::math::sum(stan::math::square(u_unconstrained_vec_var)) ;
         } else if (nuisance_transformation == "Phi_approx") {
-          u_vec.array() =   Phi_approx(u_unconstrained_vec_var).array();
+          u_vec.array() =   stan::math::Phi_approx(u_unconstrained_vec_var).array();
           log_jac_u   +=    (a_times_3 * u_unconstrained_vec_var.array().square() +  b).array().log().sum();
-          log_jac_u   +=    sum(log(u_vec));
-          log_jac_u   +=    sum(log1m(u_vec));
+          log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));
+          log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));
         } else if (nuisance_transformation == "Phi_approx_rough") {
-          u_vec.array() =   inv_logit(1.702 * u_unconstrained_vec_var).array();
-          log_jac_u   +=    u_unconstrained_vec_var.size() * log(1.702) ;
-          log_jac_u   +=    sum(log(u_vec));
-          log_jac_u   +=    sum(log1m(u_vec));
+          u_vec.array() =   stan::math::inv_logit(1.702 * u_unconstrained_vec_var).array();
+          log_jac_u   +=    u_unconstrained_vec_var.size() * stan::math::log(1.702) ;
+          log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));
+          log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));
         } else if (nuisance_transformation == "tanh") {
-          Eigen::Matrix<stan::math::var, -1, 1> tanh_u_unc = tanh(u_unconstrained_vec_var);
+          Eigen::Matrix<stan::math::var, -1, 1> tanh_u_unc = stan::math::tanh(u_unconstrained_vec_var);
           u_vec.array() =     0.5 * (  tanh_u_unc.array() + 1.0).array() ;
           //// du/dx = 2 u (1 - u), so +log(2) per coordinate:
-          log_jac_u  +=   u_unconstrained_vec_var.size() * log(2.0) ;
-          log_jac_u   +=    sum(log(u_vec));
-          log_jac_u   +=    sum(log1m(u_vec));
+          log_jac_u  +=   u_unconstrained_vec_var.size() * stan::math::log(2.0) ;
+          log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));
+          log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));
         } else if (nuisance_transformation == "inv_logit") {
           //// "inv_logit" branch (without it u_vec (var) would stay uninitialised and the process would
           //// segfault). Same transform and log-Jacobian as the manual path (fn_MVP_compute_nuisance_T /
           //// _log_jac_u_T): u = inv_logit(x), du/dx = u (1 - u).
-          u_vec.array() =   inv_logit(u_unconstrained_vec_var).array();
-          log_jac_u   +=    sum(log(u_vec));
-          log_jac_u   +=    sum(log1m(u_vec));
+          u_vec.array() =   stan::math::inv_logit(u_unconstrained_vec_var).array();
+          log_jac_u   +=    stan::math::sum(stan::math::log(u_vec));
+          log_jac_u   +=    stan::math::sum(stan::math::log1m(u_vec));
         } else {
           throw std::invalid_argument("fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process: unknown nuisance_transformation '" + nuisance_transformation +
                                       "' (allowed: Phi, Phi_approx, Phi_approx_rough, tanh, inv_logit).");
@@ -510,7 +505,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                                                                                             n_tests,
                                                                                             n_class);
         
-        for (int c = 0; c < n_class; ++c) {
+        for (int c = 0; c < n_class; c++) {
           
               Eigen::Matrix<stan::math::var, -1, -1  >  Chol_Schur_outs =  Pinkney_corr_master(  n_tests,
                                                                                                  lb_corr[c], 
@@ -522,8 +517,8 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
               target_AD +=   Chol_Schur_outs(0, 0);
               Omega_var[c] =   L_Omega_var[c] * L_Omega_var[c].transpose() ;
               
-              for (int i = 1; i < n_tests; ++i) {    ////   for (i in 2:n_tests) {
-                for (int j = 0; j < i; ++j) {   ////   for (j in 1:(i - 1)) {
+              for (int i = 1; i < n_tests; i++) {    ////   for (i in 2:n_tests) {
+                for (int j = 0; j < i; j++) {   ////   for (j in 1:(i - 1)) {
                   if (known_values_indicator[c](i, j) == 1) {
                     stan::math::var known_val_prior_ij = stan::math::normal_lpdf( Omega_var[c](i, j), 0.0, 10.0 ); //// to ensure any corr's we aren't estimating dont cause divergences
                     //// target_AD += known_val_prior_ij;
@@ -550,63 +545,26 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
         for (int c = 0; c < n_class; c++) {
           for (int t = 0; t < n_tests; t++) {
             for (int k = 0; k < n_covariates_per_outcome_vec(c, t); k++) {
-              if (k == 0 && normal_prior_of_intercept_replaced(c, t) == 1) continue;
               target_AD  += stan::math::normal_lpdf(beta_all_tests_class_var[c](k, t),
                                                     prior_coeffs_mean[c](k, t),
                                                     prior_coeffs_sd[c](k, t));
             }
-          }
-          //// ---- binary tests with the Se/Sp prior on P = Phi(-mu_ct) (rows of hyper: Dirichlet A 0-1, Beta
-          ////      a / b 2-3, link mean / SD 4-5), with the Jacobian phi(mu_ct) |b_1| (types 1-3) or |b_1|
-          ////      (type 4):
-          for (int t = 0; t < n_tests; t++) {
-            if (normal_prior_of_intercept_replaced(c, t) == 0) continue;
-            const Eigen::Matrix<double, -1, -1> &baseline_case = A.Model_args_vecs_of_mats_double[11][c];
-            const Eigen::Matrix<double, -1, -1> &hyper = A.Model_args_vecs_of_mats_double[12][c];
-            stan::math::var mu_ct = 0.0;
-            for (int k = 0; k < n_covariates_per_outcome_vec(c, t); ++k) {
-                 mu_ct += baseline_case(k, t) * beta_all_tests_class_var[c](k, t);
-            }
-            stan::math::var P_ct = stan::math::Phi(- mu_ct);
-            if (Se_Sp_prior_type == 1) {
-                 Eigen::Matrix<stan::math::var, -1, 1> q_ct(2);
-                 q_ct(0) = P_ct;
-                 q_ct(1) = 1.0 - P_ct;
-                 target_AD += stan::math::dirichlet_lpdf(q_ct, hyper.col(t).segment(0, 2));
-            } else if (Se_Sp_prior_type == 2 && c == 1) {
-                 //// 2 = Beta on Se: P is 1 - Se here, so the pair is swapped:
-                 target_AD += stan::math::beta_lpdf(P_ct,
-                                                    hyper(3, t),
-                                                    hyper(2, t));
-            } else if (Se_Sp_prior_type == 2 || Se_Sp_prior_type == 3) {
-                 target_AD += stan::math::beta_lpdf(P_ct,
-                                                    hyper(2, t),
-                                                    hyper(3, t));
-            } else if (c == 0) {
-                 target_AD += stan::math::normal_lpdf(- mu_ct,
-                                                      hyper(4, t),
-                                                      hyper(5, t));
-            } else {
-                 target_AD += stan::math::normal_lpdf(mu_ct,
-                                                      hyper(4, t),
-                                                      hyper(5, t));
-            }
-            if (Se_Sp_prior_type != 4) {
-                 target_AD += stan::math::std_normal_lpdf(mu_ct);
-            }
-            target_AD += std::log(std::abs(baseline_case(0, t)));
           }
           //// target_AD += stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
           //// ---- the correlation prior, as in the manual-derivative paths: LKJ (with the Jacobian terms of
           ////      known correlations removed), or a Beta / normal prior on every off-diagonal correlation:
           if ((corr_prior_beta == false) && (corr_prior_norm == false)) {
                 target_AD +=  stan::math::lkj_corr_cholesky_lpdf(L_Omega_var[c], lkj_cholesky_eta(c));
-                fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density(
-                      target_AD, L_Omega_var[c], known_values_indicator[c]);
+                fn_subtract_jacobian_terms_of_known_correlations_from_lkj_corr_cholesky_density( target_AD,
+                                                                                                 L_Omega_var[c],
+                                                                                                 known_values_indicator[c]);
           } else {
-                target_AD += fn_log_density_of_beta_or_normal_prior_on_correlations_on_free_cholesky_entries(
-                      L_Omega_var[c], Omega_var[c], corr_prior_beta, prior_for_corr_a[c],
-                      prior_for_corr_b[c], known_values_indicator[c]);
+                target_AD += fn_log_density_of_beta_or_normal_prior_on_correlations_on_free_cholesky_entries( L_Omega_var[c],
+                                                                                                              Omega_var[c],
+                                                                                                              corr_prior_beta,
+                                                                                                              prior_for_corr_a[c],
+                                                                                                              prior_for_corr_b[c],
+                                                                                                              known_values_indicator[c]);
           }
         }
         } //// end of if (exclude_priors == false)
@@ -675,7 +633,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
 
         for (int n = 0; n < N; n++ ) {
           
-          for (int c = 0; c < n_class; ++c) {
+          for (int c = 0; c < n_class; c++) {
                 
                 stan::math::var inc  = 0.0;
                 
@@ -685,7 +643,8 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                       //// (MVP_and_MVOP_missing_results_GHK_fns.hpp):
                       if (data_has_missing_results && (y_ref(n, t) < 0)) {
                             y1(t) = 0.0;
-                            Z_std_norm(t) = fn_AD_inv_Phi_var(u_array(n, t), use_inv_Phi_approx);
+                            Z_std_norm(t) = fn_AD_inv_Phi_var( u_array(n, t),
+                                                               use_inv_Phi_approx);
                             if (t < n_tests - 1) {
                               inc = (L_Omega_var[c].row(t+1).head(t+1) * Z_std_norm.head(t+1)).eval()(0, 0);
                             }
@@ -701,13 +660,13 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                       const stan::math::var mu_t        = Xbeta_n + inc;
                       const stan::math::var L_tt_recip  = 1.0 / L_Omega_var[c](t, t);
                       
-                      //// ============================================================================
+                      //// ----------------------------------------------------------------------------
                       //// UNIFIED INTERVAL: slot t contributes  P( C_lo < Z*_t <= C_hi ).
                       ////   BINARY  y=0 -> (-sentinel, 0]        y=1 -> (0, +sentinel]
                       ////   ORDINAL k   -> (C[k-1], C[k]], with sentinels for k = 1 and k = K.
                       //// For K = 2 the ordinal formulas below reduce EXACTLY to the binary
                       //// underflow/overflow formulas in the MVP AD file.
-                      //// ============================================================================
+                      //// ----------------------------------------------------------------------------
                       stan::math::var C_lo;
                       stan::math::var C_hi;
                       
@@ -741,7 +700,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                       ////
                       if (Bound_Z_hi < underflow_threshold) {
                         
-                            //// ================= LEFT TAIL (log scale) =================
+                            //// ----------------- LEFT TAIL (log scale) -----------------
                             //// Phi_type = "Phi": EXACT log Phi (log_Phi_exact_var, double_fns.hpp;
                             ////   derivative phi(x)/Phi(x)) and EXACT inverse below.
                             //// Otherwise: log Phi(x) ~=~ log_inv_logit(0.07056*x^3 + 1.5976*x).
@@ -772,7 +731,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                         
                       } else if (Bound_Z_lo > overflow_threshold) {
                         
-                            //// ================= RIGHT TAIL (log scale) =================
+                            //// ----------------- RIGHT TAIL (log scale) -----------------
                             //// Phi_type = "Phi": EXACT log(1 - Phi(x)) = log Phi(-x) and EXACT inverse below.
                             //// Otherwise: log(1 - Phi(x)) ~=~ log_inv_logit( -(0.07056*x^3 + 1.5976*x) ).
                             ////
@@ -802,7 +761,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                         
                       } else {
                         
-                            //// ================= STANDARD SCALE =================
+                            //// ----------------- STANDARD SCALE -----------------
                             //// Guaranteed here: Bound_Z_hi >= UF and Bound_Z_lo <= OF, so
                             //// prob_t >= ~Phi(UF) > 0 -- no log(0), bounded cancellation.
                             ////
@@ -826,8 +785,10 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                                   // const stan::math::var Phi_minus_lo = stan::math::Phi(-Bound_Z_lo);
                                   // const stan::math::var Phi_minus_hi = stan::math::Phi(-Bound_Z_hi);
                                   //// Phi or Phi_approx:
-                                  const stan::math::var Phi_minus_lo = fn_AD_Phi_var(-Bound_Z_lo, use_Phi_approx);
-                                  const stan::math::var Phi_minus_hi = fn_AD_Phi_var(-Bound_Z_hi, use_Phi_approx);
+                                  const stan::math::var Phi_minus_lo = fn_AD_Phi_var( -Bound_Z_lo,
+                                                                                      use_Phi_approx);
+                                  const stan::math::var Phi_minus_hi = fn_AD_Phi_var( -Bound_Z_hi,
+                                                                                      use_Phi_approx);
                                   const stan::math::var prob_t = Phi_minus_lo - Phi_minus_hi;
                                   ////
                                   y1(t) = stan::math::log(prob_t);
@@ -838,14 +799,17 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
                               
                             } else {
                               
-                                  const stan::math::var Phi_lo = fn_AD_Phi_var(Bound_Z_lo, use_Phi_approx);
-                                  const stan::math::var Phi_hi = fn_AD_Phi_var(Bound_Z_hi, use_Phi_approx);
+                                  const stan::math::var Phi_lo = fn_AD_Phi_var( Bound_Z_lo,
+                                                                                use_Phi_approx);
+                                  const stan::math::var Phi_hi = fn_AD_Phi_var( Bound_Z_hi,
+                                                                                use_Phi_approx);
                                   const stan::math::var prob_t = Phi_hi - Phi_lo;
                                   ////
                                   y1(t) = stan::math::log(prob_t);
                                   ////
                                   const stan::math::var Phi_Z = Phi_lo + prob_t * u_array(n, t);
-                                  Z_std_norm(t) = fn_AD_inv_Phi_var(Phi_Z, use_inv_Phi_approx);
+                                  Z_std_norm(t) = fn_AD_inv_Phi_var( Phi_Z,
+                                                                     use_inv_Phi_approx);
                               
                             }
                         
@@ -1012,7 +976,7 @@ inline void  fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace_process(   Eigen::
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 inline void     fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<double, -1, 1> &&out_mat_R_val, 
                                                             const Eigen::Matrix<double, -1, 1> &&theta_main_vec_R_val,
                                                             const Eigen::Matrix<double, -1, 1> &&theta_us_vec_R_val,
@@ -1050,7 +1014,7 @@ inline void     fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace(   Eigen::Matri
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 inline void     fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace(   Eigen::Matrix<double, -1, 1> &out_mat_ref, 
                                                             const Eigen::Matrix<double, -1, 1> &theta_main_vec_ref,
                                                             const Eigen::Matrix<double, -1, 1> &theta_us_vec_ref,
@@ -1080,7 +1044,7 @@ inline void     fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace(   Eigen::Matri
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 template <typename MatrixType>
 inline void     fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace(   Eigen::Ref<Eigen::Block<MatrixType, -1, 1>>  &out_mat_ref, 
                                                             const Eigen::Ref<const Eigen::Block<MatrixType, -1, 1>>  &theta_main_vec_ref,
@@ -1120,7 +1084,7 @@ inline void     fn_lp_and_grad_MVOP_Pinkney_AD_log_scale_InPlace(   Eigen::Ref<E
 
 
 
-// Internal function using Eigen::Ref as inputs for matrices
+//// Internal function using Eigen::Ref as inputs for matrices
 inline Eigen::Matrix<double, -1, 1>    fn_lp_and_grad_MVOP_Pinkney_AD_log_scale(  const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_main_vec_ref,
                                                                           const Eigen::Ref<const Eigen::Matrix<double, -1, 1>> theta_us_vec_ref,
                                                                           const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,

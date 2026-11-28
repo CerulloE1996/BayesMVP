@@ -42,6 +42,7 @@ auto_reorder_tests_MVP <- function(Y) {
         K <- ncol(Y)
         placed <- integer(K)
         max_idx <- which(abs(R) == max(abs(R)), arr.ind = TRUE)[1, ]
+        if (max_idx[1] == max_idx[2]) max_idx <- c(2, 1)   ## every correlation 0 (conditional independence): the largest |r| is 0, which the zeroed diagonal also holds, and the same test was placed twice
         placed[1] <- max_idx[1]
         placed[2] <- max_idx[2]
         remaining <- setdiff(1:K, placed[1:2])
@@ -52,7 +53,7 @@ auto_reorder_tests_MVP <- function(Y) {
           remaining <- setdiff(remaining, placed[pos])
         }
         
-        placed
+        return(placed)
         
 }
 
@@ -69,6 +70,7 @@ auto_reorder_tests <- function(Y) {
 
         # Root pair = strongest pairwise correlation
         max_idx <- which(abs(R) == max(abs(R)), arr.ind = TRUE)[1, ]
+        if (max_idx[1] == max_idx[2]) max_idx <- c(2, 1)   ## every correlation 0 (conditional independence): the largest |r| is 0, which the zeroed diagonal also holds, and the same test was placed twice
         placed[1] <- max_idx[1]
         placed[2] <- max_idx[2]
         remaining <- setdiff(remaining, placed[1:2])
@@ -117,6 +119,7 @@ compute_optimal_test_order <- function(Omega_hat_list) {
         placed <- integer(K)
         remaining <- 1:K
         max_idx <- which(abs(R) == max(abs(R)), arr.ind = TRUE)[1, ]
+        if (max_idx[1] == max_idx[2]) max_idx <- c(2, 1)   ## every correlation 0 (conditional independence): the largest |r| is 0, which the zeroed diagonal also holds, and the same test was placed twice
         placed[1] <- max_idx[1]
         placed[2] <- max_idx[2]
         remaining <- setdiff(remaining, placed[1:2])
@@ -127,7 +130,7 @@ compute_optimal_test_order <- function(Omega_hat_list) {
           remaining <- setdiff(remaining, placed[pos])
         }
         
-        placed
+        return(placed)
         
 }
 
@@ -153,7 +156,7 @@ compute_tail_extremeness_per_test_LC_MVP <-  function( theta_main,
                                                        n_tests,
                                                        n_class,
                                                        n_covariates_per_outcome_mat,
-                                                       X = NULL
+                                                       X
 ) {
 
         n_corrs <-  n_class * n_tests * (n_tests - 1) / 2
@@ -209,7 +212,7 @@ compute_tail_category_distance_from_latent_mean_per_test <-  function( theta_mai
                                                                        n_tests,
                                                                        n_class,
                                                                        n_covariates_per_outcome_mat,
-                                                                       X = NULL,
+                                                                       X,
                                                                        cutpoints_per_class_and_test
 ) {
 
@@ -521,7 +524,8 @@ check_reorder_cols_MVP_for_Stan <-  function(Stan_data_list) {
                              "nothing else, so without it there is nothing to reorder.",
                              "",
                              "==> reorder_cols_MVP has been DISABLED for this run; sampling continues with",
-                             "    the data in its original column order."))
+                             "    the data in its original column order."),
+                                 warn = TRUE)
               return(FALSE)
         }
         ##
@@ -542,7 +546,8 @@ check_reorder_cols_MVP_for_Stan <-  function(Stan_data_list) {
                              "Column reordering needs the outcome matrix with one COLUMN per test/outcome.",
                              "",
                              "==> reorder_cols_MVP has been DISABLED for this run; sampling continues with",
-                             "    the data in its original column order."))
+                             "    the data in its original column order."),
+                                 warn = TRUE)
               return(FALSE)
         }
         ##
@@ -607,7 +612,8 @@ check_reorder_cols_MVP_for_Stan <-  function(Stan_data_list) {
                               "",
                               "Column reordering of an external Stan model is only safe when 'y' is the ONLY",
                               "test-indexed thing in the data. (The built-in LC_MVP model permutes all of its",
-                              "test-indexed arguments together, which is why it is supported there.)"))
+                              "test-indexed arguments together, which is why it is supported there.)"),
+                                 warn = TRUE)
               ##
               return(FALSE)
 
@@ -679,7 +685,7 @@ extract_Omega_via_bridgestan <- function(bs_model,
           }
         }
         
-        Omega_hat_list
+        return(Omega_hat_list)
   
 }
 
@@ -756,8 +762,8 @@ fn_nuisance_chunk_layout_positions <-  function( N,
         ##
         ## ---- every position of the nuisance vector must appear exactly once:
         ##
-        stopifnot(!anyNA(position_of_observation_and_test),
-                  !anyDuplicated(as.vector(position_of_observation_and_test)))
+        if (any(anyNA(position_of_observation_and_test))) stop("!anyNA(position_of_observation_and_test) is not TRUE")
+        if (any(anyDuplicated(as.vector(position_of_observation_and_test)))) stop("!anyDuplicated(as.vector(position_of_observation_and_test)) is not TRUE")
         ##
         ## ---- the positions are returned as an integer matrix:
         ##
@@ -830,8 +836,11 @@ fn_permute_test_pair_matrix_reading_its_lower_triangle <-  function( test_pair_m
 #' Each matrix is permuted with fn_permute_test_pair_matrix_reading_its_lower_triangle() (the models read the
 #' strictly lower triangle only).
 #' @export
-permute_corr_data <- function(lb_corr, ub_corr,
-                              known_values_indicator, known_values, perm) {
+permute_corr_data <- function(lb_corr,
+                              ub_corr,
+                              known_values_indicator,
+                              known_values,
+                              perm) {
   # list(
   #   lb_corr = lapply(lb_corr, function(m) m[perm, perm]),
   #   ub_corr = lapply(ub_corr, function(m) m[perm, perm]),
@@ -878,7 +887,7 @@ zero_omega_in_theta <- function(theta_main_vectors,
         #   theta_main_vectors[[ch]][omega_indices] <- 0.0
         # }
         
-        theta_main_vectors
+        return(theta_main_vectors)
   
 }
 
@@ -900,7 +909,7 @@ unpermute_Omega <- function(Omega_samples,
           return(out)
         }
         
-        Omega_samples
+        return(Omega_samples)
   
 }
 
@@ -917,14 +926,14 @@ unpermute_Omega <- function(Omega_samples,
 #' @return Matrix with M-1 columns of 0/1 indicators
 #' @export
 expand_categorical_to_dummies <- function( x,
-                                           ref_level = 1L,
-                                           prefix = "cat"
+                                           ref_level,
+                                           prefix
 ) {
         
         levels <- sort(unique(x))
         M <- length(levels)
-        stopifnot(M >= 2)
-        stopifnot(ref_level %in% levels)
+        if (!all(M >= 2)) stop("M >= 2 is not TRUE")
+        if (!all(ref_level %in% levels)) stop("ref_level %in% levels is not TRUE")
         
         non_ref_levels <- setdiff(levels, ref_level)
         out <- matrix(0L, nrow = length(x), ncol = M - 1L)
@@ -1080,9 +1089,10 @@ get_basic_dims_for_internal_models <- function( Model_type,
         N <- nrow(y)
         n_tests <- ncol(y)
         ##
-        n_class <- ifelse(grepl("LC", Model_type) || Model_type == "latent_trait", 2, 1)
+        n_class <- ifelse(Model_type %in% c("CLC_MVOP", "CLC-MVOP"), 4L,
+                          ifelse(grepl("LC", Model_type) || Model_type == "latent_trait", 2L, 1L))
         ##
-        if (Model_type %in% c("LC_MVOP", "MVOP")) {
+        if (Model_type %in% c("LC_MVOP", "MVOP", "CLC_MVOP", "CLC-MVOP")) {
           
             outs_y_validation <- validate_y_tests_ordinal(y)
             ##
@@ -1121,13 +1131,14 @@ get_dims_for_internal_models <- function( y,
                                           n_pops,
                                           N,
                                           n_covariates_total,
-                                          n_cat_per_ord_test = NULL   ## REQUIRED for MVOP/LC_MVOP; ignored otherwise
+                                          n_cat_per_ord_test,  ## REQUIRED for MVOP/LC_MVOP/CLC_MVOP; ignored otherwise
+                                          model_args_list
 ) {
   
         if (Model_type %in% c("MVP", "MVOP")) {
           n_corrs <- choose(n_tests, 2)
           n_params_main <- n_covariates_total + n_corrs
-        } else if (Model_type %in% c("LC_MVP", "LC_MVOP")) {
+        } else if (Model_type %in% c("LC_MVP", "LC_MVOP", "CLC_MVOP", "CLC-MVOP")) {
           n_corrs <- n_class * choose(n_tests, 2)
           n_params_main <- n_pops + n_covariates_total + n_corrs
         } else if (Model_type == "latent_trait") {
@@ -1135,7 +1146,7 @@ get_dims_for_internal_models <- function( y,
           n_params_main <- n_pops + n_covariates_total + n_corrs
         }
         
-        if (Model_type %in% c("MVOP", "LC_MVOP")) {
+        if (Model_type %in% c("MVOP", "LC_MVOP", "CLC_MVOP", "CLC-MVOP")) {
           
               ##
               ## ---- n_cat_per_ord_test MUST be supplied by the user. It CANNOT be inferred:
@@ -1152,15 +1163,74 @@ get_dims_for_internal_models <- function( y,
               ##
               n_cat_per_ord_test <- as.integer(n_cat_per_ord_test)
               ##
-              if (any(is.na(n_cat_per_ord_test)) || any(n_cat_per_ord_test < 3L)) {
+              if (length(n_cat_per_ord_test) > 0L && (any(is.na(n_cat_per_ord_test)) || any(n_cat_per_ord_test < 3L))) {
                 stop(paste0("get_dims_for_internal_models: n_cat_per_ord_test must be integers >= 3 ",
                             "(2 == binary). Got: ", paste(n_cat_per_ord_test, collapse = ", ")))
               }
               ##
-              n_thr_per_ord_test <- n_cat_per_ord_test - 1L
+              n_thr_per_ord_test <- if (length(n_cat_per_ord_test) > 0L) n_cat_per_ord_test - 1L else integer(0L)
               ##
               if (Model_type == "LC_MVOP") {
                 n_params_main <- n_pops + n_covariates_total + n_corrs + n_class * sum(n_thr_per_ord_test)
+              } else if (Model_type %in% c("CLC_MVOP", "CLC-MVOP")) {
+                if (is.null(model_args_list)) {
+                  stop("get_dims_for_internal_models (CLC_MVOP): model_args_list must be supplied.")
+                }
+                required_clc_fields <- c(
+                  "pool_correlations_across_classes",
+                  "n_covariates_per_outcome_mat",
+                  "n_prevalence_covariates",
+                  "known_values_indicator_list"
+                )
+                for (field_name in required_clc_fields) {
+                  if (is.null(model_args_list[[field_name]])) {
+                    stop(paste0(
+                      "get_dims_for_internal_models (CLC_MVOP): missing required field '",
+                      field_name,
+                      "' in model_args_list; run init_hard_coded_model_args() first."
+                    ))
+                  }
+                }
+                if (is.null(n_pops)) {
+                  stop("get_dims_for_internal_models (CLC_MVOP): n_pops must be supplied.")
+                }
+                n_pops_effective <- as.integer(n_pops)
+                n_corrs_per_class <- rep(
+                  0L,
+                  n_class
+                )
+                for (class_index in seq_len(n_class)) {
+                  known_indicator_mat <- model_args_list$known_values_indicator_list[[class_index]]
+                  free_count <- 0L
+                  for (row_index in seq_len(n_tests)) {
+                    if (row_index >= 2L) {
+                      for (col_index in seq_len(row_index - 1L)) {
+                        if (as.integer(known_indicator_mat[row_index, col_index]) == 0L) {
+                          free_count <- free_count + 1L
+                        }
+                      }
+                    }
+                  }
+                  n_corrs_per_class[class_index] <- free_count
+                }
+                pool_corr <- as.integer(model_args_list$pool_correlations_across_classes)
+                n_corrs_total_free <- sum(n_corrs_per_class)
+                n_corrs_global <- if (pool_corr == 1L) n_corrs_per_class[1L] else 0L
+                n_lambda <- if (pool_corr == 1L) as.integer(n_class) else 0L
+                n_covariates_total_clc <- as.integer(sum(model_args_list$n_covariates_per_outcome_mat))
+                n_prevalence_covariates <- as.integer(model_args_list$n_prevalence_covariates)
+                n_total_C_per_class <- if (length(n_thr_per_ord_test) > 0L) as.integer(sum(n_thr_per_ord_test)) else 0L
+                n_corrs <- as.integer(n_corrs_total_free)
+                n_params_main <- as.integer(
+                  n_corrs_total_free +
+                  n_corrs_global +
+                  n_lambda +
+                  n_covariates_total_clc +
+                  2L * n_prevalence_covariates +
+                  2L * n_pops_effective +
+                  5L +
+                  as.integer(n_class) * n_total_C_per_class
+                )
               } else if (Model_type == "MVOP") {
                 n_params_main <- n_covariates_total + n_corrs + sum(n_thr_per_ord_test)   ## FIXED: was "n_thr_per_ord_t"
               }
@@ -1196,7 +1266,7 @@ process_covariates_X <- function(Model_type,
                                  n_class,
                                  ## (optional: the covariates of each class and test, as Stan's n_covs_per_outcome;
                                  ##  then each X[[c]][[t]] may be padded, its first n columns being used)
-                                 n_covariates_per_outcome_mat_given = NULL
+                                 n_covariates_per_outcome_mat_given
 ) {
         
         if (is.null(X)) {
@@ -1342,7 +1412,7 @@ convert_X_to_padded_for_Stan <- function(X,
                                 n_covariates_max_nd,
                                 n_covariates_max_d,
                                 n_covariates_per_outcome_mat, 
-                                padding_value = -999) {
+                                padding_value) {
         
         # X is already a list of lists from process_covariates_X
         # X[[c]][[t]] is the matrix for class c, outcome t

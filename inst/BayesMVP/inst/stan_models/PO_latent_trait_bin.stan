@@ -10,13 +10,16 @@ functions {
       }
       
       
-     matrix corr_to_chol(real x, int J) {
+     matrix corr_to_chol ( real x,
+                           int J) {
         matrix[J, J] cor = add_diag(rep_matrix(x, J, J), 1 - x);
         return cholesky_decompose(cor);
       }
       
        
-   vector lb_ub_lp (vector y, real lb, real ub) {
+   vector lb_ub_lp ( vector y,
+                     real lb,
+                     real ub) {
  
     int N = num_elements(y); 
     vector[N] tanh_y; 
@@ -27,7 +30,9 @@ functions {
     
   }
  
-    real lb_ub_lp (real y, real lb, real ub) {
+    real lb_ub_lp ( real y,
+                    real lb,
+                    real ub) {
       
        real  tanh_y = tanh(y);
     //   real tanh_y = tanh_1(y);

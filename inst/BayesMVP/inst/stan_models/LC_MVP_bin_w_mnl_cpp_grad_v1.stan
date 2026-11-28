@@ -92,14 +92,14 @@ matrix cholesky_corr_constrain_outer_lp( // matrix Omega_raw,
               //  real l_ij_old = L[i, j];
                 real b1 = dot_product(L[j, 1:(j - 1)], D[1:j - 1]' .* L[i, 1:(j - 1)]);
                   
-                  // how to derive the bounds
-                  // we know that the correlation value C is bound by
-                  // b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
-                  // Now we want our bounds to be enforced too so
+                  //// how to derive the bounds
+                  //// we know that the correlation value C is bound by
+                  //// b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
+                  //// Now we want our bounds to be enforced too so
                   // max(lb, b1 - Ljj * Lij_old) <= C <= min(ub, b1 + Ljj * Lij_old)
                   // We have the Lij_new = (C - b1) / Ljj
-                  // To get the bounds on Lij_new is
-                  // (bound - b1) / Ljj 
+                  //// To get the bounds on Lij_new is
+                  //// (bound - b1) / Ljj 
                   
                   real low = max({-sqrt(l_ij_old * D[j]), lb - b1});
                   real up = min({sqrt(l_ij_old * D[j]), ub - b1}); 
@@ -158,14 +158,14 @@ matrix cholesky_corr_constrain_outer( // matrix Omega_raw,
               //  real l_ij_old = L[i, j];
                 real b1 = dot_product(L[j, 1:(j - 1)], D[1:j - 1]' .* L[i, 1:(j - 1)]);
                   
-                  // how to derive the bounds
-                  // we know that the correlation value C is bound by
-                  // b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
-                  // Now we want our bounds to be enforced too so
+                  //// how to derive the bounds
+                  //// we know that the correlation value C is bound by
+                  //// b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
+                  //// Now we want our bounds to be enforced too so
                   // max(lb, b1 - Ljj * Lij_old) <= C <= min(ub, b1 + Ljj * Lij_old)
                   // We have the Lij_new = (C - b1) / Ljj
-                  // To get the bounds on Lij_new is
-                  // (bound - b1) / Ljj 
+                  //// To get the bounds on Lij_new is
+                  //// (bound - b1) / Ljj 
                   
                   real low = max({-sqrt(l_ij_old * D[j]), lb - b1});
                   real up = min({sqrt(l_ij_old * D[j]), ub - b1}); 

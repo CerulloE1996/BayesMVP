@@ -124,6 +124,274 @@ fn_Stan_data_of_model_family <-  function(model_family) {
             return(list(Stan_data = Stan_data, N = N, n_tests = n_tests, n_cov = 1, cpp_model_type = "LC_MVP"))
       }
       ##
+      if (identical(model_family, "CLC_MVOP")) {
+            set.seed(123L)
+            N <- 500L
+            n_tests <- 4L
+            n_class <- 4L
+            n_pops <- 3L
+            n_cov <- 2L
+            n_cat_per_test <- c(2L, 2L, 4L, 5L)
+            n_cat_per_ord_test <- c(4L, 5L)
+            n_thr_per_ord_test <- n_cat_per_ord_test - 1L
+            pop <- rep(
+                  seq_len(n_pops),
+                  length.out = N
+            )
+            pop_weight <- rep(
+                  1.0 / n_pops,
+                  n_pops
+            )
+            class_D <- matrix(
+                  c(0L, 0L,
+                    1L, 0L,
+                    0L, 1L,
+                    1L, 1L),
+                  nrow = n_class,
+                  ncol = 2L,
+                  byrow = TRUE
+            )
+            test_condition <- c(1L, 2L, 1L, 2L)
+            shared_covariate_matrix <- cbind(
+                  rep(
+                        1.0,
+                        N
+                  ),
+                  stats::rnorm(
+                        N,
+                        0.0,
+                        1.0
+                  )
+            )
+            X_array <- array(
+                  0.0,
+                  dim = c(n_class, n_tests, N, n_cov)
+            )
+            for (class_index in seq_len(n_class)) {
+                  for (test_index in seq_len(n_tests)) {
+                        X_array[class_index, test_index, , ] <- shared_covariate_matrix
+                  }
+            }
+            n_covs_per_outcome <- matrix(
+                  n_cov,
+                  nrow = n_class,
+                  ncol = n_tests
+            )
+            X_prevalence <- matrix(
+                  stats::rnorm(
+                        N,
+                        0.0,
+                        1.0
+                  ),
+                  nrow = N,
+                  ncol = 1L
+            )
+            latent_class_vector <- sample(
+                  seq_len(n_class),
+                  size = N,
+                  replace = TRUE,
+                  prob = c(0.75, 0.10, 0.10, 0.05)
+            )
+            simulated_y_matrix <- matrix(
+                  0L,
+                  nrow = N,
+                  ncol = n_tests
+            )
+            for (subject_index in seq_len(N)) {
+                  latent_class_index <- latent_class_vector[subject_index]
+                  for (test_index in seq_len(n_tests)) {
+                        own_condition_status <- class_D[latent_class_index, test_condition[test_index]]
+                        other_condition_status <- class_D[latent_class_index, 3L - test_condition[test_index]]
+                        latent_response_value <- (if (own_condition_status == 1L) 1.4 else -1.2) +
+                              0.25 * other_condition_status +
+                              0.20 * shared_covariate_matrix[subject_index, 2L] +
+                              stats::rnorm(1L)
+                        if (n_cat_per_test[test_index] == 2L) {
+                              simulated_y_matrix[subject_index, test_index] <- if (latent_response_value > 0.0) 1L else 0L
+                        } else {
+                              ordinal_cutpoints <- seq(
+                                    -1.0,
+                                    1.5,
+                                    length.out = n_cat_per_test[test_index] - 1L
+                              )
+                              simulated_y_matrix[subject_index, test_index] <- as.integer(
+                                    1L + sum(latent_response_value > ordinal_cutpoints)
+                              )
+                        }
+                  }
+            }
+            storage.mode(simulated_y_matrix) <- "integer"
+            n_chosen_cutoffs <- matrix(
+                  1L,
+                  nrow = n_class,
+                  ncol = 2L
+            )
+            chosen_cutoffs <- array(
+                  2L,
+                  dim = c(n_class, 2L, 1L)
+            )
+            prior_Se_Sp_link_mean_SD <- array(
+                  0.0,
+                  dim = c(n_class, 2L, 1L, 2L)
+            )
+            for (class_index in seq_len(n_class)) {
+                  for (ord_index in seq_len(2L)) {
+                        own_st <- class_D[class_index, test_condition[2L + ord_index]]
+                        prior_Se_Sp_link_mean_SD[class_index, ord_index, 1L, 1L] <- if (own_st == 1L) 0.8 else 1.1
+                        prior_Se_Sp_link_mean_SD[class_index, ord_index, 1L, 2L] <- 0.5
+                  }
+            }
+            prior_Se_Sp_dirichlet_A <- array(
+                  1.0,
+                  dim = c(n_class, 2L, 2L)
+            )
+            prior_Se_Sp_beta <- array(
+                  2.0,
+                  dim = c(n_class, 2L, 1L, 2L)
+            )
+            prior_beta_mean <- array(
+                  0.0,
+                  dim = c(n_class, n_cov, n_tests)
+            )
+            prior_beta_sd <- array(
+                  0.75,
+                  dim = c(n_class, n_cov, n_tests)
+            )
+            for (class_index in seq_len(n_class)) {
+                  for (test_index in seq_len(n_tests)) {
+                        own_st <- class_D[class_index, test_condition[test_index]]
+                        if (n_cat_per_test[test_index] == 2L) {
+                              prior_beta_mean[class_index, 1L, test_index] <- if (own_st == 1L) 1.2 else -1.2
+                        }
+                  }
+            }
+            prior_dirichlet_alpha <- array(
+                  1.0,
+                  dim = c(n_class, max(n_cat_per_ord_test), 2L)
+            )
+            baseline_case <- array(
+                  0.0,
+                  dim = c(n_class, n_tests, n_cov)
+            )
+            baseline_case[, , 1L] <- 1.0
+            n_standardisation <- 40L
+            standardisation_index <- seq_len(n_standardisation)
+            standardisation_weight <- rep(
+                  1.0 / n_standardisation,
+                  n_standardisation
+            )
+            known_values_list <- array(
+                  0.0,
+                  dim = c(n_class, n_tests, n_tests)
+            )
+            known_values_indicator_list <- array(
+                  0L,
+                  dim = c(n_class, n_tests, n_tests)
+            )
+            lb_corr <- array(
+                  -1.0,
+                  dim = c(n_class, n_tests, n_tests)
+            )
+            ub_corr <- array(
+                  1.0,
+                  dim = c(n_class, n_tests, n_tests)
+            )
+            Stan_data <- list(
+                  N = N,
+                  n_tests = n_tests,
+                  n_class = n_class,
+                  n_pops = n_pops,
+                  pop = pop,
+                  pop_weight = pop_weight,
+                  y = simulated_y_matrix,
+                  n_cat_per_test = n_cat_per_test,
+                  n_cat_per_ord_test = n_cat_per_ord_test,
+                  n_thr_per_ord_test = n_thr_per_ord_test,
+                  class_D = class_D,
+                  test_condition = test_condition,
+                  is_perfect_ref = rep(
+                        0L,
+                        n_tests
+                  ),
+                  perfect_ref_M = 8.0,
+                  n_covariates_max = n_cov,
+                  X = X_array,
+                  n_covs_per_outcome = n_covs_per_outcome,
+                  n_prevalence_covariates = 1L,
+                  X_prevalence = X_prevalence,
+                  prior_beta_prevalence_A_mean = array(
+                        0.0,
+                        dim = 1L
+                  ),
+                  prior_beta_prevalence_A_sd = array(
+                        0.75,
+                        dim = 1L
+                  ),
+                  prior_beta_prevalence_B_mean = array(
+                        0.0,
+                        dim = 1L
+                  ),
+                  prior_beta_prevalence_B_sd = array(
+                        0.75,
+                        dim = 1L
+                  ),
+                  pool_correlations_across_classes = 1L,
+                  prior_LKJ_global = 2.0,
+                  prior_LKJ_departure = 4.0,
+                  prior_lambda_shape_a = 2.0,
+                  prior_lambda_shape_b = 5.0,
+                  known_values_list = known_values_list,
+                  known_values_indicator_list = known_values_indicator_list,
+                  lb_corr = lb_corr,
+                  ub_corr = ub_corr,
+                  use_pop_prev_prior = 1L,
+                  prior_mu_logit_A_mean = -2.0,
+                  prior_mu_logit_A_sd = 0.5,
+                  prior_mu_logit_B_mean = -2.2,
+                  prior_mu_logit_B_sd = 0.5,
+                  prior_sigma_logit_A_sd = 0.75,
+                  prior_sigma_logit_B_sd = 0.75,
+                  prior_logit_prob_B_given_A_mean = -1.5,
+                  prior_logit_prob_B_given_A_sd = 0.8,
+                  baseline_case = baseline_case,
+                  use_Se_Sp_prior = 1L,
+                  Se_Sp_prior_type = 4L,
+                  n_chosen_cutoffs_max = 1L,
+                  n_chosen_cutoffs = n_chosen_cutoffs,
+                  chosen_cutoffs = chosen_cutoffs,
+                  prior_Se_Sp_dirichlet_A = prior_Se_Sp_dirichlet_A,
+                  prior_Se_Sp_beta = prior_Se_Sp_beta,
+                  prior_Se_Sp_link_mean_SD = prior_Se_Sp_link_mean_SD,
+                  use_pop_Se_Sp_prior = 1L,
+                  n_standardisation = n_standardisation,
+                  standardisation_index = standardisation_index,
+                  standardisation_weight = standardisation_weight,
+                  use_label_constraint = 0L,
+                  reference_test = c(1L, 2L),
+                  cutoff_category = c(2L, 2L, 2L, 2L),
+                  prior_dirichlet_alpha = prior_dirichlet_alpha,
+                  prior_beta_mean = prior_beta_mean,
+                  prior_beta_sd = prior_beta_sd,
+                  prior_LKJ = matrix(
+                        rep(
+                              4.0,
+                              n_class
+                        ),
+                        ncol = 1L
+                  ),
+                  C_raw_lower = -10.0,
+                  C_raw_upper = 10.0,
+                  overflow_threshold = 7.5,
+                  underflow_threshold = -7.5
+            )
+            return(list(
+                  Stan_data = Stan_data,
+                  N = N,
+                  n_tests = n_tests,
+                  n_cov = n_cov,
+                  cpp_model_type = "CLC_MVOP"
+            ))
+      }
       N <-  1000
       sim <-  NULL
       invisible(utils::capture.output(
@@ -183,17 +451,115 @@ fn_y_with_missing_results <-  function(y) {
 ##
 ## ---- The BayesMVP C++ model built from a Stan data list, a y, a vector type, a Phi_type and a number of chunks:
 ##
-fn_matrix_of_class <-  function(x, c) {
+fn_matrix_of_class <-  function(x,
+                                c) {
       if (is.list(x)) return(as.matrix(x[[c]]))
       return(matrix(x[c, , ], nrow = dim(x)[2]))
 }
 ##
-fn_make_cpp_model <-  function(family_data, model_family, y, vect_type, Phi_type, num_chunks) {
+fn_make_cpp_model <-  function(family_data,
+                               model_family,
+                               y,
+                               vect_type,
+                               Phi_type,
+                               num_chunks) {
 
       Stan_data <-  family_data$Stan_data
       n_tests <-  family_data$n_tests
-      n_class <-  2
       storage.mode(y) <-  "integer"
+      if (identical(model_family, "CLC_MVOP")) {
+            model_args_list <- list(
+                  y = y,
+                  N = family_data$N,
+                  n_tests = n_tests,
+                  n_class = 4L,
+                  n_pops = as.integer(Stan_data$n_pops),
+                  pop = as.integer(Stan_data$pop),
+                  pop_weight = Stan_data$pop_weight,
+                  n_cat_per_ord_test = as.integer(Stan_data$n_cat_per_ord_test),
+                  class_D = Stan_data$class_D,
+                  test_condition = as.integer(Stan_data$test_condition),
+                  is_perfect_ref = as.integer(Stan_data$is_perfect_ref),
+                  perfect_ref_M = Stan_data$perfect_ref_M,
+                  n_covariates_max = as.integer(Stan_data$n_covariates_max),
+                  X = Stan_data$X,
+                  n_covs_per_outcome = Stan_data$n_covs_per_outcome,
+                  n_prevalence_covariates = as.integer(Stan_data$n_prevalence_covariates),
+                  X_prevalence = Stan_data$X_prevalence,
+                  prior_beta_prevalence_A_mean = Stan_data$prior_beta_prevalence_A_mean,
+                  prior_beta_prevalence_A_sd = Stan_data$prior_beta_prevalence_A_sd,
+                  prior_beta_prevalence_B_mean = Stan_data$prior_beta_prevalence_B_mean,
+                  prior_beta_prevalence_B_sd = Stan_data$prior_beta_prevalence_B_sd,
+                  pool_correlations_across_classes = as.integer(Stan_data$pool_correlations_across_classes),
+                  prior_LKJ_global = Stan_data$prior_LKJ_global,
+                  prior_LKJ_departure = Stan_data$prior_LKJ_departure,
+                  prior_lambda_shape_a = Stan_data$prior_lambda_shape_a,
+                  prior_lambda_shape_b = Stan_data$prior_lambda_shape_b,
+                  known_values_list = Stan_data$known_values_list,
+                  known_values_indicator_list = Stan_data$known_values_indicator_list,
+                  lb_corr = Stan_data$lb_corr,
+                  ub_corr = Stan_data$ub_corr,
+                  use_pop_prev_prior = as.integer(Stan_data$use_pop_prev_prior),
+                  prior_mu_logit_A_mean = Stan_data$prior_mu_logit_A_mean,
+                  prior_mu_logit_A_sd = Stan_data$prior_mu_logit_A_sd,
+                  prior_mu_logit_B_mean = Stan_data$prior_mu_logit_B_mean,
+                  prior_mu_logit_B_sd = Stan_data$prior_mu_logit_B_sd,
+                  prior_sigma_logit_A_sd = Stan_data$prior_sigma_logit_A_sd,
+                  prior_sigma_logit_B_sd = Stan_data$prior_sigma_logit_B_sd,
+                  prior_logit_prob_B_given_A_mean = Stan_data$prior_logit_prob_B_given_A_mean,
+                  prior_logit_prob_B_given_A_sd = Stan_data$prior_logit_prob_B_given_A_sd,
+                  baseline_case = Stan_data$baseline_case,
+                  use_Se_Sp_prior = as.integer(Stan_data$use_Se_Sp_prior),
+                  Se_Sp_prior_type = as.integer(Stan_data$Se_Sp_prior_type),
+                  n_chosen_cutoffs_max = as.integer(Stan_data$n_chosen_cutoffs_max),
+                  n_chosen_cutoffs = Stan_data$n_chosen_cutoffs,
+                  chosen_cutoffs = Stan_data$chosen_cutoffs,
+                  prior_Se_Sp_dirichlet_A = Stan_data$prior_Se_Sp_dirichlet_A,
+                  prior_Se_Sp_beta = Stan_data$prior_Se_Sp_beta,
+                  prior_Se_Sp_link_mean_SD = Stan_data$prior_Se_Sp_link_mean_SD,
+                  use_pop_Se_Sp_prior = as.integer(Stan_data$use_pop_Se_Sp_prior),
+                  n_standardisation = as.integer(Stan_data$n_standardisation),
+                  standardisation_index = as.integer(Stan_data$standardisation_index),
+                  standardisation_weight = Stan_data$standardisation_weight,
+                  use_label_constraint = as.integer(Stan_data$use_label_constraint),
+                  reference_test = as.integer(Stan_data$reference_test),
+                  cutoff_category = as.integer(Stan_data$cutoff_category),
+                  prior_dirichlet_alpha = Stan_data$prior_dirichlet_alpha,
+                  prior_beta_mean = Stan_data$prior_beta_mean,
+                  prior_beta_sd = Stan_data$prior_beta_sd,
+                  prior_LKJ = Stan_data$prior_LKJ,
+                  corr_force_positive = FALSE,
+                  C_raw_lower = Stan_data$C_raw_lower,
+                  C_raw_upper = Stan_data$C_raw_upper,
+                  overflow_threshold = Stan_data$overflow_threshold,
+                  underflow_threshold = Stan_data$underflow_threshold,
+                  num_chunks = num_chunks,
+                  vect_type = vect_type,
+                  Phi_type = if (Phi_type == 2) "Phi_approx" else "Phi",
+                  inv_Phi_type = if (Phi_type == 2) "inv_Phi_approx" else "inv_Phi"
+            )
+            final_init <- NULL
+            invisible(utils::capture.output(
+                  final_init <- BayesMVP::init_hard_coded_model(
+                        Model_type = family_data$cpp_model_type,
+                        model_args_list = model_args_list
+                  )
+            ))
+            y_final <- final_init$model_args_list$y
+            storage.mode(y_final) <- "integer"
+            stopifnot(identical(as.integer(y_final), as.integer(y)))
+            return(list(
+                  Model_args_as_Rcpp_List = final_init$Model_args_as_Rcpp_List,
+                  model_args_list = final_init$model_args_list,
+                  y = y_final,
+                  N = family_data$N,
+                  n_tests = n_tests,
+                  num_chunks = num_chunks,
+                  cpp_model_type = family_data$cpp_model_type,
+                  vect_type = vect_type
+            ))
+      }
+      n_class <-  2
       model_args_list <-  list(y = y, n_tests = n_tests, n_class = n_class, N = family_data$N,
                                vect_type = vect_type)
       if (model_family == "ordinal") {
@@ -264,7 +630,9 @@ fn_vec_size_of_vect_type <-  function(vect_type) {
       return(1)
 }
 ##
-fn_chunk_rows <-  function(vect_type, num_chunks, N) {
+fn_chunk_rows <-  function(vect_type,
+                           num_chunks,
+                           N) {
       vec_size <-  fn_vec_size_of_vect_type(vect_type)
       normal_chunk_size <-  vec_size * (N %/% (vec_size * max(num_chunks, 1)))
       if (normal_chunk_size < vec_size) return(NULL)
@@ -279,7 +647,10 @@ fn_chunk_rows <-  function(vect_type, num_chunks, N) {
       return(list(starts = starts, sizes = sizes))
 }
 ##
-fn_nuisance_matrix_from_vector_in_chunk_layout <-  function(theta_us, chunk_rows, N, n_tests) {
+fn_nuisance_matrix_from_vector_in_chunk_layout <-  function(theta_us,
+                                                            chunk_rows,
+                                                            N,
+                                                            n_tests) {
       u_matrix <-  matrix(NA_real_, N, n_tests)
       offset <-  0
       for (chunk in seq_along(chunk_rows$starts)) {
@@ -292,7 +663,8 @@ fn_nuisance_matrix_from_vector_in_chunk_layout <-  function(theta_us, chunk_rows
       return(u_matrix)
 }
 ##
-fn_nuisance_vector_in_chunk_layout_from_matrix <-  function(u_matrix, chunk_rows) {
+fn_nuisance_vector_in_chunk_layout_from_matrix <-  function(u_matrix,
+                                                            chunk_rows) {
       return(unlist(lapply(seq_along(chunk_rows$starts), function(chunk) {
             as.vector(u_matrix[chunk_rows$starts[chunk] + seq_len(chunk_rows$sizes[chunk]), , drop = FALSE])
       })))
@@ -300,7 +672,10 @@ fn_nuisance_vector_in_chunk_layout_from_matrix <-  function(u_matrix, chunk_rows
 ##
 ## ---- The C++ log density and gradient; evaluation = "as sampled", "PartialLog" or "autodiff":
 ##
-fn_cpp_lp_grad <-  function(cpp_model, theta_main, u_unc_matrix, evaluation) {
+fn_cpp_lp_grad <-  function(cpp_model,
+                            theta_main,
+                            u_unc_matrix,
+                            evaluation) {
       N <-  cpp_model$N
       n_tests <-  cpp_model$n_tests
       chunk_rows <-  fn_chunk_rows(cpp_model$vect_type, cpp_model$num_chunks, N)
@@ -327,7 +702,8 @@ fn_cpp_lp_grad <-  function(cpp_model, theta_main, u_unc_matrix, evaluation) {
 ## ---- The points: the last burn-in state of each chain of one short BayesMVP fit of each model (PS7's settings,
 ##      Phi_type 1, one chunk; tests in the data's own order). ------------------------------------------------
 ##
-fn_initial_values_of_each_chain <-  function(family_data, model_family) {
+fn_initial_values_of_each_chain <-  function(family_data,
+                                             model_family) {
 
       Stan_data <-  family_data$Stan_data
       N <-  family_data$N
@@ -341,23 +717,96 @@ fn_initial_values_of_each_chain <-  function(family_data, model_family) {
       initial_values_of_each_chain <-  list()
       for (chain in seq_len(n_chains_of_the_fits)) {
             assign(".Random.seed", stream_of_the_chain, envir = .GlobalEnv)
-            initial_values <-  list(u_raw = matrix(stats::rnorm(n = N * n_tests, mean = 0.0,
-                                                                sd = sd_of_the_initial_nuisance_values),
-                                                   nrow = N, ncol = n_tests),
-                                    Omega_unconstrained_vec = list(rep(0.001, n_corrs), rep(0.001, n_corrs)),
-                                    beta = lapply(1:2, function(class_index) {
-                                          fn_matrix_of_class(Stan_data$prior_beta_mean, class_index)
-                                    }),
-                                    p_raw = array(rep(atanh(2 * 0.10 - 1), n_pops)))
-            if (model_family == "ordinal") {
-                  C_raw <-  c()
-                  for (k_slot in seq_along(Stan_data$n_thr_per_ord_test)) {
-                        n_thr <-  Stan_data$n_thr_per_ord_test[k_slot]
-                        C_raw <-  c(C_raw, -2.0, rep(log(4.0 / n_thr), n_thr - 1))
+            if (identical(model_family, "CLC_MVOP")) {
+                  n_class <- 4L
+                  n_cov_total <- as.integer(sum(Stan_data$n_covs_per_outcome))
+                  C_raw <- c()
+                  for (ordinal_slot_index in seq_along(Stan_data$n_thr_per_ord_test)) {
+                        n_thresholds_for_test <- Stan_data$n_thr_per_ord_test[ordinal_slot_index]
+                        C_raw <- c(
+                              C_raw,
+                              -1.5,
+                              rep(
+                                    log(3.0 / n_thresholds_for_test),
+                                    n_thresholds_for_test - 1L
+                              )
+                        )
                   }
-                  C_unc <-  atanh(2 * (C_raw - Stan_data$C_raw_lower) /
-                                      (Stan_data$C_raw_upper - Stan_data$C_raw_lower) - 1)
-                  initial_values$C_unc_vec <-  list(C_unc, C_unc)
+                  C_unc <- atanh(2.0 * (C_raw - Stan_data$C_raw_lower) /
+                                 (Stan_data$C_raw_upper - Stan_data$C_raw_lower) - 1.0)
+                  initial_values <- list(
+                        u_raw = matrix(
+                              stats::rnorm(
+                                    n = N * n_tests,
+                                    mean = 0.0,
+                                    sd = sd_of_the_initial_nuisance_values
+                              ),
+                              nrow = N,
+                              ncol = n_tests
+                        ),
+                        Omega_unconstrained_vec = rep(
+                              0.001,
+                              n_class * n_corrs
+                        ),
+                        Omega_global_unconstrained_vec = rep(
+                              0.001,
+                              n_corrs
+                        ),
+                        lambda_class = rep(
+                              0.25,
+                              n_class
+                        ),
+                        beta_vec = rep(
+                              0.0,
+                              n_cov_total
+                        ),
+                        beta_prevalence_A = array(
+                              0.0,
+                              dim = ncol(Stan_data$X_prevalence)
+                        ),
+                        beta_prevalence_B = array(
+                              0.0,
+                              dim = ncol(Stan_data$X_prevalence)
+                        ),
+                        z_logit_A = rep(
+                              0.0,
+                              n_pops
+                        ),
+                        z_logit_B = rep(
+                              0.0,
+                              n_pops
+                        ),
+                        mu_logit_A = -2.0,
+                        mu_logit_B = -1.8,
+                        sigma_logit_A = 0.35,
+                        sigma_logit_B = 0.35,
+                        log_OR = 1.0,
+                        C_unc_vec = lapply(
+                              seq_len(n_class),
+                              function(class_index) {
+                                    return(C_unc)
+                              }
+                        )
+                  )
+            } else {
+                  initial_values <-  list(u_raw = matrix(stats::rnorm(n = N * n_tests, mean = 0.0,
+                                                                      sd = sd_of_the_initial_nuisance_values),
+                                                         nrow = N, ncol = n_tests),
+                                          Omega_unconstrained_vec = list(rep(0.001, n_corrs), rep(0.001, n_corrs)),
+                                          beta = lapply(1:2, function(class_index) {
+                                                fn_matrix_of_class(Stan_data$prior_beta_mean, class_index)
+                                          }),
+                                          p_raw = array(rep(atanh(2 * 0.10 - 1), n_pops)))
+                  if (model_family == "ordinal") {
+                        C_raw <-  c()
+                        for (k_slot in seq_along(Stan_data$n_thr_per_ord_test)) {
+                              n_thr <-  Stan_data$n_thr_per_ord_test[k_slot]
+                              C_raw <-  c(C_raw, -2.0, rep(log(4.0 / n_thr), n_thr - 1))
+                        }
+                        C_unc <-  atanh(2 * (C_raw - Stan_data$C_raw_lower) /
+                                            (Stan_data$C_raw_upper - Stan_data$C_raw_lower) - 1)
+                        initial_values$C_unc_vec <-  list(C_unc, C_unc)
+                  }
             }
             initial_values_of_each_chain[[chain]] <-  initial_values
             stream_of_the_chain <-  parallel::nextRNGStream(stream_of_the_chain)
@@ -367,7 +816,8 @@ fn_initial_values_of_each_chain <-  function(family_data, model_family) {
 
 }
 ##
-fn_short_fit_and_its_points <-  function(family_data, model_family) {
+fn_short_fit_and_its_points <-  function(family_data,
+                                         model_family) {
 
       cpp_model_of_the_fit <-  fn_make_cpp_model(family_data, model_family, y = family_data$Stan_data$y,
                                                  vect_type = "Stan", Phi_type = 1, num_chunks = 1)
@@ -396,7 +846,7 @@ fn_short_fit_and_its_points <-  function(family_data, model_family) {
             ratio_M_nuisance = 0.9, interval_width_nuisance = 1, M_decay_type = "inverse", M_decay_power = 0.5,
             M_decay_scale = n_adapt / 5, max_tau_main = 50, max_tau_nuisance = 50, max_eps_main = 1.0,
             max_eps_nuisance = 1.0, max_L = 1024, calibrate_eps_on_sampling_chains_before_sampling = FALSE,
-            multi_attempts = TRUE, autodiff_fallback = TRUE, force_autodiff = FALSE, force_PartialLog = FALSE,
+            multi_attempts = TRUE, force_autodiff = FALSE, force_PartialLog = FALSE,
             nuisance_to_track = 0, store_log_lik_trace = FALSE, run_in_fresh_R_process = FALSE,
             initial_values = paste0("u_raw ~ normal(0, ", sd_of_the_initial_nuisance_values, ") drawn in R ",
                                     "(L'Ecuyer-CMRG, one stream per chain); correlations 0.001; ",
@@ -477,7 +927,6 @@ fn_short_fit_and_its_points <-  function(family_data, model_family) {
                                   calibrate_eps_on_sampling_chains_before_sampling = FALSE,
                                   ##
                                   multi_attempts = TRUE,
-                                  autodiff_fallback = TRUE,
                                   force_autodiff = FALSE,
                                   force_PartialLog = FALSE,
                                   Phi_type = "Phi",
@@ -548,14 +997,31 @@ fn_short_fit_and_its_points <-  function(family_data, model_family) {
       ##
       n_tests <-  family_data$n_tests
       n_cov <-  family_data$n_cov
-      n_corrs_of_both_classes <-  2 * n_tests * (n_tests - 1) / 2
       tail_point <-  points[[1]]
-      for (class_index in 1:2) for (test_index in 1:n_tests) {
-            position_of_the_intercept <-  n_corrs_of_both_classes + (class_index - 1) * n_tests * n_cov +
-                                          (test_index - 1) * n_cov + 1
-            tail_point$theta_main[position_of_the_intercept] <-  if (class_index == 1) {
-                  -intercepts_of_the_tail_point
-            } else +intercepts_of_the_tail_point
+      if (identical(model_family, "CLC_MVOP")) {
+            n_pairs <- as.integer(choose(n_tests, 2L))
+            beta_offset <- 4L * n_pairs + n_pairs + 4L
+            for (class_index in seq_len(4L)) {
+                  for (test_index in seq_len(n_tests)) {
+                        pos_intercept <- beta_offset + (class_index - 1L) * n_tests * n_cov +
+                              (test_index - 1L) * n_cov + 1L
+                        own_st <- family_data$Stan_data$class_D[class_index, family_data$Stan_data$test_condition[test_index]]
+                        tail_point$theta_main[pos_intercept] <- if (own_st == 1L) {
+                              +intercepts_of_the_tail_point
+                        } else {
+                              -intercepts_of_the_tail_point
+                        }
+                  }
+            }
+      } else {
+            n_corrs_of_both_classes <-  2 * n_tests * (n_tests - 1) / 2
+            for (class_index in 1:2) for (test_index in 1:n_tests) {
+                  position_of_the_intercept <-  n_corrs_of_both_classes + (class_index - 1) * n_tests * n_cov +
+                                                (test_index - 1) * n_cov + 1
+                  tail_point$theta_main[position_of_the_intercept] <-  if (class_index == 1) {
+                        -intercepts_of_the_tail_point
+                  } else +intercepts_of_the_tail_point
+            }
       }
       points[[paste0("intercepts_pm_", intercepts_of_the_tail_point)]] <-  tail_point
       ##
@@ -580,7 +1046,8 @@ fn_short_fit_and_its_points <-  function(family_data, model_family) {
 ## ==== The comparison of every number of chunks with one chunk ==================================================
 ##
 family_data_list <-  list(binary = fn_Stan_data_of_model_family("binary"),
-                          ordinal = fn_Stan_data_of_model_family("ordinal"))
+                          ordinal = fn_Stan_data_of_model_family("ordinal"),
+                          CLC_MVOP = fn_Stan_data_of_model_family("CLC_MVOP"))
 ##
 records_of_the_fits <-  list()
 points_list <-  list()
@@ -595,7 +1062,7 @@ saveRDS(records_of_the_fits,
 ##
 ## (one C++ model per model family, data, Phi_type, vector type and number of chunks)
 ##
-models_of_the_comparison <-  expand.grid(model_family = c("binary", "ordinal"),
+models_of_the_comparison <-  expand.grid(model_family = c("binary", "ordinal", "CLC_MVOP"),
                                          data = c("without missing results", "with missing results"),
                                          Phi_type = c(1, 2),
                                          vect_type = vect_types_to_check,
@@ -607,6 +1074,7 @@ numbers_of_chunks_left_out <-  c()
 for (model_index in seq_len(nrow(models_of_the_comparison))) {
 
       model_family <-  models_of_the_comparison$model_family[model_index]
+      evaluations_of_model <-  evaluations
       data_of_the_model <-  models_of_the_comparison$data[model_index]
       Phi_type <-  models_of_the_comparison$Phi_type[model_index]
       vect_type <-  models_of_the_comparison$vect_type[model_index]
@@ -618,7 +1086,7 @@ for (model_index in seq_len(nrow(models_of_the_comparison))) {
       cpp_model_of_one_chunk <-  fn_make_cpp_model(family_data, model_family, y = y_of_the_model,
                                                    vect_type = vect_type, Phi_type = Phi_type, num_chunks = 1)
       results_of_one_chunk <-  list()
-      for (evaluation in evaluations) {
+      for (evaluation in evaluations_of_model) {
             results_of_one_chunk[[evaluation]] <-  lapply(points_list[[model_family]], function(point) {
                   fn_cpp_lp_grad(cpp_model_of_one_chunk, point$theta_main, point$u_unc, evaluation)
             })
@@ -633,7 +1101,7 @@ for (model_index in seq_len(nrow(models_of_the_comparison))) {
             cpp_model_of_these_chunks <-  fn_make_cpp_model(family_data, model_family, y = y_of_the_model,
                                                             vect_type = vect_type, Phi_type = Phi_type,
                                                             num_chunks = num_chunks)
-            for (evaluation in evaluations) for (point_name in names(points_list[[model_family]])) {
+            for (evaluation in evaluations_of_model) for (point_name in names(points_list[[model_family]])) {
                   point <-  points_list[[model_family]][[point_name]]
                   of_one_chunk <-  results_of_one_chunk[[evaluation]][[point_name]]
                   of_these_chunks <-  fn_cpp_lp_grad(cpp_model_of_these_chunks, point$theta_main, point$u_unc,

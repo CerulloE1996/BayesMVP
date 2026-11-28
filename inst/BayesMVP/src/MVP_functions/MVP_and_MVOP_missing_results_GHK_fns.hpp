@@ -42,10 +42,10 @@
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 1. Whether rows row_start, ..., row_start + n_rows - 1 of y have at least one missing result (y < 0).
 ////    One pass of integer comparisons; decides once per chunk whether the missing-result path is taken.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 inline bool fn_MVP_rows_of_y_have_a_missing_result(  const Eigen::Ref<const Eigen::Matrix<int, -1, -1>> y_ref,
                                                      const int row_start,
                                                      const int n_rows
@@ -58,7 +58,7 @@ inline bool fn_MVP_rows_of_y_have_a_missing_result(  const Eigen::Ref<const Eige
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 2. The indicator of the missing results of a chunk (1.0 where y < 0, else 0.0), and the recoding of every
 ////    missing result to y = 1:
 ////      - binary tests: y_sign = 1 and y - y_sign u = 1 - u, which the binary gradient formulas only ever
@@ -67,7 +67,7 @@ inline bool fn_MVP_rows_of_y_have_a_missing_result(  const Eigen::Ref<const Eige
 ////      - ordinal tests: category 1, so that every index into the cutpoints stays valid; the bounds of the entry
 ////        are then set to -Inf and +Inf (fn_MVOP_set_bounds_of_missing_results_to_minus_and_plus_infinity), so
 ////        that its phi(bounds) = 0 and its cutpoint gradient terms are exactly 0.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 inline void fn_MVP_missing_result_indicator_and_recode_missing_results_to_y_equals_1(
                                      Eigen::Matrix<double, -1, -1> &y_chunk,             //// updated
                                      Eigen::Matrix<double, -1, -1> &is_missing_result    //// output
@@ -81,12 +81,12 @@ inline void fn_MVP_missing_result_indicator_and_recode_missing_results_to_y_equa
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 3. The untruncated GHK draws Z = F^{-1}(u) of a chunk, column by column, for the columns that have at least
 ////    one missing result (the other columns are not read). They depend on u only: computed once per chunk, for
 ////    every class. F^{-1} is the inverse the GHK step uses (inv_Phi_col_inplace with the same KernelChoice:
 ////    exact inv_Phi for Phi_type = "Phi", inv_Phi_approx for Phi_type = "Phi_approx").
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 template <Vec vec>
 inline void fn_MVP_compute_untruncated_GHK_Z_of_missing_results_T(
                                      Eigen::Matrix<double, -1, -1> &Z_untruncated,          //// output
@@ -106,13 +106,13 @@ inline void fn_MVP_compute_untruncated_GHK_Z_of_missing_results_T(
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 4. After the GHK step of column t (fn_MVP_compute_lp_GHK_cols_T, i.e. a binary test), the missing entries
 ////    of the column are set to the untruncated draw (the GHK step with Phi(Bound_Z) = 0, see the top):
 ////      prob = 1, log(prob) = 0, Phi(Bound_Z) = 0, Phi_Z = u, Z = F^{-1}(u).
 ////    Column-wise selects (SIMD blends), no loop over the rows. Must run BEFORE Z of column t is used for the
 ////    increments of the later tests and before phi(Z) of column t is formed.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 inline void fn_MVP_set_GHK_col_of_missing_results_to_the_untruncated_draw(
                                      const int t,
                                      const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> is_missing_result,
@@ -139,11 +139,11 @@ inline void fn_MVP_set_GHK_col_of_missing_results_to_the_untruncated_draw(
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 5. phi(Bound_Z) = 0 for the missing entries of column t (binary test): the derivative of the GHK step of a
 ////    missing result with respect to its bound (Phi(Bound_Z) is the constant 0 there). Must run after
 ////    fn_MVP_compute_phi_Bound_Z_cols_T and before phi(Bound_Z) is used (or its log is taken).
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 inline void fn_MVP_set_phi_Bound_Z_col_of_missing_results_to_zero(
                                      const int t,
                                      const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> is_missing_result,
@@ -158,10 +158,10 @@ inline void fn_MVP_set_phi_Bound_Z_col_of_missing_results_to_zero(
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 6. Over- / underflow masks of the log-scale (PartialLog) path of the binary LC-MVP: a missing entry is never
 ////    a tail entry (its prob is exactly 1). Zeroes the mask of the missing entries of column t.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 inline void fn_MVP_remove_missing_results_from_tail_mask(
                                      const int t,
                                      const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> is_missing_result,
@@ -176,11 +176,11 @@ inline void fn_MVP_remove_missing_results_from_tail_mask(
 
 
 
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 //// 7. Ordinal test t: both truncation bounds of the missing entries infinite (lower -Inf, upper +Inf), i.e. the
 ////    untruncated draw; the ordinal GHK step (fn_MVOP_compute_lp_GHK_cols_T) then gives prob = 1, q = u and
 ////    Z = F^{-1}(u), and the existing guards give phi(bounds) = 0 and x phi(x) = 0 for the infinite bounds.
-//// =====================================================================================
+//// -------------------------------------------------------------------------------------
 inline void fn_MVOP_set_bounds_of_missing_results_to_minus_and_plus_infinity(
                                      const int t,
                                      const Eigen::Ref<const Eigen::Matrix<double, -1, -1>> is_missing_result,

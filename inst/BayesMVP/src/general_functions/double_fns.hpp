@@ -64,7 +64,7 @@ using nico::math::reference::nico_inv_Phi_from_log_p;
  
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)   //// (x86-64 only: ARM CPUs have no AVX)
-#include <immintrin.h>
+#include <NicoSIMD/nico_simd_intrinsics.hpp>
 #endif
  
 
@@ -84,7 +84,7 @@ inline std::array<Eigen::Matrix<T, -1, -1>, N> array_of_mats( int rows,
                                                               int cols) {
   
        std::array<Eigen::Matrix<T, -1, -1>, N> arr;
-       for (int c = 0; c < N; ++c) {
+       for (int c = 0; c < N; c++) {
          arr[c] = Eigen::Matrix<T, -1, -1>::Zero(rows, cols);
        }
        
@@ -160,14 +160,14 @@ inline std::array<Eigen::Matrix<T, -1, -1>, N> array_of_mats( int rows,
 
 
 
-// inv_Phi given log(p) and log(1-p). No exp/log of an extreme probability anywhere.
+//// inv_Phi given log(p) and log(1-p). No exp/log of an extreme probability anywhere.
 
 
 
 
-// Total derivative dZ/dv through the STABLE side: log_p when Z<0, log_1m_p when Z>=0.
+//// Total derivative dZ/dv through the STABLE side: log_p when Z<0, log_1m_p when Z>=0.
 // Both are exact identities (p = exp(log_p) = 1 - exp(log_1m_p)); the blend only picks the
-// evaluation that cannot overflow.
+//// evaluation that cannot overflow.
 
 
 
@@ -237,7 +237,7 @@ inline stan::math::var inv_Phi_from_log_p_exact_var(const stan::math::var &log_p
 //// -------------------------------------------------------------------------------------------------------------------------------------------------------------
  
  
-// The scalar version for comparison
+//// The scalar version for comparison
 inline double test_simple_double(const double x) {
  
    const double res = 2.0*x;
@@ -247,7 +247,7 @@ inline double test_simple_double(const double x) {
   
  
  
- // Other Misc. functions -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ //// Other Misc. functions -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  
  
 inline bool Eigen_any_NaNs_process_return(Eigen::Ref<Eigen::Matrix<double, -1, -1>>  x_Ref) {
@@ -312,7 +312,7 @@ inline bool Eigen_any_NaNs(Eigen::Array<double, -1, -1> x) {
 // 
 // 
 // 
-// template <typename BlockType>
+//// template <typename BlockType>
 // inline bool Eigen_any_NaNs(Eigen::Ref<Eigen::Block<BlockType>> &block) {
 //   return !((block.array() == block.array()).all());
 // }
@@ -321,7 +321,7 @@ inline bool Eigen_any_NaNs(Eigen::Array<double, -1, -1> x) {
 
 
 
-// template <typename Derived>
+//// template <typename Derived>
 // inline bool Eigen_any_NaNs(const Eigen::DenseBase<Derived>& x) {
 //   return !((x.array() == x.array()).all());  // NaN check
 // }
@@ -344,7 +344,7 @@ inline bool Eigen_any_NaNs(Eigen::Array<double, -1, -1> x) {
 //// Function to manually construct a cutpoint vector from raw unconstrained parameters - using exp() / log-differences.
 ////
 inline Eigen::Matrix<double, -1, 1>	  construct_C( const Eigen::Matrix<double, -1, 1> &C_raw_vec,
-                                                   // parameter - log_diffs
+                                                   //// parameter - log_diffs
                                                    bool softplus) {
   
        const int n_total_cutpoints = C_raw_vec.size();
@@ -353,12 +353,12 @@ inline Eigen::Matrix<double, -1, 1>	  construct_C( const Eigen::Matrix<double, -
       
        if (softplus == true) { 
            Eigen::Matrix<double, -1, 1> softplus_C_vec = stan::math::log1p_exp(C_raw_vec.segment(1, n_total_cutpoints - 1));
-           for (int k = 2; k <= n_total_cutpoints; ++k) {
+           for (int k = 2; k <= n_total_cutpoints; k++) {
                C_vec(k - 1) = C_vec(k - 2) + softplus_C_vec(k - 2);
            }
        } else { 
            Eigen::Matrix<double, -1, 1> exp_C_vec = stan::math::exp(C_raw_vec.segment(1, n_total_cutpoints - 1));
-           for (int k = 2; k <= n_total_cutpoints; ++k) {
+           for (int k = 2; k <= n_total_cutpoints; k++) {
                C_vec(k - 1) = C_vec(k - 2) + exp_C_vec(k - 2);
            }
        }
@@ -396,7 +396,7 @@ inline double induced_dirichlet_given_C_lpdf( const Eigen::Matrix<double, -1, 1>
         
        double log_prob = 0.0;
         
-       for (int k = 1; k <= n_thr; ++k) {
+       for (int k = 1; k <= n_thr; k++) {
           if (use_probit_link == true)  log_prob += stan::math::normal_lpdf(C(k - 1), 0.0, 1.0);
           else                          log_prob += stan::math::log_inv_logit(C(k - 1)) + stan::math::log1m_inv_logit(C(k - 1));
        }
@@ -417,7 +417,7 @@ inline Eigen::Matrix<double, -1, 1> cumul_probs_to_ord_probs( const Eigen::Matri
        Eigen::Matrix<double, -1, 1> ord_probs(n_cat);
         
        ord_probs(0) = cumul_probs(0) - 0.0;
-       for (int k = 2; k <= n_thr; ++k) {
+       for (int k = 2; k <= n_thr; k++) {
           ord_probs(k - 1) = cumul_probs(k - 1) - cumul_probs(k - 2); // since probs are INCREASING with k
        }
        ord_probs(n_cat - 1) =  1.0 - cumul_probs(n_cat - 2);
@@ -442,7 +442,7 @@ inline Eigen::Matrix<double, -1, 1> ord_probs_to_cumul_probs( const Eigen::Matri
        Eigen::Matrix<double, -1, 1> cumul_probs(n_thr);
       
        cumul_probs(0) = ord_probs(0);
-       for (int k = 2; k <= n_thr; ++k) {
+       for (int k = 2; k <= n_thr; k++) {
          cumul_probs(k - 1) = cumul_probs(k - 2) + ord_probs(k - 1); // since probs are INCREASING with k
        }
       
@@ -483,7 +483,7 @@ inline Eigen::Matrix<double, -1, 1> ID_cumul_probs_to_C( const Eigen::Matrix<dou
        const int n_cat = n_thr + 1;
        Eigen::Matrix<double, -1, 1> C(n_thr);
       
-      for (int k = 0; k < n_thr; ++k) {
+      for (int k = 0; k < n_thr; k++) {
          if (cumul_probs(k) < 1e-300) {
            C(k) = -37.5; ////  prob = 1e-38;
          } else if (cumul_probs(k) > 0.99999999999999999) {
@@ -544,12 +544,12 @@ inline std::array<Eigen::Matrix<double, -1, -1>, 2> array_of_mats_2d( int n_rows
 }
  
   
-// convert std vec to eigen vec - double
+//// convert std vec to eigen vec - double
 inline Eigen::Matrix<double, -1, 1> std_vec_to_Eigen_vec( const std::vector<double> &std_vec) {
    
        Eigen::Matrix<double, -1, 1>  Eigen_vec(std_vec.size());
        
-       for (int i = 0; i < std_vec.size(); ++i) {
+       for (int i = 0; i < std_vec.size(); i++) {
          Eigen_vec(i) = std_vec[i];
        }
        
@@ -562,7 +562,7 @@ inline Eigen::Matrix<double, -1, 1> std_vec_to_Eigen_vec( const std::vector<doub
    
        std::vector<double>  std_vec(Eigen_vec.rows());
        
-       for (int i = 0; i < Eigen_vec.rows(); ++i) {
+       for (int i = 0; i < Eigen_vec.rows(); i++) {
          std_vec[i] = Eigen_vec(i);
        }
        
@@ -586,7 +586,7 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Ma
  
  // 
  // 
- // inline  std::unique_ptr<size_t[]> get_commutation_unequal_vec
+ //// inline  std::unique_ptr<size_t[]> get_commutation_unequal_vec
  // (unsigned const n, unsigned const m, bool const transpose){
  //   
  //   unsigned const nm = n * m,
@@ -610,7 +610,7 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Ma
  // 
  // 
  // 
- // inline  Rcpp::NumericVector commutation_dot
+ //// inline  Rcpp::NumericVector commutation_dot
  // (unsigned const n, unsigned const m, Rcpp::NumericVector x,
  //  bool const transpose){
  //   size_t const nm = n * m;
@@ -623,7 +623,7 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Ma
  //   return out;
  // }
  // 
- // inline  Rcpp::NumericMatrix get_commutation_unequal
+ //// inline  Rcpp::NumericMatrix get_commutation_unequal
  // (unsigned const n, unsigned const m){
  //   
  //   unsigned const nm = n * m,
@@ -823,8 +823,8 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Ma
 
    int  N = x.rows();     ///// Eigen::Matrix<double, -1, 1  >  out(N); /// NOTABLY slower if store in new array!!!!!! (making arrays is taxing !!!!)
    int  M = x.cols();
-   for (int j = 0; j < M; ++j) {
-     for (int i = 0; i < N; ++i) {
+   for (int j = 0; j < M; j++) {
+     for (int i = 0; i < N; i++) {
        x(i, j) = fn_double(x(i, j));
      }
    }
@@ -837,7 +837,7 @@ inline Eigen::Matrix<double, 1, -1>     fn_first_element_neg_rest_pos( Eigen::Ma
  inline  Eigen::Matrix<double, -1, 1  > fn_colvec_loop_dbl_Eigen(  Eigen::Matrix<double, -1, 1  > x, 
                                                                    std::function<double(double)> fn_double) {
 
-   for (int i = 0; i < x.rows(); ++i) {
+   for (int i = 0; i < x.rows(); i++) {
      x(i) = fn_double(x(i));
    }  
    return  x;
@@ -906,10 +906,10 @@ struct is_dynamic_matrix {
 
 
 
-// see https://stackoverflow.com/questions/39587752/difference-between-ldexp1-x-and-exp2x
+//// see https://stackoverflow.com/questions/39587752/difference-between-ldexp1-x-and-exp2x
 /* For a in [0.5, 4), compute a * 2**i, -250 < i < 250 */
-// Note: this function is  the same as the one in the link above, but for * double * instead of * float *.
-// not handling edge cases  - should work for a in [0.5, 2.0). 
+//// Note: this function is  the same as the one in the link above, but for * double * instead of * float *.
+//// not handling edge cases  - should work for a in [0.5, 2.0). 
 
 /// this is the same as nico_ldexp but handles edge-cases (will have wider input range )
 /// if i is too large, splits the calc. into two steps
@@ -919,7 +919,7 @@ struct is_dynamic_matrix {
 
 
 
-// Adapted from: https://stackoverflow.com/questions/48863719/fastest-implementation-of-exponential-function-using-avx
+//// Adapted from: https://stackoverflow.com/questions/48863719/fastest-implementation-of-exponential-function-using-avx
 // added (optional) extra degree(s) for poly approx (oroginal float fn had 4 degrees) - using "minimaxApprox" R package to find coefficient terms
 // R code:   minimaxApprox::minimaxApprox(fn = exp, lower = -0.346573590279972643113, upper = 0.346573590279972643113, degree = 5, basis ="Chebyshev")
 
@@ -932,8 +932,8 @@ struct is_dynamic_matrix {
 
 
 
-// see https://stackoverflow.com/questions/39587752/difference-between-ldexp1-x-and-exp2x
-// Note: this function is  the same as the one in the link above, but for * double * instead of * float *.
+//// see https://stackoverflow.com/questions/39587752/difference-between-ldexp1-x-and-exp2x
+//// Note: this function is  the same as the one in the link above, but for * double * instead of * float *.
  
 
 
@@ -944,7 +944,7 @@ struct is_dynamic_matrix {
 // 
 ///////////////////  fns - log   -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-//https://stackoverflow.com/a/65537754/9007125
+//// https://stackoverflow.com/a/65537754/9007125
 
 //  compute log(1+x) without losing precision for small values of x. //  see: https://www.johndcook.com/cpp_log_one_plus_x.html
 
@@ -955,7 +955,7 @@ struct is_dynamic_matrix {
  
  
 
-//https://stackoverflow.com/a/65537754/9007125 /* compute natural logarithm, maximum error 0.85089 ulps */
+//// https://stackoverflow.com/a/65537754/9007125 /* compute natural logarithm, maximum error 0.85089 ulps */
 
 //  compute log(1+x) without losing precision for small values of x.
 //  see: https://www.johndcook.com/cpp_log_one_plus_x.html

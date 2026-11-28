@@ -1,4 +1,4 @@
-// Internal one-class parameter reconstruction. This is not a standalone posterior model.
+//// Internal one-class parameter reconstruction. This is not a standalone posterior model.
 
 
 functions {
@@ -170,7 +170,9 @@ functions {
             
       }
  
-      vector lb_ub_lp (vector y, real lb, real ub) {
+      vector lb_ub_lp ( vector y,
+                        real lb,
+                        real ub) {
  
             int N = num_elements(y); 
             vector[N] tanh_y; 
@@ -181,7 +183,9 @@ functions {
     
       }  
  
-      real lb_ub_lp (real y, real lb, real ub) {
+      real lb_ub_lp ( real y,
+                      real lb,
+                      real ub) {
           
              real  tanh_y = tanh(y);
           //   real tanh_y = tanh_1(y);  
@@ -340,14 +344,14 @@ functions {
                               //  real L_ij_old = L[i, j];
                               real b1 = dot_product(L[j, 1:(j - 1)], D[1:j - 1]' .* L[i, 1:(j - 1)]);
 
-                              // how to derive the bounds
-                              // we know that the correlation value C is bound by
-                              // b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
-                              // Now we want our bounds to be enforced too so
+                              //// how to derive the bounds
+                              //// we know that the correlation value C is bound by
+                              //// b1 - Ljj * Lij_old <= C <= b1 + Ljj * Lij_old
+                              //// Now we want our bounds to be enforced too so
                               // max(lb_corr, b1 - Ljj * Lij_old) <= C <= min(ub_corr, b1 + Ljj * Lij_old)
                               // We have the Lij_new = (C - b1) / Ljj
-                              // To get the bounds on Lij_new is
-                              // (bound - b1) / Ljj
+                              //// To get the bounds on Lij_new is
+                              //// (bound - b1) / Ljj
 
                               if (known_values_indicator[i, j] == 1)  {
 
@@ -444,11 +448,9 @@ data {
   array[n_ordinal_tests] int<lower=1> n_thr_per_ord_test;
   real C_raw_lower;
   real<lower=C_raw_lower> C_raw_upper;
-  array[1, n_tests] int<lower=0> n_covs_per_outcome;
 }
 transformed data {
-  int n_corrs_per_class = (n_tests * (n_tests - 1)) %/% 2;
-  int n_covariates_total = sum(to_array_1d(n_covs_per_outcome));//// (%/% binds before *: without the brackets 24 for 8 tests)
+  int n_corrs_per_class = (n_tests * (n_tests - 1)) %/% 2;//// (%/% binds before *: without the brackets 24 for 8 tests)
   matrix[n_tests,n_tests] lb_corr_actual = lb_corr[1];
   array[n_tests] int inv_perm;
   for (j in 1:n_tests) inv_perm[test_perm[j]] = j;
@@ -459,30 +461,12 @@ transformed data {
   array[n_ordinal_tests] int end_index = calculate_end_indices(n_thr_per_ord_test,n_ordinal_tests,start_index);
 }
 parameters {
-  // Internal constrain-only skeleton. Nuisance values are sampled/stored by the native backend.
+  //// Internal constrain-only skeleton. Nuisance values are sampled/stored by the native backend.
   array[1] vector[n_corrs_per_class] Omega_unconstrained_vec;
-  vector[n_covariates_total] beta_vec;
+  array[1] matrix[n_covariates_max,n_tests] beta;
   array[1] vector[sum(n_thr_per_ord_test)] C_unc_vec;
 }
 transformed parameters {
-     //// ---- the coefficients the model samples (beta_vec: for each class, each test, its n_covs_per_outcome[c, t]
-     ////      coefficients, the order of the native C++ model), as the full table beta (0 in unused cells) and in the
-     ////      ORIGINAL test order (beta_orig):
-     array[1] matrix[n_covariates_max, n_tests] beta;
-     array[1] matrix[n_covariates_max, n_tests] beta_orig;
-     {
-       int position = 1;
-       for (c in 1:1) {
-         beta[c] = rep_matrix(0.0, n_covariates_max, n_tests);
-         for (t in 1:n_tests) {
-           for (k in 1:n_covs_per_outcome[c, t]) {
-             beta[c][k, t] = beta_vec[position];
-             position += 1;
-           }
-         }
-         for (t in 1:n_tests) beta_orig[c][:, t] = beta[c][:, inv_perm[t]];
-       }
-     }
 array[1] matrix[n_tests,n_tests] L_Omega;
   array[1] matrix[n_tests,n_tests] Omega;
   array[1] matrix[n_tests,n_tests] Omega_orig;
@@ -502,5 +486,5 @@ array[1] matrix[n_tests,n_tests] L_Omega;
   }
 }
 model {
-  // The full log density and manual gradients are evaluated by BayesMVP's native backend.
+  //// The full log density and manual gradients are evaluated by BayesMVP's native backend.
 }
